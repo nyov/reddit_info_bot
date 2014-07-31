@@ -3,10 +3,27 @@ import praw
 import pickle
 import urllib2
 import BeautifulSoup
+import requests
+import re
 from requests import HTTPError,ConnectionError
 from praw.errors import RateLimitExceeded
 
-def get_bing_results(submission, limit=10): #limit is the max number of results to display
+def get_google_results(submission, limit=5): #limit is the max number of results to display
+    image = submission.url
+    headers = {}
+    headers['User-Agent'] = "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"
+    response_text = requests.get('http://www.google.com/searchbyimage?image_url={0}'.format(image), headers=headers).content
+    response_text = response_text[response_text.find('Pages that include'):]
+    tree = BeautifulSoup.BeautifulSoup(response_text)
+    list_class_results = tree.findAll(attrs={'class':'r'})
+    if len(list_class_results) == 0:
+        raise IndexError('No results')
+    if limit >= len(list_class_results):
+        limit = len(list_class_results)-1
+    results = [(list_class_results[i].find('a')['href'],re.sub('<.*?>', '', re.sub('&#\d\d;', "'", ''.join([str(j) for j in list_class_results[i].find('a').contents])))) for i in xrange(limit)]
+    return results
+
+def get_bing_results(submission, limit=5):
     image = submission.url
     response_text = urllib2.urlopen("https://www.bing.com/images/searchbyimage?FORM=IRSBIQ&cbir=sbi&imgurl="+image)
     tree = BeautifulSoup.BeautifulSoup(response_text)
@@ -20,10 +37,18 @@ def get_bing_results(submission, limit=10): #limit is the max number of results 
 
 def give_more_info(comment):
     try:
+        google_result = get_google_results(comment.submission)
+        ascii_google = [[''.join(k for k in i[j] if ord(k)<128) for j in xrange(2)] for i in google_result]
+        google_linkified = ["["+i[1]+"]("+i[0]+")" for i in ascii_google] #reformats the results into markdown links
+        google_formatted = ''.join(i for i in '\n\n'.join(google_linkified))
+
         bing_result = get_bing_results(comment.submission)
-        bing_formatted = ["["+i[1]+"]("+i[0]+")" for i in bing_result] #reformats the results into Markdown
-        ascii_bing = ''.join(i for i in '\n\n'.join(bing_formatted) if ord(i)<128)
-        reply = "**More Information:**\n\n{0}".format(ascii_bing)
+        ascii_bing = [[''.join(k for k in i[j] if ord(k)<128) for j in xrange(2)] for i in bing_result]
+        bing_linkified = ["["+i[1]+"]("+i[0]+")" for i in ascii_bing]
+        bing_formatted = ''.join(i for i in '\n\n'.join(bing_linkified))
+
+        reply = "**Best Google Guesses:**\n\n{0}\n\n**Best Bing Guesses:**\n\n{1}".format(google_formatted,bing_formatted)
+
     except IndexError:
         reply = "Sorry, no information is available for this link."
     try:
@@ -82,7 +107,7 @@ keyword_list = ["what is this",
 
 comment_deleting_wait_time = 30 #how many minutes to wait before deleting downvoted comments
 r = praw.Reddit('Info Bot')
-r.login('info_bot','password')
+r.login('info_bot','pass')
 user = r.get_redditor('info_bot')
 already_done = pickle.load(open("already_done.p", "rb"))
 start_time = int(time.time()/60) #time in minutes for downvote checking
