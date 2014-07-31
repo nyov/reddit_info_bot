@@ -42,11 +42,23 @@ def format_results(results):
     return formatted
 
 def give_more_info(comment):
+    google_available = True
+    bing_available = True
     try:
         google_formatted = format_results(get_google_results(comment.submission))
-        bing_formatted = format_results(get_bing_results(comment.submission))
-        reply = "**Best Google Guesses:**\n\n{0}\n\n**Best Bing Guesses:**\n\n{1}".format(google_formatted,bing_formatted)
     except IndexError:
+        google_available = False
+    try:
+        bing_formatted = format_results(get_bing_results(comment.submission))
+    except IndexError:
+        bing_available = False
+    if google_available and bing_available:
+        reply = "**Best Google Guesses:**\n\n{0}\n\n**Best Bing Guesses:**\n\n{1}".format(google_formatted,bing_formatted)
+    elif google_available:
+        reply = "**Best Google Guesses:**\n\n{0}".format(google_formatted)
+    elif bing_available:
+        reply = "Best Bing Guesses:**\n\n{1}".format(bing_formatted)
+    else:
         reply = "Sorry, no information is available for this link."
     try:
         comment.reply(reply)
