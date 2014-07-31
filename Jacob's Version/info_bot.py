@@ -35,20 +35,17 @@ def get_bing_results(submission, limit=5):
     results = [(list_class_results[i].findAll(attrs={'class':'info'})[0].find('a')['href'],list_class_results[i].findAll(attrs={'class':'info'})[0].find('a').contents[0]) for i in xrange(limit)]
     return results
 
+def format_results(results):
+    ascii = [[''.join(k for k in i[j] if ord(k)<128) for j in xrange(2)] for i in results] #eliminates non-ascii characters
+    linkified = ["["+i[1]+"]("+i[0]+")" for i in ascii] #reformats the results into markdown links
+    formatted = ''.join(i for i in '\n\n'.join(linkified))
+    return formatted
+
 def give_more_info(comment):
     try:
-        google_result = get_google_results(comment.submission)
-        ascii_google = [[''.join(k for k in i[j] if ord(k)<128) for j in xrange(2)] for i in google_result]
-        google_linkified = ["["+i[1]+"]("+i[0]+")" for i in ascii_google] #reformats the results into markdown links
-        google_formatted = ''.join(i for i in '\n\n'.join(google_linkified))
-
-        bing_result = get_bing_results(comment.submission)
-        ascii_bing = [[''.join(k for k in i[j] if ord(k)<128) for j in xrange(2)] for i in bing_result]
-        bing_linkified = ["["+i[1]+"]("+i[0]+")" for i in ascii_bing]
-        bing_formatted = ''.join(i for i in '\n\n'.join(bing_linkified))
-
+        google_formatted = format_results(get_google_results(comment.submission))
+        bing_formatted = format_results(get_bing_results(comment.submission))
         reply = "**Best Google Guesses:**\n\n{0}\n\n**Best Bing Guesses:**\n\n{1}".format(google_formatted,bing_formatted)
-
     except IndexError:
         reply = "Sorry, no information is available for this link."
     try:
@@ -107,7 +104,7 @@ keyword_list = ["what is this",
 
 comment_deleting_wait_time = 30 #how many minutes to wait before deleting downvoted comments
 r = praw.Reddit('Info Bot')
-r.login('info_bot','pass')
+r.login('info_bot','password')
 user = r.get_redditor('info_bot')
 already_done = pickle.load(open("already_done.p", "rb"))
 start_time = int(time.time()/60) #time in minutes for downvote checking
