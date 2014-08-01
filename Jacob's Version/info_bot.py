@@ -69,7 +69,8 @@ def give_more_info(comment):
     except HTTPError:
         print 'HTTP Error. Bot might be banned from this sub'
 
-def reply_to_potential_comment(comment,attempt):
+def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to disable this feature
+    #return True
     done = False
     try:
         comment.reply('It appears that you are looking for more information.\n\nObtain more information by replying to this comment with the phrase "more info info_bot"')
