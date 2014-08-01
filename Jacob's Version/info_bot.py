@@ -36,12 +36,13 @@ def get_bing_results(submission, limit=5):
     return results
 
 def format_results(results):
-    ascii = [[''.join(k for k in i[j] if ord(k)<128) for j in xrange(2)] for i in results] #eliminates non-ascii characters
+    ascii = [[''.join(k for k in i[j] if (ord(k)<128 and k not in '[]()')) for j in xrange(2)] for i in results] #eliminates non-ascii characters
     linkified = ["["+i[1]+"]("+i[0]+")" for i in ascii] #reformats the results into markdown links
     formatted = ''.join(i for i in '\n\n'.join(linkified))
     return formatted
 
 def give_more_info(comment):
+    extra_message = ""
     google_available = True
     bing_available = True
     try:
@@ -61,6 +62,7 @@ def give_more_info(comment):
     else:
         reply = "Sorry, no information is available for this link."
     try:
+        reply += "\n\n^({0})".format(extra_message)
         comment.reply(reply)
         print 'replied to comment with more info'
     except HTTPError:
@@ -116,7 +118,7 @@ keyword_list = ["what is this",
 
 comment_deleting_wait_time = 30 #how many minutes to wait before deleting downvoted comments
 r = praw.Reddit('Info Bot')
-r.login('info_bot','pass')
+r.login('user','pass')
 user = r.get_redditor('info_bot')
 already_done = pickle.load(open("already_done.p", "rb"))
 start_time = int(time.time()/60) #time in minutes for downvote checking
