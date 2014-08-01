@@ -57,7 +57,7 @@ def give_more_info(comment):
     elif google_available:
         reply = "**Best Google Guesses:**\n\n{0}".format(google_formatted)
     elif bing_available:
-        reply = "Best Bing Guesses:**\n\n{1}".format(bing_formatted)
+        reply = "**Best Bing Guesses:**\n\n{0}".format(bing_formatted)
     else:
         reply = "Sorry, no information is available for this link."
     try:
@@ -116,7 +116,7 @@ keyword_list = ["what is this",
 
 comment_deleting_wait_time = 30 #how many minutes to wait before deleting downvoted comments
 r = praw.Reddit('Info Bot')
-r.login('info_bot','password')
+r.login('info_bot','pass')
 user = r.get_redditor('info_bot')
 already_done = pickle.load(open("already_done.p", "rb"))
 start_time = int(time.time()/60) #time in minutes for downvote checking
