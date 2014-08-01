@@ -19,7 +19,7 @@ def get_google_results(submission, limit=5): #limit is the max number of results
     if len(list_class_results) == 0:
         raise IndexError('No results')
     if limit >= len(list_class_results):
-        limit = len(list_class_results)-1
+        limit = len(list_class_results)
     results = [(list_class_results[i].find('a')['href'],re.sub('<.*?>', '', re.sub('&#\d\d;', "'", ''.join([str(j) for j in list_class_results[i].find('a').contents])))) for i in xrange(limit)]
     return results
 
@@ -31,7 +31,7 @@ def get_bing_results(submission, limit=5):
     if len(list_class_results) == 0:
         raise IndexError('No results')
     if limit >= len(list_class_results):
-        limit = len(list_class_results)-1
+        limit = len(list_class_results)
     results = [(list_class_results[i].findAll(attrs={'class':'info'})[0].find('a')['href'],list_class_results[i].findAll(attrs={'class':'info'})[0].find('a').contents[0]) for i in xrange(limit)]
     return results
 
@@ -42,7 +42,8 @@ def format_results(results):
     return formatted
 
 def give_more_info(comment):
-    extra_message = ""
+    extra_message = extra_message = "\n\n ***** \n ^^[Suggestions](http://www.reddit.com/message/compose/?to=info_bot&subject=Suggestion) ^^| ^^[FAQs](http://www.reddit.com/r/info_bot/comments/2cc45a/info_bot_info/) ^^| ^^[Issues](http://www.reddit.com/message/compose/?to=info_bot&subject=Issue) \
+    \n ^^Downvoted ^^comments ^^from ^^info_bot ^^are ^^automagically ^^removed."
     google_available = True
     bing_available = True
     try:
@@ -62,7 +63,7 @@ def give_more_info(comment):
     else:
         reply = "Sorry, no information is available for this link."
     try:
-        reply += "\n\n^({0})".format(extra_message)
+        reply += extra_message
         comment.reply(reply)
         print 'replied to comment with more info'
     except HTTPError:
@@ -118,14 +119,14 @@ keyword_list = ["what is this",
 
 comment_deleting_wait_time = 30 #how many minutes to wait before deleting downvoted comments
 r = praw.Reddit('Info Bot')
-r.login('user','pass')
+r.login('info_bot','pass')
 user = r.get_redditor('info_bot')
 already_done = pickle.load(open("already_done.p", "rb"))
 start_time = int(time.time()/60) #time in minutes for downvote checking
 
 while True:
     try:
-        all_comments = r.get_comments(subreddit = r.get_subreddit('all'),limit = None)
+        all_comments = r.get_comments(subreddit = r.get_subreddit('info_bot'),limit = None)
         parse_comments(all_comments)
         start_time = check_downvotes(user,start_time)
         pickle.dump(already_done, open("already_done.p", "wb"))
