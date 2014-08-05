@@ -2,6 +2,7 @@ import time
 import praw
 import pickle
 import urllib2
+import cookielib
 import BeautifulSoup
 import requests
 import re
@@ -25,7 +26,10 @@ def get_google_results(submission, limit=5): #limit is the max number of results
 
 def get_bing_results(submission, limit=5):
     image = submission.url
-    response_text = urllib2.urlopen("https://www.bing.com/images/searchbyimage?FORM=IRSBIQ&cbir=sbi&imgurl="+image)
+    cj = cookielib.MozillaCookieJar('cookies.txt')
+    cj.load()
+    opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
+    response_text = opener.open("https://www.bing.com/images/searchbyimage?FORM=IRSBIQ&cbir=sbi&imgurl="+image).read()
     tree = BeautifulSoup.BeautifulSoup(response_text)
     list_class_results = tree.findAll(attrs={'class':'sbi_sp'})
     if len(list_class_results) == 0:
