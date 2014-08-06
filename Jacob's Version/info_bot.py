@@ -93,7 +93,7 @@ def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to dis
 def parse_comments(all_comments):
     SEARCH_STRING = 'u/info_bot'
     for comment in all_comments:
-        if re.search('{0}$|{0}\s'.format(SEARCH_STRING),comment.body.lower()).group() and comment.id not in already_done and comment.author != user:
+        if re.search('{0}$|{0}\s'.format(SEARCH_STRING),comment.body.lower()) and comment.id not in already_done and comment.author != user:
             give_more_info(comment)
             already_done.append(comment.id)
         elif any(word in comment.body.lower() for word in keyword_list):
