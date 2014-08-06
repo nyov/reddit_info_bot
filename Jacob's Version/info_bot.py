@@ -91,8 +91,9 @@ def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to dis
     return done
 
 def parse_comments(all_comments):
+    SEARCH_STRING = 'u/info_bot'
     for comment in all_comments:
-        if 'more info info_bot' in comment.body.lower() and comment.id not in already_done and comment.author != user:
+        if re.search('{0}$|{0}\s'.format(SEARCH_STRING),comment.body.lower()).group() and comment.id not in already_done and comment.author != user:
             give_more_info(comment)
             already_done.append(comment.id)
         elif any(word in comment.body.lower() for word in keyword_list):
@@ -124,14 +125,14 @@ keyword_list = ["what is this",
 
 comment_deleting_wait_time = 30 #how many minutes to wait before deleting downvoted comments
 r = praw.Reddit('Info Bot')
-r.login('info_bot','pass')
+r.login('user','pass')
 user = r.get_redditor('info_bot')
 already_done = pickle.load(open("already_done.p", "rb"))
 start_time = int(time.time()/60) #time in minutes for downvote checking
 
 while True:
     try:
-        all_comments = r.get_comments(subreddit = r.get_subreddit('info_bot'),limit = None)
+        all_comments = r.get_comments(subreddit = r.get_subreddit('info_bot_nsfw'),limit = None)
         parse_comments(all_comments)
         start_time = check_downvotes(user,start_time)
         pickle.dump(already_done, open("already_done.p", "wb"))
