@@ -1,5 +1,27 @@
-Bot needs to check the time of last comments, if they are older than a (set time) then ignore.
+Bugs:
+Bot needs to check the time of last comments, if they are older than a (set time) then ignore.  This is because if the bot is restarted, it will comment on everything it just did unless the next part is fixed (but will still recomment if a mod has removed or deleted the first post.  We dont want to piss mods off.)
+
 Bot still isn't correctly checking to see if itself has already commented. (not sure why its not working)
+
+
+
+Crashes:
+Traceback (most recent call last):
+  File "info_bot_nsfw.py", line 160, in <module>
+    parse_comments(all_comments)
+  File "info_bot_nsfw.py", line 117, in parse_comments
+    done = reply_to_potential_comment(comment,attempt)
+  File "info_bot_nsfw.py", line 93, in reply_to_potential_comment
+    \n ^^Downvoted ^^comments ^^from ^^info_bot_nsfw ^^are ^^automagically ^^removed.')
+  File "/usr/local/lib/python2.7/site-packages/praw/objects.py", line 348, in reply
+    response = self.reddit_session._add_comment(self.fullname, text)
+  File "/usr/local/lib/python2.7/site-packages/praw/decorators.py", line 323, in wrapped
+    return function(cls, *args, **kwargs)
+  File "/usr/local/lib/python2.7/site-packages/praw/__init__.py", line 2047, in _add_comment
+    retry_on_error=False)
+  File "/usr/local/lib/python2.7/site-packages/praw/decorators.py", line 177, in wrapped
+    raise error_list[0]
+praw.errors.APIException: (DELETED_COMMENT) `that comment has been deleted` on field `parent`
 
 
 
