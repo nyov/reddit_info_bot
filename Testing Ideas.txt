@@ -1,0 +1,10 @@
+Bot needs to check the time of last comments, if they are older than a (set time) then ignore.
+Bot still isn't correctly checking to see if itself has already commented. (not sure why its not working)
+
+
+
+
+
+If interested in another $50 addon pay in order of importance:
+A way to handle numerous (all_comments = r.get_comments(subreddit = r.get_subreddit)subreddit+subreddit+subreddit.  Current max string is 1024.  Needs to handle close to 12000+
+A config file that handles all settings that can manually be changed in the bot.  (ease of use)
