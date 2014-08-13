@@ -28,8 +28,9 @@ praw.errors.APIException: (DELETED_COMMENT) `that comment has been deleted` on f
 
 
 
-If interested in another $50 addon pay in order of importance:
+If interested in another $100 addon pay in order of importance:
 
 - A way to handle numerous (all_comments = r.get_comments(subreddit = r.get_subreddit)subreddit+subreddit+subreddit.  Current max string is 1024.  Needs to handle close to 12000+ -  Possibly use r/all but then check it against a DB that holds the subreddits?
 - A config file that handles all settings that can manually be changed in the bot.  (ease of use)
+- Ability to scan for keywords but to ONLY log a message on screen. Ability to change this from manual to auto.  Auto would reply back, manual would log on screen .
 - Bot will not make any comments on keywords or search string, if the link is not a image, gif, html.  ie it will ignore video and text posts.
