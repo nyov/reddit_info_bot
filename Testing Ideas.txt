@@ -2,7 +2,8 @@ Bugs:
 Bot needs to check the time of last comments, if they are older than a (set time) then ignore.  This is because if the bot is restarted, it will comment on everything it just did unless the next part is fixed (but will still recomment if a mod has removed or deleted the first post.  We dont want to piss mods off.)
 
 Bot still isn't correctly checking to see if itself has already commented. (not sure why its not working)
-
+Make bot check entire thread to make sure it hasnt commented. 
+Add Search regex to key words.  It is finding nearly anyword right now.
 
 
 Crashes:
