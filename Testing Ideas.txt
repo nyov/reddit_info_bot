@@ -1,6 +1,6 @@
 Bugs:
 Bot needs to check the time of last comments, if they are older than a (set time via .cfg file) then ignore.  This is because if the bot is restarted, it will comment on everything it just did.
-Bot still isn't correctly checking to see if itself has already commented. (not sure why its not working)
+Bot still isn't correctly checking to see if itself has already commented. (not sure why its not working), but the above fix will resolve this.
 Make bot check entire thread to make sure it hasnt commented. This will fix Line 3's bug.  Its not double responding, its just responding to the same thread multiple times.
 Add Search regex to Key Words List.  It is finding nearly anyword right now.
 
