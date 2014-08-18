@@ -1,11 +1,10 @@
 Bugs:
-Bot needs to check the time of last comments, if they are older than a (set time) then ignore.  This is because if the bot is restarted, it will comment on everything it just did unless the next part is fixed (but will still recomment if a mod has removed or deleted the first post.  We dont want to piss mods off.)
-
+Bot needs to check the time of last comments, if they are older than a (set time via .cfg file) then ignore.  This is because if the bot is restarted, it will comment on everything it just did.
 Bot still isn't correctly checking to see if itself has already commented. (not sure why its not working)
-Make bot check entire thread to make sure it hasnt commented. 
-Add Search regex to key words.  It is finding nearly anyword right now.
+Make bot check entire thread to make sure it hasnt commented. This will fix Line 3's bug.  Its not double responding, its just responding to the same thread multiple times.
+Add Search regex to Key Words List.  It is finding nearly anyword right now.
 
-
+Fix error for when comments are deleted, before the bot can respond.
 Crashes:
 Traceback (most recent call last):
   File "info_bot_nsfw.py", line 160, in <module>
@@ -28,9 +27,11 @@ praw.errors.APIException: (DELETED_COMMENT) `that comment has been deleted` on f
 
 
 
-If interested in another $100 addon pay in order of importance:
+New Feature Requests, in order of importance:
 
-- A way to handle numerous (all_comments = r.get_comments(subreddit = r.get_subreddit)subreddit+subreddit+subreddit.  Current max string is 1024.  Needs to handle close to 12000+ -  Possibly use r/all but then check it against a DB that holds the subreddits?
+- Ability to filter any link found on google or bing, as well as it's raw text.  Must be able to handled ALL filter (except user and image) from this site:  http://spambot.rarchives.com/  - Must check against this site, as it is the main source of reddits nsfw subreddit filters.  This is a requirement per the mods.
+- A way to handle numerous (all_comments = r.get_comments(subreddit = r.get_subreddit)subreddit+subreddit+subreddit.  Current max string is 1024.  Needs to handle close to 12000+ subreddits. -  Possibly use r/all but then check it against a DB that holds the subreddits?
 - A config file that handles all settings that can manually be changed in the bot.  (ease of use)
-- Ability to scan for keywords but to ONLY log a message on screen. Ability to change this from manual to auto.  Auto would reply back, manual would log on screen .
+- Ability to scan for Key Words List, with the option in a .cfg to change it to "comment, PM, Log"
+    -comment would reply to the comment, as it is right now.  PM would send a pm to the person instead of commenting, Log would just log to screen.
 - Bot will not make any comments on keywords or search string, if the link is not a image, gif, html.  ie it will ignore video and text posts.
