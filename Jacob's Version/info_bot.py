@@ -6,6 +6,7 @@ import cookielib
 import BeautifulSoup
 import requests
 import re
+import json
 from requests import HTTPError,ConnectionError
 from praw.errors import RateLimitExceeded
 
@@ -93,15 +94,22 @@ def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to dis
 def parse_comments(all_comments):
     SEARCH_STRING = 'u/info_bot'
     for comment in all_comments:
-        if re.search('{0}$|{0}\s'.format(SEARCH_STRING),comment.body.lower()) and comment.id not in already_done and comment.author != user:
-            give_more_info(comment)
-            already_done.append(comment.id)
-        elif any(word in comment.body.lower() for word in keyword_list):
-            if comment.id not in already_done and comment.author != user:
-                done = False
-                attempt = 1
-                while not done:
-                    done = reply_to_potential_comment(comment,attempt)
+        if (time.time()-comment.created)/60 < time_limit_minutes: #if the age of the comment is less than the time limit
+            top_level = [i.replies for i in comment.submission.comments]
+            submission_comments = []
+            for i in top_level:
+                for j in i:
+                    submission_comments.append(j)
+            if not any(i for i in submission_comments if i.author == user): #If it hasn't already posted in this thread
+                if re.search('{0}$|{0}\s'.format(SEARCH_STRING),comment.body.lower()) and comment.id not in already_done and comment.author != user:
+                    give_more_info(comment)
+                    already_done.append(comment.id)
+                elif any(word.lower() in comment.body.lower() for word in keyword_list):
+                    if comment.id not in already_done and comment.author != user:
+                        done = False
+                        attempt = 1
+                        while not done:
+                            done = reply_to_potential_comment(comment,attempt)
 
 def check_downvotes(user,start_time):
     current_time = int(time.time()/60)
@@ -123,16 +131,20 @@ keyword_list = ["what is this",
                 "where is this",
                 "who is this"]
 
+with open('config.json') as json_data:
+    config = json.load(json_data)
+
+time_limit_minutes = config['TIME_LIMIT_MINUTES'] #how long before a comment will be ignored for being too old
 comment_deleting_wait_time = 30 #how many minutes to wait before deleting downvoted comments
 r = praw.Reddit('Info Bot')
-r.login('user','pass')
-user = r.get_redditor('info_bot')
+r.login(config['USER_NAME'],config['PASSWORD'])
+user = r.get_redditor(config['USER_NAME'])
 already_done = pickle.load(open("already_done.p", "rb"))
 start_time = int(time.time()/60) #time in minutes for downvote checking
 
 while True:
     try:
-        all_comments = r.get_comments(subreddit = r.get_subreddit('info_bot_nsfw'),limit = None)
+        all_comments = r.get_comments(subreddit = r.get_subreddit('nagasgura'),limit = None)
         parse_comments(all_comments)
         start_time = check_downvotes(user,start_time)
         pickle.dump(already_done, open("already_done.p", "wb"))
