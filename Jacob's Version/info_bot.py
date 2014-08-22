@@ -9,6 +9,7 @@ import re
 import json
 from requests import HTTPError,ConnectionError
 from praw.errors import RateLimitExceeded
+import get_filters
 
 def get_google_results(submission, limit=5): #limit is the max number of results to display
     image = submission.url
@@ -149,10 +150,10 @@ user = r.get_redditor(config['USER_NAME'])
 already_done = pickle.load(open("already_done.p", "rb"))
 start_time = int(time.time()/60) #time in minutes for downvote checking
 
-with open('words') as raw_words:
-    bad_words = raw_words.read().split('\n')
-with open('links') as raw_links:
-    bad_links = raw_links.read().split('\n')
+bad_words = get_filters.get_text_filters()
+bad_links = get_filters.get_link_filters()
+
+
 
 while True:
     try:
