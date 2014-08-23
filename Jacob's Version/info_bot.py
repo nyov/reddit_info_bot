@@ -9,7 +9,6 @@ import re
 import json
 from requests import HTTPError,ConnectionError
 from praw.errors import RateLimitExceeded
-import get_filters
 import itertools
 
 def get_google_results(submission, limit=5): #limit is the max number of results to display
@@ -82,7 +81,7 @@ def give_more_info(comment):
         elif mode == LOG:
             print reply
         elif mode == PM:
-             r.send_message(comment.author, 'Info results', reply)
+             print r.send_message(comment.author, 'Info results', reply)
         print 'replied to comment with more info'
     except HTTPError:
         print 'HTTP Error. Bot might be banned from this sub'
@@ -140,6 +139,10 @@ def check_downvotes(user,start_time):
         return current_time
     return start_time
 
+def get_filter(filter_type):
+    filters=json.load(urllib2.urlopen('http://spambot.rarchives.com/api.cgi?method=get_filters&start=0&count=2000&type={0}'.format(filter_type)))['filters']
+    return [i['spamtext'] for i in filters]
+
 
 with open('config.json') as json_data:
     config = json.load(json_data)
@@ -160,9 +163,9 @@ user = r.get_redditor(config['USER_NAME'])
 already_done = pickle.load(open("already_done.p", "rb"))
 start_time = int(time.time()/60) #time in minutes for downvote checking
 
-bad_words = get_filters.get_text_filters()
-bad_links = get_filters.get_link_filters()
 
+bad_words = get_filter('text')
+bad_links = get_filter('link')
 
 while True:
     try:
