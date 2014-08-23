@@ -1,29 +1,29 @@
 {
-"PASSWORD": 			"user", 
+"PASSWORD": 		"user", 
 
-"USER_NAME": 			"pass", 
+"USER_NAME": 		"pass", 
 
 "TIME_LIMIT_MINUTES": 	2,
 
-"DELETE_WAIT_TIME":		30,
+"DELETE_WAIT_TIME":	30,
 
-"KEYWORDS":				[
-						"what is this",
-						"I want more info",
-						"/u/info_bot",
-						"what is that",
-						"more info please",
-						"where is this",
-						"who is this"
-						],
+"KEYWORDS":		[
+			"what is this",
+			"I want more info",
+			"/u/info_bot",
+			"what is that",
+			"more info please",
+			"where is this",
+			"who is this"
+			],
 						
-"MODE":					"comment",
+"MODE":			"comment",
 
-"SUBREDDITS":			[
-						"info_bot",
-						"info_bot_nsfw"
-						],
+"SUBREDDITS":		[
+			"info_bot",
+			"info_bot_nsfw"
+			],
 						
-"USE_KEYWORDS":			true
+"USE_KEYWORDS":		true
 
 }
