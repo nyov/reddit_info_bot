@@ -31,7 +31,7 @@ New Feature Requests, in order of importance:
 
 ✓ - Ability to filter any link found on google or bing, as well as it's raw text.  Must be able to handled ALL filter (except user and image) from this site:  http://spambot.rarchives.com/  - Must check against this site, as it is the main source of reddits nsfw subreddit filters.  This is a requirement per the mods.
 - A way to handle numerous (all_comments = r.get_comments(subreddit = r.get_subreddit)subreddit+subreddit+subreddit.  Current max string is 1024.  Needs to handle close to 12000+ subreddits. -  Possibly use r/all but then check it against a DB that holds the subreddits?
-- A config file that handles all settings that can manually be changed in the bot.  (ease of use)
+✓ - A config file that handles all settings that can manually be changed in the bot.  (ease of use)
 - Ability to scan for Key Words List, with the option in a .cfg to change it to "comment, PM, Log"
     -comment would reply to the comment, as it is right now.  PM would send a pm to the person instead of commenting, Log would just log to screen.
 - Bot will not make any comments on keywords or search string, if the link is not a image, gif, html.  ie it will ignore video and text posts.
