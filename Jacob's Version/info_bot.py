@@ -10,6 +10,7 @@ import json
 from requests import HTTPError,ConnectionError
 from praw.errors import RateLimitExceeded
 import get_filters
+import itertools
 
 def get_google_results(submission, limit=5): #limit is the max number of results to display
     image = submission.url
@@ -76,13 +77,21 @@ def give_more_info(comment):
         reply = "Sorry, no information is available for this link."
     try:
         reply += extra_message
-        comment.reply(reply)
+        if mode == COMMENT:
+            comment.reply(reply)
+        elif mode == LOG:
+            print reply
+        elif mode == PM:
+             r.send_message(comment.author, 'Info results', reply)
         print 'replied to comment with more info'
     except HTTPError:
         print 'HTTP Error. Bot might be banned from this sub'
 
 def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to disable this feature
-    #return True
+    if (not use_keywords) or (mode != COMMENT):
+        return True
+    if not any(i in str(comment.submission.url) for i in ['.tif', '.tiff', '.gif', '.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd', '.png']):
+        return True
     done = False
     try:
         comment.reply('It appears that you are looking for more information.\n\nObtain more information by replying to this comment with the phrase "more info info_bot"')
@@ -103,21 +112,22 @@ def parse_comments(all_comments):
     for comment in all_comments:
         if comment.author:
             if (time.time()-comment.created)/60 < time_limit_minutes: #if the age of the comment is less than the time limit
-                top_level = [i.replies for i in comment.submission.comments]
-                submission_comments = []
-                for i in top_level:
-                    for j in i:
-                        submission_comments.append(j)
-                if not any(i for i in submission_comments if i.author == user): #If it hasn't already posted in this thread
-                    if re.search('{0}$|{0}\s'.format(SEARCH_STRING),comment.body.lower()) and comment.id not in already_done and comment.author != user:
-                        give_more_info(comment)
-                        already_done.append(comment.id)
-                    elif any(word.lower() in comment.body.lower() for word in keyword_list):
-                        if comment.id not in already_done and comment.author != user:
-                            done = False
-                            attempt = 1
-                            while not done:
-                                done = reply_to_potential_comment(comment,attempt)
+                if any(i in str(comment.submission.url) for i in ['.tif', '.tiff', '.gif', '.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd', '.png']):
+                    top_level = [i.replies for i in comment.submission.comments]
+                    submission_comments = []
+                    for i in top_level:
+                        for j in i:
+                            submission_comments.append(j)
+                    if not any(i for i in submission_comments if i.author == user): #If it hasn't already posted in this thread
+                        if re.search('{0}$|{0}\s'.format(SEARCH_STRING),comment.body.lower()) and comment.id not in already_done and comment.author != user:
+                            give_more_info(comment)
+                            already_done.append(comment.id)
+                        elif any(word.lower() in comment.body.lower() for word in keyword_list):
+                            if comment.id not in already_done and comment.author != user:
+                                done = False
+                                attempt = 1
+                                while not done:
+                                    done = reply_to_potential_comment(comment,attempt)
 
 def check_downvotes(user,start_time):
     current_time = int(time.time()/60)
@@ -131,19 +141,19 @@ def check_downvotes(user,start_time):
     return start_time
 
 
-keyword_list = ["what is this",
-                "I want more info",
-                "/u/info_bot",
-                "what is that",
-                "more info please",
-                "where is this",
-                "who is this"]
-
 with open('config.json') as json_data:
     config = json.load(json_data)
 
+COMMENT = 'comment'
+PM = 'PM'
+LOG = 'log'
+mode = config['MODE']
+
+use_keywords = config['USE_KEYWORDS']
+
+keyword_list = config['KEYWORDS']
 time_limit_minutes = config['TIME_LIMIT_MINUTES'] #how long before a comment will be ignored for being too old
-comment_deleting_wait_time = 30 #how many minutes to wait before deleting downvoted comments
+comment_deleting_wait_time = config["DELETE_WAIT_TIME"] #how many minutes to wait before deleting downvoted comments
 r = praw.Reddit('Info Bot')
 r.login(config['USER_NAME'],config['PASSWORD'])
 user = r.get_redditor(config['USER_NAME'])
@@ -154,10 +164,9 @@ bad_words = get_filters.get_text_filters()
 bad_links = get_filters.get_link_filters()
 
 
-
 while True:
     try:
-        all_comments = r.get_comments(subreddit = r.get_subreddit('nagasgura'),limit = None)
+        all_comments = itertools.chain(*[r.get_comments(subreddit = r.get_subreddit(s),limit = None) for s in config['SUBREDDITS']])
         parse_comments(all_comments)
         start_time = check_downvotes(user,start_time)
         pickle.dump(already_done, open("already_done.p", "wb"))
