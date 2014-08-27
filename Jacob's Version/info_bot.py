@@ -11,7 +11,7 @@ from requests import HTTPError,ConnectionError
 from praw.errors import RateLimitExceeded
 import itertools
 
-def get_google_results(submission, limit=5): #limit is the max number of results to display
+def get_google_results(submission, limit=15): #limit is the max number of results to grab (not the max to display)
     image = submission.url
     headers = {}
     headers['User-Agent'] = "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"
@@ -26,7 +26,7 @@ def get_google_results(submission, limit=5): #limit is the max number of results
     results = [(list_class_results[i].find('a')['href'],re.sub('<.*?>', '', re.sub('&#\d\d;', "'", ''.join([str(j) for j in list_class_results[i].find('a').contents])))) for i in xrange(limit)]
     return results
 
-def get_bing_results(submission, limit=5):
+def get_bing_results(submission, limit=15):
     image = submission.url
     cj = cookielib.MozillaCookieJar('cookies.txt')
     cj.load()
@@ -49,6 +49,7 @@ def format_results(results):
         if not any(j in i[1] for j in bad_words):
             if not any(j in i[0] for j in bad_links):
                 ascii_filtered.append(i)
+    ascii_filtered = ascii_filtered[:5]
     linkified = ["["+i[1]+"]("+i[0]+")" for i in ascii_filtered] #reformats the results into markdown links
     formatted = ''.join(i for i in '\n\n'.join(linkified))
     return formatted
