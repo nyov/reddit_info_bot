@@ -55,8 +55,7 @@ def format_results(results):
     return formatted
 
 def give_more_info(comment):
-    extra_message = extra_message = "\n\n ***** \n ^^[Suggestions](http://www.reddit.com/message/compose/?to=info_bot&subject=Suggestion) ^^| ^^[FAQs](http://www.reddit.com/r/info_bot/comments/2cc45a/info_bot_info/) ^^| ^^[Issues](http://www.reddit.com/message/compose/?to=info_bot&subject=Issue) \
-    \n ^^Downvoted ^^comments ^^from ^^info_bot ^^are ^^automagically ^^removed."
+    extra_message = config["EXTRA_MESSAGE"]
     google_available = True
     bing_available = True
     try:
@@ -77,24 +76,25 @@ def give_more_info(comment):
         reply = "Sorry, no information is available for this link."
     try:
         reply += extra_message
-        if mode == COMMENT:
-            comment.reply(reply)
-        elif mode == LOG:
-            print reply
-        elif mode == PM:
-             print r.send_message(comment.author, 'Info results', reply)
+        comment.reply(reply)
         print 'replied to comment with more info'
     except HTTPError:
         print 'HTTP Error. Bot might be banned from this sub'
 
 def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to disable this feature
-    if (not use_keywords) or (mode != COMMENT):
+    if (not use_keywords):
         return True
     if not any(i in str(comment.submission.url) for i in ['.tif', '.tiff', '.gif', '.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd', '.png']):
         return True
     done = False
     try:
-        comment.reply('It appears that you are looking for more information.\n\nObtain more information by replying to this comment with the phrase "more info info_bot"')
+        reply = config["INFORMATION_REPLY"]
+        if mode == COMMENT:
+            comment.reply(reply)
+        elif mode == LOG:
+            print reply
+        elif mode == PM:
+             print r.send_message(comment.author, 'Info Bot Information', reply)
         print "replied to potential comment: {0}".format(comment.body)
         done = True
         already_done.append(comment.id)
@@ -108,7 +108,7 @@ def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to dis
     return done
 
 def parse_comments(all_comments):
-    SEARCH_STRING = 'u/info_bot'
+    SEARCH_STRING = config["SEARCH_STRING"]
     for comment in all_comments:
         if comment.author:
             if (time.time()-comment.created)/60 < time_limit_minutes: #if the age of the comment is less than the time limit
