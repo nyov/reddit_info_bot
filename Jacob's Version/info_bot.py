@@ -118,16 +118,17 @@ def parse_comments(all_comments):
                     for i in top_level:
                         for j in i:
                             submission_comments.append(j)
-                    if not any(i for i in submission_comments if i.author == user): #If it hasn't already posted in this thread
+                    if not any(i for i in submission_comments if config['EXTRA_MESSAGE'] in i.body): #If there are no link replies
                         if re.search('{0}$|{0}\s'.format(SEARCH_STRING),comment.body.lower()) and comment.id not in already_done and comment.author != user:
                             give_more_info(comment)
                             already_done.append(comment.id)
-                        elif any(word.lower() in comment.body.lower() for word in keyword_list):
-                            if comment.id not in already_done and comment.author != user:
-                                done = False
-                                attempt = 1
-                                while not done:
-                                    done = reply_to_potential_comment(comment,attempt)
+                        elif not any(i for i in submission_comments if i.body == config['INFORMATION_REPLY']): #If there are no information replies
+                            if any(word.lower() in comment.body.lower() for word in keyword_list):
+                                if comment.id not in already_done and comment.author != user:
+                                    done = False
+                                    attempt = 1
+                                    while not done:
+                                        done = reply_to_potential_comment(comment,attempt)
 
 def check_downvotes(user,start_time):
     current_time = int(time.time()/60)
