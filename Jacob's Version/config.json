@@ -4,6 +4,8 @@
 
 "USER_NAME": 		"pass", 
 
+"BOT_NAME":			"Info Bot",
+
 "EXTRA_MESSAGE":	"\n\n ***** \n ^^[Suggestions](http://www.reddit.com/message/compose/?to=info_bot&subject=Suggestion) ^^| ^^[FAQs](http://www.reddit.com/r/info_bot/comments/2cc45a/info_bot_info/) ^^| ^^[Issues](http://www.reddit.com/message/compose/?to=info_bot&subject=Issue)\n\n ^^Downvoted ^^comments ^^from ^^info_bot ^^are ^^automagically ^^removed.",
 
 "INFORMATION_REPLY":	"It appears that you are looking for more information.\n\nObtain more information by making a comment in the thread which includes /u/info_bot",

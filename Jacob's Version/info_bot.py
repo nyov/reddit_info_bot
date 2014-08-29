@@ -158,7 +158,7 @@ use_keywords = config['USE_KEYWORDS']
 keyword_list = config['KEYWORDS']
 time_limit_minutes = config['TIME_LIMIT_MINUTES'] #how long before a comment will be ignored for being too old
 comment_deleting_wait_time = config["DELETE_WAIT_TIME"] #how many minutes to wait before deleting downvoted comments
-r = praw.Reddit('Info Bot')
+r = praw.Reddit(config['BOT_NAME'])
 r.login(config['USER_NAME'],config['PASSWORD'])
 user = r.get_redditor(config['USER_NAME'])
 already_done = pickle.load(open("already_done.p", "rb"))
