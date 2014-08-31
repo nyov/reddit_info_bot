@@ -20,7 +20,11 @@
 
 8.  The bot fails on certain subreddits - eg; r/ImGoingToHellForThis
 
-9.  doesnt seem to handle multiple subreddits.  just locks up.
+9.  How much we looking at to add tineye and karma decay to the results?
+
+
+
+x. doesnt seem to handle multiple subreddits.  just locks up.
 After watching the debug, everything works, just the "Finished a round of comments. Waiting two seconds."  no longer shows up.
 It seems to be taking nearly 20 seconds to get through each subreddit (With a limit of 100).  With over 4000 subreddits it could 22 hours to cover them all.  How could we scan more at once?  
 
