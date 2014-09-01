@@ -1,186 +1,97 @@
-1 - It is still double commenting on Information Post and Link Post - *THIS LINK IS NSFW* - http://www.reddit.com/r/info_bot_nsfw/comments/2f16wf/test_315/
+1 - It is still double commenting on Information Post and Link Post, see here - *THIS LINK IS NSFW* - http://www.reddit.com/r/info_bot_nsfw/comments/2f16wf/test_315/
 
 2 - It seems to be filtering things it shouldnt?  See above link, notice how it removed the top two google reverse links (twitter and daily motion) - yet those are not on the filter list.
 		-I believe I resolved this by commenting out line 19?
 
 3 - Can we have it also filter out non English links?  See above link again, 5th link on the Bing Link Post is '...'' because it is in Russian.  
 
-4 - Issue with captcha in PM mode.  
+4 - Issue with captcha in PM mode.  There seems to be some way around this after reading about it.  Not sure how to implement.  
 
 	Captcha URL: http://www.reddit.com/captcha/6sn0BT3R96Du9h2zms94nGEl2JmHkgpL.png
 	Captcha: OXEEWG
 	{u'errors': []}
 	replied to potential comment: 
 
-5. TIME_IN_MINUTES - how does it work?  Seems like it doesnt check against keywords.  I let the bot sit for about 25 mins, ran it again with a settings of '2' and it commented on a keyword from over 25 mins ago. (on PM mode, not sure if that matters) - dont fix this yet, let me verify.
 
-6.  Possible for the log to tell me what thread it is posting information and link posts to?
+
+5. TIME_IN_MINUTES - how does it work?  Seems like it doesnt check against keywords.  I let the bot sit for about 25 mins, ran it again with a settings of '2' and it commented on a keyword from over 25 mins ago. (on PM mode, not sure if that matters) - dont fix this yet, let me verify.  Verified it is not working.  If the bot is stopped, wait for 20-40 mins and started again it will repost on anything it still finds regardless of the time.
+
+6.  Is it possible for the log(print) to tell me what thread it is posting information and link posts to?
 
 7.  How do I log python to a file?
 
 8.  The bot fails on certain subreddits - eg; r/ImGoingToHellForThis
 
-9.  How much we looking at to add tineye and karma decay to the results?
+
+9.  Can the config file be edited then saved while the bot is running?
+
+Debugger:
+After watching the debug, everything works, however the "Finished a round of comments. Waiting two seconds."  no longer shows up.
+	It seems to be taking nearly 20 seconds to get through each subreddit (With a limit of 100).  With over 4000 subreddits it could 22 hours to cover them all.    
+		If I watch the debugger it is grabbing the same .json link hundreds of times, this is most likely why it takes nearly an hour to only make it through 10 subreddits?
+It seems that when it hits an HTTP Error (aka a subreddit that no longer exists), it starts over on the list.  
+
+Here is the debug of it grabbing multiple links:
 
 
+C:\Python27>python info_bot.py
+retrieving: https://ssl.reddit.com/api/login/.json
+params: None
+data: {'passwd': u'j159n357s', 'user': u'info_bot_nsfw'}
+retrieving: http://www.reddit.com/user/info_bot_nsfw/about/.json
+params: None
+data: None
+retrieving: http://www.reddit.com/user/info_bot_nsfw/about/.json
+params: None
+retrieving: http://www.reddit.com/r/OnOff/comments/.json
+retrieving: http://www.reddit.com/r/OnOff/comments/.json
+retrieving: http://www.reddit.com/r/OnOff/comments/.json
+retrieving: http://www.reddit.com/r/OnOff/comments/.json
+retrieving: http://www.reddit.com/r/OnOff/comments/.json
+retrieving: http://www.reddit.com/r/OnOff/comments/.json
+retrieving: http://www.reddit.com/r/OnOff/comments/.json
+retrieving: http://www.reddit.com/r/OnOff/comments/.json
+retrieving: http://www.reddit.com/r/OnOff/comments/.json
+retrieving: http://www.reddit.com/r/girlsinyogapants/comments/.json
+retrieving: http://www.reddit.com/comments/2f0cmi.json
+retrieving: http://www.reddit.com/comments/2f0cmi.json
+retrieving: http://www.reddit.com/comments/2f0cmi.json
+retrieving: http://www.reddit.com/comments/2f0cmi.json
+retrieving: http://www.reddit.com/comments/2f0cmi.json
+retrieving: http://www.reddit.com/comments/2f0cmi.json
+retrieving: http://www.reddit.com/comments/2ezvtk.json
+retrieving: http://www.reddit.com/comments/2f0mhh.json
+retrieving: http://www.reddit.com/comments/2f0cmi.json
+retrieving: http://www.reddit.com/comments/2f1iut.json
+retrieving: http://www.reddit.com/comments/2f0cmi.json
+retrieving: http://www.reddit.com/comments/2f0cmi.json
+retrieving: http://www.reddit.com/comments/2f0cmi.json
+retrieving: http://www.reddit.com/comments/2f0cmi.json
+retrieving: http://www.reddit.com/comments/2f0cmi.json
+retrieving: http://www.reddit.com/r/girlsinyogapants/comments/.json
+retrieving: http://www.reddit.com/r/girlsinyogapants/comments/.json
+retrieving: http://www.reddit.com/r/girlsinyogapants/comments/.json
+retrieving: http://www.reddit.com/r/girlsinyogapants/comments/.json
+retrieving: http://www.reddit.com/r/girlsinyogapants/comments/.json
+retrieving: http://www.reddit.com/r/girlsinyogapants/comments/.json
+retrieving: http://www.reddit.com/r/girlsinyogapants/comments/.json
+retrieving: http://www.reddit.com/r/girlsinyogapants/comments/.json
+retrieving: http://www.reddit.com/r/girlsinyogapants/comments/.json
+retrieving: http://www.reddit.com/r/Hotchickswithtattoos/comments/.json
+retrieving: http://www.reddit.com/comments/2f0a6h.json
+retrieving: http://www.reddit.com/comments/2f0a6h.json
+retrieving: http://www.reddit.com/comments/2ezse1.json
+retrieving: http://www.reddit.com/comments/2f1ncm.json
+retrieving: http://www.reddit.com/comments/2f0a6h.json
+retrieving: http://www.reddit.com/comments/2f0a6h.json
+retrieving: http://www.reddit.com/comments/2f0a6h.json
+retrieving: http://www.reddit.com/comments/2f0a6h.json
+retrieving: http://www.reddit.com/r/Hotchickswithtattoos/comments/.json
+retrieving: http://www.reddit.com/r/Hotchickswithtattoos/comments/.json
+retrieving: http://www.reddit.com/r/Hotchickswithtattoos/comments/.json
+retrieving: http://www.reddit.com/r/Hotchickswithtattoos/comments/.json
+retrieving: http://www.reddit.com/r/Hotchickswithtattoos/comments/.json
+retrieving: http://www.reddit.com/r/Hotchickswithtattoos/comments/.json
+retrieving: http://www.reddit.com/r/Hotchickswithtattoos/comments/.json
 
-x. doesnt seem to handle multiple subreddits.  just locks up.
-After watching the debug, everything works, just the "Finished a round of comments. Waiting two seconds."  no longer shows up.
-It seems to be taking nearly 20 seconds to get through each subreddit (With a limit of 100).  With over 4000 subreddits it could 22 hours to cover them all.  How could we scan more at once?  
-
-Here is the debug:
-
-
-			C:\Python27>python info_bot.py
-			retrieving: https://ssl.reddit.com/api/login/.json
-			params: None
-			data: {'passwd': u'j159n357s', 'user': u'info_bot_nsfw'}
-			retrieving: http://www.reddit.com/user/info_bot_nsfw/about/.json
-			params: None
-			data: None
-			retrieving: http://www.reddit.com/user/info_bot_nsfw/about/.json
-			params: None
-			data: None
-			retrieving: http://www.reddit.com/r/NSFW_GIF/comments/.json
-			params: {'limit': 1024}
-			data: None
-			retrieving: http://www.reddit.com/comments/2f0b2m.json
-			params: None
-			data: None
-			retrieving: http://www.reddit.com/comments/2ezqlg.json
-			params: None
-			data: None
-			retrieving: http://www.reddit.com/comments/2ezqlg.json
-			params: None
-			data: None
-			retrieving: http://www.reddit.com/comments/2f1kod.json
-			params: None
-			data: None
-			retrieving: http://www.reddit.com/comments/2ez1b2.json
-			params: None
-			data: None
-			retrieving: http://www.reddit.com/comments/2f0z32.json
-			params: None
-			data: None
-			retrieving: http://www.reddit.com/comments/2eyvco.json
-			params: None
-			data: None
-			retrieving: http://www.reddit.com/comments/2ez98t.json
-			params: None
-			data: None
-			retrieving: http://www.reddit.com/comments/2f1kod.json
-			params: None
-			data: None
-			retrieving: http://www.reddit.com/comments/2f0uz1.json
-			params: None
-			data: None
-			retrieving: http://www.reddit.com/comments/2f1hmh.json
-			params: None
-			data: None
-			retrieving: http://www.reddit.com/comments/2f0uz1.json
-			params: None
-			data: None
-			retrieving: http://www.reddit.com/comments/2ezrcd.json
-			params: None
-			data: None
-			retrieving: http://www.reddit.com/comments/2f02vq.json
-			params: None
-			data: None
-			retrieving: http://www.reddit.com/comments/2ezrcd.json
-			params: None
-			data: None
-			retrieving: http://www.reddit.com/comments/2f0ttv.json
-			params: None
-			data: None
-			retrieving: http://www.reddit.com/comments/2f0ttv.json
-			params: None
-			data: None
-			retrieving: http://www.reddit.com/comments/2ezqlg.json
-			params: None
-			data: None
-			retrieving: http://www.reddit.com/comments/2f0abh.json
-			params: None
-			data: None
-			Traceback (most recent call last):
-			  File "info_bot.py", line 175, in <module>
-			    parse_comments(all_comments)
-			  File "info_bot.py", line 115, in parse_comments
-			    if any(i in str(comment.submission.url) for i in ['.tif', '.tiff', '.gif', '
-			.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd',
-			'.png']):
-			  File "info_bot.py", line 115, in <genexpr>
-			    if any(i in str(comment.submission.url) for i in ['.tif', '.tiff', '.gif', '
-			.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd',
-			'.png']):
-			  File "C:\Python27\lib\site-packages\praw\objects.py", line 576, in submission
-			    self._submission = self.reddit_session.get_submission(None, sid)
-			  File "C:\Python27\lib\site-packages\praw\__init__.py", line 909, in get_submis
-			sion
-			    params=params)
-			  File "C:\Python27\lib\site-packages\praw\decorators.py", line 323, in wrapped
-			    return function(cls, *args, **kwargs)
-			  File "C:\Python27\lib\site-packages\praw\objects.py", line 855, in from_url
-			    s_info, c_info = reddit_session.request_json(url, params=params)
-			  File "C:\Python27\lib\site-packages\praw\decorators.py", line 161, in wrapped
-			    return_value = function(reddit_session, *args, **kwargs)
-			  File "C:\Python27\lib\site-packages\praw\__init__.py", line 510, in request_js
-			on
-			    response = self._request(url, params, data)
-			  File "C:\Python27\lib\site-packages\praw\__init__.py", line 374, in _request
-			    response = handle_redirect()
-			  File "C:\Python27\lib\site-packages\praw\__init__.py", line 347, in handle_red
-			irect
-			    timeout=timeout, **kwargs)
-			  File "C:\Python27\lib\site-packages\praw\handlers.py", line 135, in wrapped
-			    result = function(cls, **kwargs)
-			  File "C:\Python27\lib\site-packages\praw\handlers.py", line 52, in wrapped
-			    time.sleep(delay)
-			KeyboardInterrupt
-
-			C:\Python27>python info_bot.py
-			retrieving: https://ssl.reddit.com/api/login/.json
-			retrieving: http://www.reddit.com/user/info_bot_nsfw/about/.json
-			retrieving: http://www.reddit.com/user/info_bot_nsfw/about/.json
-			retrieving: http://www.reddit.com/r/NSFW_GIF/comments/.json
-			retrieving: http://www.reddit.com/comments/2f0b2m.json
-			retrieving: http://www.reddit.com/comments/2ezqlg.json
-			retrieving: http://www.reddit.com/comments/2ezqlg.json
-			retrieving: http://www.reddit.com/comments/2f1kod.json
-			retrieving: http://www.reddit.com/comments/2ez1b2.json
-			Traceback (most recent call last):
-			  File "info_bot.py", line 175, in <module>
-			    parse_comments(all_comments)
-			  File "info_bot.py", line 115, in parse_comments
-			    if any(i in str(comment.submission.url) for i in ['.tif', '.tiff', '.gif', '
-			.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd',
-			'.png']):
-			  File "info_bot.py", line 115, in <genexpr>
-			    if any(i in str(comment.submission.url) for i in ['.tif', '.tiff', '.gif', '
-			.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd',
-			'.png']):
-			  File "C:\Python27\lib\site-packages\praw\objects.py", line 576, in submission
-			    self._submission = self.reddit_session.get_submission(None, sid)
-			  File "C:\Python27\lib\site-packages\praw\__init__.py", line 909, in get_submis
-			sion
-			    params=params)
-			  File "C:\Python27\lib\site-packages\praw\decorators.py", line 323, in wrapped
-			    return function(cls, *args, **kwargs)
-			  File "C:\Python27\lib\site-packages\praw\objects.py", line 855, in from_url
-			    s_info, c_info = reddit_session.request_json(url, params=params)
-			  File "C:\Python27\lib\site-packages\praw\decorators.py", line 161, in wrapped
-			    return_value = function(reddit_session, *args, **kwargs)
-			  File "C:\Python27\lib\site-packages\praw\__init__.py", line 510, in request_js
-			on
-			    response = self._request(url, params, data)
-			  File "C:\Python27\lib\site-packages\praw\__init__.py", line 374, in _request
-			    response = handle_redirect()
-			  File "C:\Python27\lib\site-packages\praw\__init__.py", line 347, in handle_red
-			irect
-			    timeout=timeout, **kwargs)
-			  File "C:\Python27\lib\site-packages\praw\handlers.py", line 135, in wrapped
-			    result = function(cls, **kwargs)
-			  File "C:\Python27\lib\site-packages\praw\handlers.py", line 52, in wrapped
-			    time.sleep(delay)
-			KeyboardInterrupt
-
-			C:\Python27>python info_bot.py
+10.  How much we looking at to add tineye and karma decay to the results?
