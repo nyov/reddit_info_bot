@@ -22,8 +22,13 @@
 
 8.  The bot fails on certain subreddits - eg; r/ImGoingToHellForThis
 
-
 9.  Can the config file be edited then saved while the bot is running?
+
+10. Google Links only displaying 4 results.
+
+11. Would you tihnk it fair if I requested we add Tineye and Karma Decay to the searches? Lets talk about this.
+
+Biggest Issue:
 
 Debugger:
 After watching the debug, everything works, however the "Finished a round of comments. Waiting two seconds."  no longer shows up.
@@ -94,4 +99,3 @@ retrieving: http://www.reddit.com/r/Hotchickswithtattoos/comments/.json
 retrieving: http://www.reddit.com/r/Hotchickswithtattoos/comments/.json
 retrieving: http://www.reddit.com/r/Hotchickswithtattoos/comments/.json
 
-10.  How much we looking at to add tineye and karma decay to the results?
