@@ -16,7 +16,7 @@ def get_google_results(submission, limit=15): #limit is the max number of result
     headers = {}
     headers['User-Agent'] = "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"
     response_text = requests.get('http://www.google.com/searchbyimage?image_url={0}'.format(image), headers=headers).content
-    response_text = response_text[response_text.find('Pages that include'):]
+    #response_text = response_text[response_text.find('Pages that include'):]
     tree = BeautifulSoup.BeautifulSoup(response_text)
     list_class_results = tree.findAll(attrs={'class':'r'})
     if len(list_class_results) == 0:
@@ -110,30 +110,33 @@ def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to dis
 def parse_comments(all_comments):
     SEARCH_STRING = config["SEARCH_STRING"]
     for comment in all_comments:
-        if comment.author:
-            if (time.time()-comment.created)/60 < time_limit_minutes: #if the age of the comment is less than the time limit
-                if any(i in str(comment.submission.url) for i in ['.tif', '.tiff', '.gif', '.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd', '.png']):
-                    top_level = [i.replies for i in comment.submission.comments]
-                    submission_comments = []
-                    for i in top_level:
-                        for j in i:
-                            submission_comments.append(j)
-                    if not any(i for i in submission_comments if config['EXTRA_MESSAGE'] in i.body): #If there are no link replies
-                        if re.search('{0}$|{0}\s'.format(SEARCH_STRING),comment.body.lower()) and comment.id not in already_done and comment.author != user:
-                            give_more_info(comment)
-                            already_done.append(comment.id)
-                        elif not any(i for i in submission_comments if i.body == config['INFORMATION_REPLY']): #If there are no information replies
-                            if any(word.lower() in comment.body.lower() for word in keyword_list):
-                                if comment.id not in already_done and comment.author != user:
-                                    done = False
-                                    attempt = 1
-                                    while not done:
-                                        done = reply_to_potential_comment(comment,attempt)
+        print ".",
+        if comment.author: #check if the comment exists
+            if comment.subreddit.display_name in subreddit_list: #check if it's in one of the right subs
+                if (time.time()-comment.created_utc)/60 < time_limit_minutes: #if the age of the comment is less than the time limit
+                    if any(i in str(comment.submission.url) for i in ['.tif', '.tiff', '.gif', '.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd', '.png']):
+                        top_level = [i.replies for i in comment.submission.comments]
+                        submission_comments = []
+                        for i in top_level:
+                            for j in i:
+                                submission_comments.append(j)
+                        if not any(i for i in submission_comments if config['EXTRA_MESSAGE'] in i.body): #If there are no link replies
+                            if re.search('{0}$|{0}\s'.format(SEARCH_STRING),comment.body.lower()) and comment.id not in already_done and comment.author != user:
+                                give_more_info(comment)
+                                already_done.append(comment.id)
+                            elif not any(i for i in submission_comments if i.body == config['INFORMATION_REPLY']): #If there are no information replies
+                                if any(word.lower() in comment.body.lower() for word in keyword_list):
+                                    if comment.id not in already_done and comment.author != user:
+                                        done = False
+                                        attempt = 1
+                                        while not done:
+                                            done = reply_to_potential_comment(comment,attempt)
+    print
 
 def check_downvotes(user,start_time):
     current_time = int(time.time()/60)
     if (current_time - start_time) >= comment_deleting_wait_time:
-        my_comments = user.get_comments(limit=100)
+        my_comments = user.get_comments(limit=None)
         for comment in my_comments:
             if comment.score < 0:
                 comment.delete()
@@ -165,13 +168,15 @@ user = r.get_redditor(config['USER_NAME'])
 already_done = pickle.load(open("already_done.p", "rb"))
 start_time = int(time.time()/60) #time in minutes for downvote checking
 
+nagasgura = r.get_subreddit("nagasgura")
+subreddit_list = [r.get_subreddit(i).display_name for i in config['SUBREDDITS']]
 
 bad_words = get_filter('text')
 bad_links = get_filter('link')
 
 while True:
     try:
-        all_comments = itertools.chain(*[r.get_comments(subreddit = r.get_subreddit(s),limit = None) for s in config['SUBREDDITS']])
+        all_comments = r.get_comments(subreddit = r.get_subreddit('all'),limit = None)
         parse_comments(all_comments)
         start_time = check_downvotes(user,start_time)
         pickle.dump(already_done, open("already_done.p", "wb"))
