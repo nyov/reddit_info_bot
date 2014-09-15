@@ -1,3 +1,15 @@
+Latest Error: 9.15.2014:
+Traceback (most recent call last):
+  File "info_bot.py", line 180, in <module>
+    parse_comments(all_comments)
+  File "info_bot.py", line 118, in parse_comments
+    top_level = [i.replies for i in comment.submission.comments]
+  File "C:\Python27\lib\site-packages\praw\objects.py", line 85, in __getattr__
+    attr))
+AttributeError: '<class 'praw.objects.MoreComments'>' has no attribute 'replies'
+
+
+
 1 - It is still double commenting on Information Post and Link Post, see here - *THIS LINK IS NSFW* - http://www.reddit.com/r/info_bot_nsfw/comments/2f16wf/test_315/
 
 2 - It seems to be filtering things it shouldnt?  See above link, notice how it removed the top two google reverse links (twitter and daily motion) - yet those are not on the filter list.
