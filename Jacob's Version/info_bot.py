@@ -9,7 +9,6 @@ import re
 import json
 from requests import HTTPError,ConnectionError
 from praw.errors import RateLimitExceeded
-import itertools
 
 def get_google_results(submission, limit=15): #limit is the max number of results to grab (not the max to display)
     image = submission.url
