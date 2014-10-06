@@ -45,9 +45,10 @@ def format_results(results):
     #filter the links and words.
     ascii_filtered = []
     for i in ascii:
-        if not any(j in i[1] for j in bad_words):
-            if not any(j in i[0] for j in bad_links):
-                ascii_filtered.append(i)
+        if any(letter in ' '.join(i[1]).lower() for letter in 'abcdefghijklmnopqrstuv'): #checks to ensure that there is English in the result
+            if not any(j in i[1] for j in bad_words):
+                if not any(j in i[0] for j in bad_links):
+                    ascii_filtered.append(i)
     ascii_filtered = ascii_filtered[:5]
     linkified = ["["+i[1]+"]("+i[0]+")" for i in ascii_filtered] #reformats the results into markdown links
     formatted = ''.join(i for i in '\n\n'.join(linkified))
@@ -167,7 +168,6 @@ user = r.get_redditor(config['USER_NAME'])
 already_done = pickle.load(open("already_done.p", "rb"))
 start_time = int(time.time()/60) #time in minutes for downvote checking
 
-nagasgura = r.get_subreddit("nagasgura")
 subreddit_list = [r.get_subreddit(i).display_name for i in config['SUBREDDITS']]
 
 bad_words = get_filter('text')
@@ -175,7 +175,7 @@ bad_links = get_filter('link')
 
 while True:
     try:
-        all_comments = r.get_comments(subreddit = r.get_subreddit('all'),limit = None)
+        all_comments = r.get_comments(subreddit = r.get_subreddit('all'),limit = None) #building a big sub list takes more time than just filtering through r/all in parse_comments
         parse_comments(all_comments)
         start_time = check_downvotes(user,start_time)
         pickle.dump(already_done, open("already_done.p", "wb"))
