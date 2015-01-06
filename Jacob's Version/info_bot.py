@@ -41,6 +41,12 @@ def get_bing_results(submission, limit=15):
     results = [(list_class_results[i].findAll(attrs={'class':'info'})[0].find('a')['href'],list_class_results[i].findAll(attrs={'class':'info'})[0].find('a').contents[0]) for i in xrange(limit)]
     return results
 
+def get_karmadecay_results(image, limit=15):
+    headers = {}
+    headers['User-Agent'] = "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"
+    response_text = requests.get("http://www.karmadecay.com/search?kdtoolver=b1&q="+image, headers=headers).content
+    print response_text
+
 def format_results(results):
     ascii = [[''.join(k for k in i[j] if (ord(k)<128 and k not in '[]()')) for j in xrange(2)] for i in results] #eliminates non-ascii characters
     #filter the links and words.
@@ -189,3 +195,4 @@ def main():
 #main()
 
 
+get_karmadecay_results("http://i.imgur.com/GuAB8OE.jpg")
