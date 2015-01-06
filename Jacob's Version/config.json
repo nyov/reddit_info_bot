@@ -1,8 +1,8 @@
 {
 	
-"PASSWORD": 		"user", 
+"PASSWORD": 		"urlfixerbot", 
 
-"USER_NAME": 		"pass", 
+"USER_NAME": 		"urlfixerbot", 
 
 "BOT_NAME":			"Info Bot",
 
@@ -29,8 +29,7 @@
 "MODE":			"comment",
 
 "SUBREDDITS":		[
-			"info_bot",
-			"info_bot_nsfw"
+			"nagasgura"
 			],
 						
 "USE_KEYWORDS":		true

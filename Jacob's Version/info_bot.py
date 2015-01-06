@@ -148,43 +148,44 @@ def get_filter(filter_type):
     filters=json.load(urllib2.urlopen('http://spambot.rarchives.com/api.cgi?method=get_filters&start=0&count=2000&type={0}'.format(filter_type)))['filters']
     return [i['spamtext'] for i in filters]
 
+def main():
+    with open('config.json') as json_data:
+        config = json.load(json_data)
 
-with open('config.json') as json_data:
-    config = json.load(json_data)
+    COMMENT = 'comment'
+    PM = 'PM'
+    LOG = 'log'
+    mode = config['MODE']
 
-COMMENT = 'comment'
-PM = 'PM'
-LOG = 'log'
-mode = config['MODE']
+    use_keywords = config['USE_KEYWORDS']
 
-use_keywords = config['USE_KEYWORDS']
+    keyword_list = config['KEYWORDS']
+    time_limit_minutes = config['TIME_LIMIT_MINUTES'] #how long before a comment will be ignored for being too old
+    comment_deleting_wait_time = config["DELETE_WAIT_TIME"] #how many minutes to wait before deleting downvoted comments
+    r = praw.Reddit(config['BOT_NAME'])
+    r.login(config['USER_NAME'],config['PASSWORD'])
+    user = r.get_redditor(config['USER_NAME'])
+    already_done = pickle.load(open("already_done.p", "rb"))
+    start_time = int(time.time()/60) #time in minutes for downvote checking
 
-keyword_list = config['KEYWORDS']
-time_limit_minutes = config['TIME_LIMIT_MINUTES'] #how long before a comment will be ignored for being too old
-comment_deleting_wait_time = config["DELETE_WAIT_TIME"] #how many minutes to wait before deleting downvoted comments
-r = praw.Reddit(config['BOT_NAME'])
-r.login(config['USER_NAME'],config['PASSWORD'])
-user = r.get_redditor(config['USER_NAME'])
-already_done = pickle.load(open("already_done.p", "rb"))
-start_time = int(time.time()/60) #time in minutes for downvote checking
+    nagasgura = r.get_subreddit("nagasgura")
+    subreddit_list = [r.get_subreddit(i).display_name for i in config['SUBREDDITS']]
 
-nagasgura = r.get_subreddit("nagasgura")
-subreddit_list = [r.get_subreddit(i).display_name for i in config['SUBREDDITS']]
+    bad_words = get_filter('text')
+    bad_links = get_filter('link')
 
-bad_words = get_filter('text')
-bad_links = get_filter('link')
-
-while True:
-    try:
-        all_comments = r.get_comments(subreddit = r.get_subreddit('all'),limit = None)
-        parse_comments(all_comments)
-        start_time = check_downvotes(user,start_time)
-        pickle.dump(already_done, open("already_done.p", "wb"))
-        print 'Finished a round of comments. Waiting two seconds.\n'
-        time.sleep(2)
-    except ConnectionError:
-        print 'Connection Error'
-    except HTTPError:
-        print 'HTTP Error'
+    while True:
+        try:
+            all_comments = r.get_comments(subreddit = r.get_subreddit('all'),limit = None)
+            parse_comments(all_comments)
+            start_time = check_downvotes(user,start_time)
+            pickle.dump(already_done, open("already_done.p", "wb"))
+            print 'Finished a round of comments. Waiting two seconds.\n'
+            time.sleep(2)
+        except ConnectionError:
+            print 'Connection Error'
+        except HTTPError:
+            print 'HTTP Error'
+#main()
 
 
