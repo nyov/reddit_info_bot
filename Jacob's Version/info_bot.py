@@ -51,49 +51,14 @@ def get_karmadecay_results(image, limit=15):
     results = [(i[i.find("(")+1:i.find(")")],i[i.find("[")+1:i.find("]")]) for i in raw_results]
     return results #[(link,text)]
 
-def check_spam(link): #True if the link is spam
-    print "trying " + link
-    domain =  re.search("http://\w.*\.\w.+\.\w*/|http://\w.+\.\w*/",link).group().decode('utf-8')
-    submission = r.get_submission(submission_id='2rwpxt')
-    submission.add_comment(domain)
-    print "adding comment"
-    max_tries = 5
-    #user2.get_submission(submission_id='2rwpxt')
-    for i in xrange(max_tries): #it will keep checking if the link shows up for max_tries
-        time.sleep(1)
-        done = False
-        start_time = time.time()
-        while not done:
-            done = True
-            try:
-                #headers = {}
-                #headers['User-Agent'] = "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"
-                #submission_html = requests.get("http://www.reddit.com/r/nagasgura/comments/2rwpxt/infobot_spam_tester/?sort=new", headers=headers).content.decode('utf-8')
-                submission_html = urllib2.urlopen("http://www.reddit.com/r/nagasgura/comments/2rwpxt/infobot_spam_tester/?sort=new?"+str(random.randint(100000,1000000))).read().decode('utf-8')
-            except:
-                print "error in spam checker!"
-                i-=1
-                time.sleep(2)
-                done = False
-        print time.time()-start_time
-
-        #comments = [c.body for c in user2.get_submission(submission_id='2rwpxt').comments]
-        print domain
-        if domain in submission_html:
-            print domain + " is clean! " + str(i+1) + "try."
-            return False,domain
-    print domain + " is spam!"
-    return True,domain
-
 def get_nonspam_links(results):
-    #First, PM the links to the alt account
+    #PM the links to the alt account
     for i in results:
         link = i[0]
         print link
         domain =  re.search("http\w?://\w.*\.\w.+\.\w*/|http://\w.+\.\w*/",link).group().decode('utf-8')
-        r.send_message('bottester1234','Link Test',domain)
+        r.send_message(config['SECOND_ACCOUNT_NAME'],'Link Test',domain)
         print "sent: "+domain
-    time.sleep(2)
     passed_domains = []
     for msg in r2.get_unread(limit=15):
         passed_domains.append(msg.body)
@@ -109,29 +74,17 @@ def get_nonspam_links(results):
     print nonspam_links
     return nonspam_links
 
-def format_results(results):
+def format_results(results): #returns a formatted and spam filtered list of the results
     ascii = [[''.join(k for k in i[j] if (ord(k)<128 and k not in '[]()')) for j in xrange(2)] for i in results] #eliminates non-ascii characters
     #filter the links and words.
     ascii_filtered = []
     for i in ascii:
         if not any(j in i[1] for j in bad_words):
             ascii_filtered.append(i)
-            """
-            if any(j in i[0] for j in approved_links):
-                ascii_filtered.append(i)
-            elif not any(j in i[0] for j in bad_links+other_bad_links): #if it doesn't match with the spam lists
-                spam_results = check_spam(i[0])
-                if spam_results[0]: #the link didn't show up
-                    #bad_links.append(spam_results[1])
-                    pass
 
-                else: #the link isn't spam
-                    approved_links.append(spam_results[1])
-                    ascii_filtered.append(i)
-            """
-    ascii_final = get_nonspam_links(ascii_filtered)
+    ascii_final = get_nonspam_links(ascii_filtered) #filter the links for spam
     if len(ascii_final) > 5:
-        ascii_final = ascii_final[:5]
+        ascii_final = ascii_final[:5] #limit the list to 5 items
     linkified = ["["+i[1]+"]("+i[0]+")" for i in ascii_final] #reformats the results into markdown links
     formatted = ''.join(i for i in '\n\n'.join(linkified))
     return formatted
@@ -248,20 +201,16 @@ comment_deleting_wait_time = config["DELETE_WAIT_TIME"] #how many minutes to wai
 r = praw.Reddit(config['BOT_NAME'])
 r.login(config['USER_NAME'],config['PASSWORD'])
 
-r2 = praw.Reddit(config['BOT_NAME'])
-r2.login('bottester1234','bottester1234')
+r2 = praw.Reddit(config['BOT_NAME']) #load a second praw instance for the second account (the one used to check the spam links)
+r2.login(config['SECOND_ACCOUNT_NAME'],config['SECOND_ACCOUNT_PASS'])
 
 user = r.get_redditor(config['USER_NAME'])
 already_done = pickle.load(open("already_done.p", "rb"))
 start_time = int(time.time()/60) #time in minutes for downvote checking
 
-nagasgura = r.get_subreddit("nagasgura")
 subreddit_list = [r.get_subreddit(i).display_name for i in config['SUBREDDITS']]
-#check_spam(r,"http://www.hdfsfwedv.com/hello")
+#load the link and word lists:
 bad_words = get_filter('text')
-bad_links = pickle.load(open("bad_links.p","rb")) #from the file
-other_bad_links = get_filter('link') #from the online spam list
-approved_links = pickle.load(open("approved_links.p","rb"))
 
 while True:
     try:
@@ -279,4 +228,3 @@ while True:
         print 'Connection Error'
     except HTTPError:
         print 'HTTP Error'
-main()

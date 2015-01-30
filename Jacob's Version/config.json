@@ -1,8 +1,12 @@
 {
 	
-"PASSWORD": 		"urlfixerbot", 
+"PASSWORD": 		"blank", 
 
-"USER_NAME": 		"urlfixerbot", 
+"USER_NAME": 		"blank", 
+
+"SECOND_ACCOUNT_NAME":	"blank",
+
+"SECOND_ACCOUNT_PASS":	"blank",
 
 "BOT_NAME":			"Info Bot",
 
@@ -29,7 +33,7 @@
 "MODE":			"comment",
 
 "SUBREDDITS":		[
-			"nagasgura"
+			"blank"
 			],
 						
 "USE_KEYWORDS":		true
