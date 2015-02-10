@@ -1,12 +1,12 @@
 {
 	
-"PASSWORD": 		"blank", 
+"PASSWORD": 		"urlfixerbot", 
 
-"USER_NAME": 		"blank", 
+"USER_NAME": 		"*****", 
 
-"SECOND_ACCOUNT_NAME":	"blank",
+"SECOND_ACCOUNT_NAME":	"bottester1234",
 
-"SECOND_ACCOUNT_PASS":	"blank",
+"SECOND_ACCOUNT_PASS":	"*****",
 
 "BOT_NAME":			"Info Bot",
 
@@ -33,7 +33,7 @@
 "MODE":			"comment",
 
 "SUBREDDITS":		[
-			"blank"
+			"*****"
 			],
 						
 "USE_KEYWORDS":		true

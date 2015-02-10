@@ -93,6 +93,7 @@ def give_more_info(comment):
     extra_message = config["EXTRA_MESSAGE"]
     google_available = True
     bing_available = True
+    karmadecay_available = True
     try:
         google_formatted = format_results(get_google_results(comment.submission))
     except IndexError:
@@ -101,14 +102,25 @@ def give_more_info(comment):
         bing_formatted = format_results(get_bing_results(comment.submission))
     except IndexError:
         bing_available = False
-    if google_available and bing_available:
-        reply = "**Best Google Guesses:**\n\n{0}\n\n**Best Bing Guesses:**\n\n{1}".format(google_formatted,bing_formatted)
-    elif google_available:
-        reply = "**Best Google Guesses:**\n\n{0}".format(google_formatted)
-    elif bing_available:
-        reply = "**Best Bing Guesses:**\n\n{0}".format(bing_formatted)
-    else:
+    try:
+        karmadecay_formatted = format_results(get_karmadecay_results(comment.submission))
+    except IndexError:
+        karmadecay_available = False
+
+    google_message = "**Best Google Guesses**\n\n{0}\n\n"
+    bing_message = "**Best Bing Guesses**\n\n{0}\n\n"
+    karmadecay_message = "**Best Karma Decay Guesses**\n\n{0}\n\n"
+
+    reply = ""
+    if google_available:
+        reply.append(google_message.format(google_formatted))
+    if bing_available:
+        reply.append(bing_message.format(bing_formatted))
+    if karmadecay_available:
+        reply.append(karmadecay_message.format(karmadecay_formatted))
+    if not all(karmadecay_available, bing_available, google_available):
         reply = "Sorry, no information is available for this link."
+
     try:
         reply += extra_message
         comment.reply(reply)
@@ -209,7 +221,7 @@ already_done = pickle.load(open("already_done.p", "rb"))
 start_time = int(time.time()/60) #time in minutes for downvote checking
 
 subreddit_list = [r.get_subreddit(i).display_name for i in config['SUBREDDITS']]
-#load the link and word lists:
+#load the word list:
 bad_words = get_filter('text')
 
 while True:
@@ -219,8 +231,6 @@ while True:
         start_time = check_downvotes(user,start_time)
 
         pickle.dump(already_done, open("already_done.p", "wb"))
-        pickle.dump(bad_links, open("bad_links.p", "wb"))
-        pickle.dump(bad_links, open("approved_links.p", "wb"))
 
         print 'Finished a round of comments. Waiting two seconds.\n'
         time.sleep(2)
