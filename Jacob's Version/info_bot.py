@@ -42,7 +42,8 @@ def get_bing_results(submission, limit=15):
     results = [(list_class_results[i].findAll(attrs={'class':'info'})[0].find('a')['href'],list_class_results[i].findAll(attrs={'class':'info'})[0].find('a').contents[0]) for i in xrange(limit)]
     return results
 
-def get_karmadecay_results(image, limit=15):
+def get_karmadecay_results(submission, limit=15):
+    image = submission.url
     headers = {}
     headers['User-Agent'] = "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"
     response_text = requests.get("http://www.karmadecay.com/search?kdtoolver=b1&q="+image, headers=headers).content
@@ -52,13 +53,14 @@ def get_karmadecay_results(image, limit=15):
     return results #[(link,text)]
 
 def get_nonspam_links(results):
-    #PM the links to the alt account
+    #comment the links on a post made by an alt account to see if they show up
     for i in results:
         link = i[0]
         print link
         domain =  re.search("http\w?://\w.*\.\w.+\.\w*/|http://\w.+\.\w*/",link).group().decode('utf-8')
-        r.send_message(config['SECOND_ACCOUNT_NAME'],'Link Test',domain)
-        print "sent: "+domain
+        submission = r.get_submission(submission_id=submission_id)
+        submission.add_comment(domain)
+        print "posted: "+domain
     passed_domains = []
     for msg in r2.get_unread(limit=15):
         passed_domains.append(msg.body)
@@ -71,6 +73,9 @@ def get_nonspam_links(results):
         domain =  re.search("http\w?://\w.*\.\w.+\.\w*/|http://\w.+\.\w*/",link).group().decode('utf-8')
         if domain in passed_domains:
             nonspam_links.append([i[0],i[1]])
+            print link + " IS CLEAN"
+        else:
+            print link + " IS SPAM"
     print nonspam_links
     return nonspam_links
 
@@ -103,7 +108,8 @@ def give_more_info(comment):
     except IndexError:
         bing_available = False
     try:
-        karmadecay_formatted = format_results(get_karmadecay_results(comment.submission))
+        karmadecay_formatted = ""
+        #karmadecay_formatted = format_results(get_karmadecay_results(comment.submission))
     except IndexError:
         karmadecay_available = False
 
@@ -113,12 +119,12 @@ def give_more_info(comment):
 
     reply = ""
     if google_available:
-        reply.append(google_message.format(google_formatted))
+        reply += google_message.format(google_formatted)
     if bing_available:
-        reply.append(bing_message.format(bing_formatted))
+        reply += bing_message.format(bing_formatted)
     if karmadecay_available:
-        reply.append(karmadecay_message.format(karmadecay_formatted))
-    if not all(karmadecay_available, bing_available, google_available):
+        reply += karmadecay_message.format(karmadecay_formatted)
+    if not all((karmadecay_available, bing_available, google_available)):
         reply = "Sorry, no information is available for this link."
 
     try:
@@ -204,6 +210,7 @@ COMMENT = 'comment'
 PM = 'PM'
 LOG = 'log'
 mode = config['MODE']
+submission_id = config['SUBMISSION_ID']
 
 use_keywords = config['USE_KEYWORDS']
 
