@@ -47,6 +47,8 @@ def get_karmadecay_results(submission, limit=15):
     headers = {}
     headers['User-Agent'] = "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"
     response_text = requests.get("http://www.karmadecay.com/search?kdtoolver=b1&q="+image, headers=headers).content
+    if "No very similar images were found." in response_text:
+        return []
     raw_results_text = response_text[response_text.find(":--|:--|:--|:--|:--")+20:response_text.find("*[Source: karmadecay]")-2]
     raw_results = raw_results_text.split("\n")
     results = [(i[i.find("(")+1:i.find(")")],i[i.find("[")+1:i.find("]")]) for i in raw_results]
@@ -57,7 +59,7 @@ def get_nonspam_links(results):
     for i in results:
         link = i[0]
         print link
-        domain =  re.search("http\w?://\w.*\.\w.+\.\w*/|http://\w.+\.\w*/",link).group().decode('utf-8')
+        domain =  re.search("http\w?://\w*\.*\w.+\.\w*/|http://\w.+\.\w*/",link).group().decode('utf-8')
         submission = r.get_submission(submission_id=submission_id)
         submission.add_comment(domain)
         print "posted: "+domain
@@ -70,7 +72,7 @@ def get_nonspam_links(results):
         text = i[1]
         link = i[0]
         print "checking "+link
-        domain =  re.search("http\w?://\w.*\.\w.+\.\w*/|http://\w.+\.\w*/",link).group().decode('utf-8')
+        domain =  re.search("http\w?://\w*\.*\w.+\.\w*/|http://\w.+\.\w*/",link).group().decode('utf-8')
         if domain in passed_domains:
             nonspam_links.append([i[0],i[1]])
             print link + " IS CLEAN"
@@ -108,8 +110,8 @@ def give_more_info(comment):
     except IndexError:
         bing_available = False
     try:
-        karmadecay_formatted = ""
-        #karmadecay_formatted = format_results(get_karmadecay_results(comment.submission))
+        #karmadecay_formatted = ""
+        karmadecay_formatted = format_results(get_karmadecay_results(comment.submission))
     except IndexError:
         karmadecay_available = False
 
@@ -164,26 +166,36 @@ def parse_comments(all_comments):
     SEARCH_STRING = config["SEARCH_STRING"]
     for comment in all_comments:
         print ".",
-        if comment.author: #check if the comment exists
-            if comment.subreddit.display_name in subreddit_list: #check if it's in one of the right subs
-                if (time.time()-comment.created_utc)/60 < time_limit_minutes: #if the age of the comment is less than the time limit
-                    if any(i in str(comment.submission.url) for i in ['.tif', '.tiff', '.gif', '.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd', '.png']):
-                        top_level = [i.replies for i in comment.submission.comments]
-                        submission_comments = []
-                        for i in top_level:
-                            for j in i:
-                                submission_comments.append(j)
-                        if not any(i for i in submission_comments if config['EXTRA_MESSAGE'] in i.body): #If there are no link replies
-                            if re.search('{0}$|{0}\s'.format(SEARCH_STRING),comment.body.lower()) and comment.id not in already_done and comment.author != user:
-                                give_more_info(comment)
-                                already_done.append(comment.id)
-                            elif not any(i for i in submission_comments if i.body == config['INFORMATION_REPLY']): #If there are no information replies
-                                if any(word.lower() in comment.body.lower() for word in keyword_list):
-                                    if comment.id not in already_done and comment.author != user:
-                                        done = False
-                                        attempt = 1
-                                        while not done:
-                                            done = reply_to_potential_comment(comment,attempt)
+        if comment['author']: #check if the comment exists
+            if comment['subreddit'] in subreddit_list: #check if it's in one of the right subs
+                if (time.time()-comment['created_utc'])/60 < time_limit_minutes: #if the age of the comment is less than the time limit
+                    if any(i in str(comment['link_url']) for i in ['.tif', '.tiff', '.gif', '.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd', '.png']):
+                        body = comment['body'].lower()
+                        if SEARCH_STRING in body or any(word.lower() in body.lower() for word in keyword_list):
+                            comment = r.get_submission(url="http://www.reddit.com/r/{0}/comments/{1}/aaaa/{2}".format(comment['subreddit'],comment['link_id'][3:],comment['id'])).comments[0]
+                            top_level = [i.replies for i in comment.submission.comments]
+                            submission_comments = []
+                            for i in top_level:
+                                for j in i:
+                                    submission_comments.append(j)
+                            if not any(i for i in submission_comments if config['EXTRA_MESSAGE'] in i.body): #If there are no link replies
+                                if re.search('{0}$|{0}\s'.format(SEARCH_STRING),comment.body.lower()) and comment.id not in already_done and comment.author != user:
+                                    give_more_info(comment)
+                                    already_done.append(comment.id)
+                                elif not any(i for i in submission_comments if i.body == config['INFORMATION_REPLY']): #If there are no information replies
+                                    if any(word.lower() in comment.body.lower() for word in keyword_list):
+                                        print "\ndetected keyword: "+ comment.body.lower()
+                                        if comment.id not in already_done and comment.author != user:
+                                            done = False
+                                            attempt = 1
+                                            while not done:
+                                                done = reply_to_potential_comment(comment,attempt)
+                                print 6,
+                            print 5,
+                        print 4,
+                    print 3,
+                print 2,
+            print 1,
     print
 
 def check_downvotes(user,start_time):
@@ -201,8 +213,17 @@ def get_filter(filter_type):
     filters=json.load(urllib2.urlopen('http://spambot.rarchives.com/api.cgi?method=get_filters&start=0&count=2000&type={0}'.format(filter_type)))['filters']
     return [i['spamtext'] for i in filters]
 
-def main():
-    pass
+def get_all_comments():
+    a = session_client.get('http://reddit.com/r/nagasgura/comments.json', headers=headers)
+    js = json.loads(a.content)
+    b =  js['data']['children']
+    comments_json = [i['data'] for i in b]
+    return comments_json
+
+    #comments = [r.get_submission( url="http://www.reddit.com/r/{0}/comments/{1}/aaaa/{2}".format(b['subreddit'],b['link_id'][3:],b['id'])).comments[0] for b in comments_json]
+    #comment = r.get_submission( url="http://www.reddit.com/r/{0}/comments/{1}/aaaa/{2}".format(b['subreddit'],b['link_id'][3:],b['id'])).comments[0]
+    #return comments
+
 with open('config.json') as json_data:
     config = json.load(json_data)
 
@@ -231,9 +252,19 @@ subreddit_list = [r.get_subreddit(i).display_name for i in config['SUBREDDITS']]
 #load the word list:
 bad_words = get_filter('text')
 
+credentials = {'user': config["USER_NAME"], 'passwd': config["PASSWORD"], 'api_type': 'json',}
+headers = {'user-agent': config["BOT_NAME"],}
+session_client = requests.session()
+r1 = session_client.post('http://www.reddit.com/api/login', data = credentials, headers=headers)
+the_json = json.loads(r1.text)
+session_client.modhash = the_json['json']['data']['modhash']
+
 while True:
     try:
-        all_comments = r.get_comments(subreddit = r.get_subreddit('all'),limit = None)
+        #all_comments = praw.helpers.comment_stream(r, 'all', limit=None)
+        a = time.time()
+        all_comments = get_all_comments()
+        print time.time()-a
         parse_comments(all_comments)
         start_time = check_downvotes(user,start_time)
 
