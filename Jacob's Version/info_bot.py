@@ -51,19 +51,25 @@ def get_karmadecay_results(submission, limit=15):
         return []
     raw_results_text = response_text[response_text.find(":--|:--|:--|:--|:--")+20:response_text.find("*[Source: karmadecay]")-2]
     raw_results = raw_results_text.split("\n")
-    results = [(i[i.find("(")+1:i.find(")")],i[i.find("[")+1:i.find("]")]) for i in raw_results]
+    results = [(i[i.find("(",i.find(']'))+1:i.find(")",i.find(']'))],i[i.find("[")+1:i.find("]")]) for i in raw_results]
     return results #[(link,text)]
+
+def get_domain(link):
+    result = re.search("http\w?://\w*\.*\w.+\.\w*/|http://\w.+\.\w*/",link)
+    group = result.group()
+    return group.decode('utf-8')
 
 def get_nonspam_links(results):
     #comment the links on a post made by an alt account to see if they show up
+    passed_domains = []
     for i in results:
         link = i[0]
         print link
-        domain =  re.search("http\w?://\w*\.*\w.+\.\w*/|http://\w.+\.\w*/",link).group().decode('utf-8')
-        submission = r.get_submission(submission_id=submission_id)
-        submission.add_comment(domain)
-        print "posted: "+domain
-    passed_domains = []
+        domain =  get_domain(link)
+        if domain not in blacklist:
+            submission = r.get_submission(submission_id=submission_id)
+            submission.add_comment(domain)
+            print "posted: "+domain
     for msg in r2.get_unread(limit=15):
         passed_domains.append(msg.body)
         msg.mark_as_read()
@@ -72,12 +78,15 @@ def get_nonspam_links(results):
         text = i[1]
         link = i[0]
         print "checking "+link
-        domain =  re.search("http\w?://\w*\.*\w.+\.\w*/|http://\w.+\.\w*/",link).group().decode('utf-8')
+        domain =  get_domain(link)
         if domain in passed_domains:
             nonspam_links.append([i[0],i[1]])
             print link + " IS CLEAN"
         else:
             print link + " IS SPAM"
+            if domain not in blacklist:
+                spam_domain = get_domain(link)
+                blacklist.append(spam_domain)
     print nonspam_links
     return nonspam_links
 
@@ -190,13 +199,6 @@ def parse_comments(all_comments):
                                             attempt = 1
                                             while not done:
                                                 done = reply_to_potential_comment(comment,attempt)
-                                print 6,
-                            print 5,
-                        print 4,
-                    print 3,
-                print 2,
-            print 1,
-    print
 
 def check_downvotes(user,start_time):
     current_time = int(time.time()/60)
@@ -220,9 +222,7 @@ def get_all_comments():
     comments_json = [i['data'] for i in b]
     return comments_json
 
-    #comments = [r.get_submission( url="http://www.reddit.com/r/{0}/comments/{1}/aaaa/{2}".format(b['subreddit'],b['link_id'][3:],b['id'])).comments[0] for b in comments_json]
-    #comment = r.get_submission( url="http://www.reddit.com/r/{0}/comments/{1}/aaaa/{2}".format(b['subreddit'],b['link_id'][3:],b['id'])).comments[0]
-    #return comments
+blacklist = pickle.load(open("blacklist.p", "rb"))
 
 with open('config.json') as json_data:
     config = json.load(json_data)
@@ -269,6 +269,7 @@ while True:
         start_time = check_downvotes(user,start_time)
 
         pickle.dump(already_done, open("already_done.p", "wb"))
+        pickle.dump(blacklist, open("blacklist.p", "wb"))
 
         print 'Finished a round of comments. Waiting two seconds.\n'
         time.sleep(2)
