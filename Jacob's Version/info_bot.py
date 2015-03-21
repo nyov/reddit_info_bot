@@ -95,7 +95,7 @@ def format_results(results): #returns a formatted and spam filtered list of the 
     #filter the links and words.
     ascii_filtered = []
     for i in ascii:
-        if not any(j in i[1] for j in bad_words):
+        if any(k in 'abcdefghijklmnopqrstuvwxyz' for k in i[1]):
             ascii_filtered.append(i)
 
     ascii_final = get_nonspam_links(ascii_filtered) #filter the links for spam
@@ -215,8 +215,21 @@ def get_filter(filter_type):
     filters=json.load(urllib2.urlopen('http://spambot.rarchives.com/api.cgi?method=get_filters&start=0&count=2000&type={0}'.format(filter_type)))['filters']
     return [i['spamtext'] for i in filters]
 
-def get_all_comments():
-    a = session_client.get('http://reddit.com/r/nagasgura/comments.json', headers=headers)
+def get_comment_stream_urls(subreddit_list):
+    MAX_LENGTH = 2010
+    url_list = []
+    subreddit_chain = ""
+    for i in subreddit_list:
+        new_element = i + "+"
+        if len(subreddit_chain) + len(new_element) > MAX_LENGTH:
+            url_list.append("http://reddit.com/r/{0}/comments.json".format(subreddit_chain[:-1]))
+            subreddit_chain = ""
+        subreddit_chain += new_element
+    url_list.append("http://reddit.com/r/{0}/comments.json".format(subreddit_chain[:-1]))
+    return url_list
+
+def get_all_comments(stream):
+    a = session_client.get(stream, headers=headers)
     js = json.loads(a.content)
     b =  js['data']['children']
     comments_json = [i['data'] for i in b]
@@ -259,20 +272,22 @@ r1 = session_client.post('http://www.reddit.com/api/login', data = credentials, 
 the_json = json.loads(r1.text)
 session_client.modhash = the_json['json']['data']['modhash']
 
+comment_stream_urls = get_comment_stream_urls(subreddit_list)
+
 while True:
     try:
-        #all_comments = praw.helpers.comment_stream(r, 'all', limit=None)
-        a = time.time()
-        all_comments = get_all_comments()
-        print time.time()-a
-        parse_comments(all_comments)
-        start_time = check_downvotes(user,start_time)
+        for stream in comment_stream_urls: #uses separate comment streams for large subreddit list due to URL length limit
+            a = time.time()
+            all_comments = get_all_comments(stream)
+            print time.time()-a
+            parse_comments(all_comments)
+            start_time = check_downvotes(user,start_time)
 
-        pickle.dump(already_done, open("already_done.p", "wb"))
-        pickle.dump(blacklist, open("blacklist.p", "wb"))
+            pickle.dump(already_done, open("already_done.p", "wb"))
+            pickle.dump(blacklist, open("blacklist.p", "wb"))
 
-        print 'Finished a round of comments. Waiting two seconds.\n'
-        time.sleep(2)
+            print 'Finished a round of comments. Waiting two seconds.\n'
+            time.sleep(2)
     except ConnectionError:
         print 'Connection Error'
     except HTTPError:
