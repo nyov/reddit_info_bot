@@ -118,10 +118,8 @@ def give_more_info(comment):
         bing_formatted = format_results(get_bing_results(comment.submission))
     except IndexError:
         bing_available = False
-    try:
-        #karmadecay_formatted = ""
-        karmadecay_formatted = format_results(get_karmadecay_results(comment.submission))
-    except IndexError:
+    karmadecay_formatted = format_results(get_karmadecay_results(comment.submission))
+    if not karmadecay_formatted:
         karmadecay_available = False
 
     google_message = "**Best Google Guesses**\n\n{0}\n\n"
