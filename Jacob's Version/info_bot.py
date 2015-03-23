@@ -133,7 +133,7 @@ def give_more_info(comment):
         reply += bing_message.format(bing_formatted)
     if karmadecay_available:
         reply += karmadecay_message.format(karmadecay_formatted)
-    if not all((karmadecay_available, bing_available, google_available)):
+    if not any((karmadecay_available, bing_available, google_available)):
         reply = "Sorry, no information is available for this link."
 
     try:
