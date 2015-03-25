@@ -17,6 +17,7 @@ def get_google_results(submission, limit=15): #limit is the max number of result
     headers = {}
     headers['User-Agent'] = "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"
     response_text = requests.get('http://www.google.com/searchbyimage?image_url={0}'.format(image), headers=headers).content
+    response_text += requests.get('http://www.google.com/searchbyimage?image_url={0}&start=10'.format(image), headers=headers).content
     #response_text = response_text[response_text.find('Pages that include'):]
     tree = BeautifulSoup.BeautifulSoup(response_text)
     list_class_results = tree.findAll(attrs={'class':'r'})
@@ -70,7 +71,8 @@ def get_nonspam_links(results):
             submission = r.get_submission(submission_id=submission_id)
             submission.add_comment(domain)
             print "posted: "+domain
-    for msg in r2.get_unread(limit=15):
+    time.sleep(2)
+    for msg in r2.get_unread(limit=40):
         passed_domains.append(msg.body)
         msg.mark_as_read()
     nonspam_links = []
@@ -90,7 +92,7 @@ def get_nonspam_links(results):
     print nonspam_links
     return nonspam_links
 
-def format_results(results): #returns a formatted and spam filtered list of the results
+def format_results(results, display_limit=5): #returns a formatted and spam filtered list of the results. Change 5 to adjust number of results to display per provider. Fi
     ascii = [[''.join(k for k in i[j] if (ord(k)<128 and k not in '[]()')) for j in xrange(2)] for i in results] #eliminates non-ascii characters
     #filter the links and words.
     ascii_filtered = []
@@ -99,8 +101,8 @@ def format_results(results): #returns a formatted and spam filtered list of the 
             ascii_filtered.append(i)
 
     ascii_final = get_nonspam_links(ascii_filtered) #filter the links for spam
-    if len(ascii_final) > 5:
-        ascii_final = ascii_final[:5] #limit the list to 5 items
+    if len(ascii_final) > display_limit:
+        ascii_final = ascii_final[:display_limit] #limit the list to 5 items
     linkified = ["["+i[1]+"]("+i[0]+")" for i in ascii_final] #reformats the results into markdown links
     formatted = ''.join(i for i in '\n\n'.join(linkified))
     return formatted
