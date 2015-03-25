@@ -128,15 +128,17 @@ def give_more_info(comment):
     bing_message = "**Best Bing Guesses**\n\n{0}\n\n"
     karmadecay_message = "**Best Karma Decay Guesses**\n\n{0}\n\n"
 
+    available_dict = {google_available:(google_message, google_formatted), bing_available:(bing_message, bing_formatted), karmadecay_available:(karmadecay_message,karmadecay_formatted)}
     reply = ""
-    if google_available:
-        reply += google_message.format(google_formatted)
-    if bing_available:
-        reply += bing_message.format(bing_formatted)
-    if karmadecay_available:
-        reply += karmadecay_message.format(karmadecay_formatted)
     if not any((karmadecay_available, bing_available, google_available)):
         reply = "Sorry, no information is available for this link."
+    else:
+        for availability in (google_available, bing_available, karmadecay_available):
+            #for each search engine, add the results if they're available, otherwise say there are no links from that search engine.
+            if availability:
+                reply += available_dict[availability][0].format(available_dict[availability][1]) #0: message; 1: formatted results
+            else:
+                reply += available_dict[availability][0].format("No links from this search engine found")
 
     try:
         reply += extra_message
