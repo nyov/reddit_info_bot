@@ -69,23 +69,24 @@ def get_nonspam_links(results):
         domain =  get_domain(link)
         if domain not in blacklist:
             submission = r.get_submission(submission_id=submission_id)
-            submission.add_comment(domain)
-            print "posted: "+domain
+            submission.add_comment(link)
+            print "posted: "+link
     time.sleep(2)
     for msg in r2.get_unread(limit=40):
-        passed_domains.append(msg.body)
+        domain = get_domain(msg.body)
+        passed_domains.append(domain)
         msg.mark_as_read()
     nonspam_links = []
     for i in results:
         text = i[1]
         link = i[0]
         print "checking "+link
-        domain =  get_domain(link)
+        domain = get_domain(link)
         if domain in passed_domains:
             nonspam_links.append([i[0],i[1]])
-            print link + " IS CLEAN"
+            print link + " IS CLEAN\n"
         else:
-            print link + " IS SPAM"
+            print link + " IS SPAM\n"
             if domain not in blacklist:
                 spam_domain = get_domain(link)
                 blacklist.append(spam_domain)
@@ -127,18 +128,18 @@ def give_more_info(comment):
     google_message = "**Best Google Guesses**\n\n{0}\n\n"
     bing_message = "**Best Bing Guesses**\n\n{0}\n\n"
     karmadecay_message = "**Best Karma Decay Guesses**\n\n{0}\n\n"
-
-    available_dict = {google_available:(google_message, google_formatted), bing_available:(bing_message, bing_formatted), karmadecay_available:(karmadecay_message,karmadecay_formatted)}
+    available_dict = {"google":google_available, "bing":bing_available, "karmadecay":karmadecay_available}
+    searchengine_dict = {"google":(google_message, google_formatted), "karmadecay":(karmadecay_message,karmadecay_formatted), "bing":(bing_message, bing_formatted)}
     reply = ""
     if not any((karmadecay_available, bing_available, google_available)):
         reply = "Sorry, no information is available for this link."
     else:
-        for availability in (google_available, bing_available, karmadecay_available):
+        for availability in ("google", "bing", "karmadecay"):
             #for each search engine, add the results if they're available, otherwise say there are no links from that search engine.
-            if availability:
-                reply += available_dict[availability][0].format(available_dict[availability][1]) #0: message; 1: formatted results
+            if available_dict[availability]:
+                reply += searchengine_dict[availability][0].format(searchengine_dict[availability][1]) #0: message; 1: formatted results
             else:
-                reply += available_dict[availability][0].format("No links from this search engine found")
+                reply += searchengine_dict[availability][0].format("No links from this search engine found")
 
     try:
         reply += extra_message
