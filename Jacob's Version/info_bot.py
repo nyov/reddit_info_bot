@@ -196,7 +196,11 @@ def parse_comments(all_comments):
                                     already_done.append(comment.id)
                                 elif not any(i for i in submission_comments if i.body == config['INFORMATION_REPLY']): #If there are no information replies
                                     if any(word.lower() in comment.body.lower() for word in keyword_list):
-                                        print "\ndetected keyword: "+ comment.body.lower()
+                                        try:
+                                            print "\ndetected keyword: "+ comment.body.lower()
+                                        except UnicodeEncodeError:
+                                            print "\ndetected keyword: ",
+                                            print comment.body
                                         if comment.id not in already_done and comment.author != user:
                                             done = False
                                             attempt = 1
