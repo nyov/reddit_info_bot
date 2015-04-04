@@ -113,6 +113,7 @@ def give_more_info(comment):
     google_available = True
     bing_available = True
     karmadecay_available = True
+    google_formatted = bing_formatted = karmadecay_formatted = []
     try:
         google_formatted = format_results(get_google_results(comment.submission))
     except IndexError:
