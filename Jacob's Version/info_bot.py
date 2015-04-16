@@ -67,7 +67,7 @@ def get_nonspam_links(results):
         link = i[0]
         print link
         domain =  get_domain(link)
-        if domain not in blacklist:
+        if (domain not in blacklist) and (not any(i in domain for i in blacklist)):
             submission = r.get_submission(submission_id=submission_id)
             submission.add_comment(link)
             print "posted: "+link
@@ -248,6 +248,8 @@ print 'Adding Rarchives links to blacklist.'
 rarchives_spam_domains = get_filter('link')
 for domain in rarchives_spam_domains:
     if domain not in blacklist:
+        print domain
+            domain = "http://"+domain
         blacklist.append(domain)
 
 with open('config.json') as json_data:
