@@ -244,6 +244,11 @@ def get_all_comments(stream):
     return comments_json
 
 blacklist = pickle.load(open("blacklist.p", "rb"))
+print 'Adding Rarchives links to blacklist.'
+rarchives_spam_domains = get_filter('link')
+for domain in rarchives_spam_domains:
+    if domain not in blacklist:
+        blacklist.append(domain)
 
 with open('config.json') as json_data:
     config = json.load(json_data)
