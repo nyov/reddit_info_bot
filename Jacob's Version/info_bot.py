@@ -249,6 +249,7 @@ rarchives_spam_domains = get_filter('link')
 for domain in rarchives_spam_domains:
     if domain not in blacklist:
         print domain
+        if 'http' not in domain and domain[0] != '.':
             domain = "http://"+domain
         blacklist.append(domain)
 
