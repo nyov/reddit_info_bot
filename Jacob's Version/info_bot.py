@@ -97,9 +97,13 @@ def format_results(results, display_limit=5): #returns a formatted and spam filt
     ascii = [[''.join(k for k in i[j] if (ord(k)<128 and k not in '[]()')) for j in xrange(2)] for i in results] #eliminates non-ascii characters
     #filter the links and words.
     ascii_filtered = []
+    ASCII = ''.join(chr(x) for x in range(128))
     for i in ascii:
-        if any(k in 'abcdefghijklmnopqrstuvwxyz' for k in i[1]):
-            ascii_filtered.append(i)
+        text = ""
+        for char in i[1]:
+            if char in ASCII and char not in "\)([]^/":
+                text += char
+        ascii_filtered.append([i[0],text])
 
     ascii_final = get_nonspam_links(ascii_filtered) #filter the links for spam
     if len(ascii_final) > display_limit:
@@ -182,7 +186,11 @@ def parse_comments(all_comments):
         if comment['author']: #check if the comment exists
             if comment['subreddit'] in subreddit_list: #check if it's in one of the right subs
                 if (time.time()-comment['created_utc'])/60 < time_limit_minutes: #if the age of the comment is less than the time limit
-                    if any(i in str(comment['link_url']) for i in ['.tif', '.tiff', '.gif', '.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd', '.png']):
+                    try:
+                        isPicture = any(i in str(comment['link_url']) for i in ['.tif', '.tiff', '.gif', '.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd', '.png'])
+                    except UnicodeEncodeError:
+                        isPicture = False #non-ascii url
+                    if isPicture:
                         body = comment['body'].lower()
                         if SEARCH_STRING in body or any(word.lower() in body.lower() for word in keyword_list):
                             comment = r.get_submission(url="http://www.reddit.com/r/{0}/comments/{1}/aaaa/{2}".format(comment['subreddit'],comment['link_id'][3:],comment['id'])).comments[0]
@@ -238,19 +246,21 @@ def get_comment_stream_urls(subreddit_list):
 
 def get_all_comments(stream):
     a = session_client.get(stream, headers=headers)
-    js = json.loads(a.content)
-    b =  js['data']['children']
-    comments_json = [i['data'] for i in b]
-    return comments_json
+    try:
+        js = json.loads(a.content)
+        b =  js['data']['children']
+        comments_json = [i['data'] for i in b]
+        return comments_json
+    except ValueError:
+        return None
 
 blacklist = pickle.load(open("blacklist.p", "rb"))
 print 'Adding Rarchives links to blacklist.'
 rarchives_spam_domains = get_filter('link')
 for domain in rarchives_spam_domains:
+    if 'http' not in domain and domain[0] != '.':
+        domain = "http://"+domain
     if domain not in blacklist:
-        print domain
-        if 'http' not in domain and domain[0] != '.':
-            domain = "http://"+domain
         blacklist.append(domain)
 
 with open('config.json') as json_data:
@@ -295,6 +305,8 @@ while True:
         for stream in comment_stream_urls: #uses separate comment streams for large subreddit list due to URL length limit
             a = time.time()
             all_comments = get_all_comments(stream)
+            if not all_comments:
+                continue
             print time.time()-a
             parse_comments(all_comments)
             start_time = check_downvotes(user,start_time)
