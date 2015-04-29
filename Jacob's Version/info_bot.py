@@ -56,8 +56,12 @@ def get_karmadecay_results(submission, limit=15):
     return results #[(link,text)]
 
 def get_domain(link):
-    result = re.search("http\w?://\w*\.*\w.+\.\w*/|http://\w.+\.\w*/",link)
-    group = result.group()
+    result = re.search("http\w?://\w+\.(.+\.\w*)/?|http\w?://(.+\.\w*)/?",link)
+    try:
+        group = result.group(1) if result.group(1) else result.group(2)
+    except:
+        #"ERROR: get_domain("+link+") could not find a working domain. Attempting to skip..."
+        group = link
     return group.decode('utf-8')
 
 def get_nonspam_links(results):
@@ -67,7 +71,7 @@ def get_nonspam_links(results):
         link = i[0]
         print link
         domain =  get_domain(link)
-        if (domain not in blacklist) and (not any(i in domain for i in blacklist)):
+        if (domain not in blacklist) and (domain not in hard_blacklist) and (not any(i in domain for i in blacklist)):
             submission = r.get_submission(submission_id=submission_id)
             submission.add_comment(link)
             print "posted: "+link
@@ -253,7 +257,6 @@ def get_all_comments(stream):
         return comments_json
     except ValueError:
         return None
-
 blacklist = pickle.load(open("blacklist.p", "rb"))
 print 'Adding Rarchives links to blacklist.'
 rarchives_spam_domains = get_filter('link')
@@ -262,6 +265,8 @@ for domain in rarchives_spam_domains:
         domain = "http://"+domain
     if domain not in blacklist:
         blacklist.append(domain)
+hard_blacklist = ["tumblr.com"]
+whitelist = ["reddit.com"]
 
 with open('config.json') as json_data:
     config = json.load(json_data)
