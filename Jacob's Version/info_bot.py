@@ -183,8 +183,38 @@ def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to dis
         time.sleep(30)
     return done
 
-def parse_comments(all_comments):
-    SEARCH_STRING = config["SEARCH_STRING"]
+def find_username_mentions():
+    for comment in r.get_unread(limit=100):
+        if SEARCH_STRING in comment.body:
+            #print "search string in body"
+            if comment.author: #check if the comment exists
+                #print "comment.author"
+                #print comment.subreddit
+                if str(comment.subreddit) in subreddit_list: #check if it's in one of the right subs
+                    #print "comment.subreddit"
+                    if (time.time()-comment.created_utc)/60 < time_limit_minutes: #if the age of the comment is less than the time limit
+                        #print "time"
+                        try:
+                            isPicture = any(i in str(comment.submission.url) for i in ['.tif', '.tiff', '.gif', '.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd', '.png'])
+                        except UnicodeEncodeError:
+                            isPicture = False #non-ascii url
+                        if isPicture:
+                            #print "isPicture"
+                            top_level = [i.replies for i in comment.submission.comments]
+                            submission_comments = []
+                            for i in top_level:
+                                for j in i:
+                                    submission_comments.append(j)
+                            if not any(i for i in submission_comments if config['EXTRA_MESSAGE'] in i.body): #If there are no link replies
+                                #print "no link replies"
+                                if comment.id not in already_done and comment.author != user:
+                                    #print "not already done and not its own user"
+                                    give_more_info(comment)
+                                    already_done.append(comment.id)
+        comment.mark_as_read()
+
+
+def find_keywords(all_comments):
     for comment in all_comments:
         print ".",
         if comment['author']: #check if the comment exists
@@ -196,7 +226,7 @@ def parse_comments(all_comments):
                         isPicture = False #non-ascii url
                     if isPicture:
                         body = comment['body'].lower()
-                        if SEARCH_STRING in body or any(word.lower() in body.lower() for word in keyword_list):
+                        if any(word.lower() in body.lower() for word in keyword_list):
                             comment = r.get_submission(url="http://www.reddit.com/r/{0}/comments/{1}/aaaa/{2}".format(comment['subreddit'],comment['link_id'][3:],comment['id'])).comments[0]
                             top_level = [i.replies for i in comment.submission.comments]
                             submission_comments = []
@@ -204,10 +234,7 @@ def parse_comments(all_comments):
                                 for j in i:
                                     submission_comments.append(j)
                             if not any(i for i in submission_comments if config['EXTRA_MESSAGE'] in i.body): #If there are no link replies
-                                if re.search('{0}$|{0}\s'.format(SEARCH_STRING),comment.body.lower()) and comment.id not in already_done and comment.author != user:
-                                    give_more_info(comment)
-                                    already_done.append(comment.id)
-                                elif not any(i for i in submission_comments if i.body == config['INFORMATION_REPLY']): #If there are no information replies
+                                if not any(i for i in submission_comments if i.body == config['INFORMATION_REPLY']): #If there are no information replies
                                     if any(word.lower() in comment.body.lower() for word in keyword_list):
                                         try:
                                             print "\ndetected keyword: "+ comment.body.lower()
@@ -280,6 +307,8 @@ LOG = 'log'
 mode = config['MODE']
 submission_id = config['SUBMISSION_ID']
 
+SEARCH_STRING = config["SEARCH_STRING"]
+
 use_keywords = config['USE_KEYWORDS']
 
 keyword_list = config['KEYWORDS']
@@ -316,7 +345,9 @@ while True:
             if not all_comments:
                 continue
             print time.time()-a
-            parse_comments(all_comments)
+            find_keywords(all_comments)
+            print "finding username mentions..."
+            find_username_mentions()
             start_time = check_downvotes(user,start_time)
 
             pickle.dump(already_done, open("already_done.p", "wb"))
