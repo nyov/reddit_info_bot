@@ -116,6 +116,12 @@ def format_results(results, display_limit=5): #returns a formatted and spam filt
     formatted = ''.join(i for i in '\n\n'.join(linkified))
     return formatted
 
+def comment_exists(comment):
+    if comment.author:
+        return True
+    print 'Comment was deleted'
+    return False
+
 def give_more_info(comment):
     extra_message = config["EXTRA_MESSAGE"]
     google_available = True
@@ -152,8 +158,9 @@ def give_more_info(comment):
 
     try:
         reply += extra_message
-        comment.reply(reply)
-        print 'replied to comment with more info'
+        if comment_exists(comment):
+            comment.reply(reply)
+            print 'replied to comment with more info'
     except HTTPError:
         print 'HTTP Error. Bot might be banned from this sub'
 
@@ -166,7 +173,8 @@ def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to dis
     try:
         reply = config["INFORMATION_REPLY"]
         if mode == COMMENT:
-            comment.reply(reply)
+            if comment_exists(comment):
+                comment.reply(reply)
         elif mode == LOG:
             print reply
         elif mode == PM:
@@ -227,32 +235,34 @@ def find_keywords(all_comments):
                     if isPicture:
                         body = comment['body'].lower()
                         if any(word.lower() in body.lower() for word in keyword_list):
-                            comment = r.get_submission(url="http://www.reddit.com/r/{0}/comments/{1}/aaaa/{2}".format(comment['subreddit'],comment['link_id'][3:],comment['id'])).comments[0]
-                            top_level = [i.replies for i in comment.submission.comments]
-                            submission_comments = []
-                            for i in top_level:
-                                for j in i:
-                                    submission_comments.append(j)
-                            if not any(i for i in submission_comments if config['EXTRA_MESSAGE'] in i.body): #If there are no link replies
-                                if not any(i for i in submission_comments if i.body == config['INFORMATION_REPLY']): #If there are no information replies
-                                    if any(word.lower() in comment.body.lower() for word in keyword_list):
-                                        try:
-                                            print "\ndetected keyword: "+ comment.body.lower()
-                                        except UnicodeEncodeError:
-                                            print "\ndetected keyword: ",
-                                            print comment.body
-                                        if comment.id not in already_done and comment.author != user:
-                                            done = False
-                                            attempt = 1
-                                            while not done:
-                                                done = reply_to_potential_comment(comment,attempt)
+                            comment = r.get_submission(url="http://www.reddit.com/r/{0}/comments/{1}/aaaa/{2}".format(comment['subreddit'],comment['link_id'][3:],comment['id'])).comments
+                            if comment: #get_submission returns a valid comment object
+                                comment = comment[0]
+                                top_level = [i.replies for i in comment.submission.comments]
+                                submission_comments = []
+                                for i in top_level:
+                                    for j in i:
+                                        submission_comments.append(j)
+                                if not any(i for i in submission_comments if config['EXTRA_MESSAGE'] in i.body): #If there are no link replies
+                                    if not any(i for i in submission_comments if i.body == config['INFORMATION_REPLY']): #If there are no information replies
+                                        if any(word.lower() in comment.body.lower() for word in keyword_list):
+                                            try:
+                                                print "\ndetected keyword: "+ comment.body.lower()
+                                            except UnicodeEncodeError:
+                                                print "\ndetected keyword: ",
+                                                print comment.body
+                                            if comment.id not in already_done and comment.author != user:
+                                                done = False
+                                                attempt = 1
+                                                while not done:
+                                                    done = reply_to_potential_comment(comment,attempt)
 
 def check_downvotes(user,start_time):
     current_time = int(time.time()/60)
     if (current_time - start_time) >= comment_deleting_wait_time:
         my_comments = user.get_comments(limit=None)
         for comment in my_comments:
-            if comment.score < 0:
+            if comment.score < 1:
                 comment.delete()
                 print 'deleted a comment'
         return current_time
@@ -279,6 +289,8 @@ def get_all_comments(stream):
     a = session_client.get(stream, headers=headers)
     try:
         js = json.loads(a.content)
+        if not 'data' in js:
+            return None
         b =  js['data']['children']
         comments_json = [i['data'] for i in b]
         return comments_json
