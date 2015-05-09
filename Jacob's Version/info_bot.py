@@ -43,6 +43,30 @@ def get_bing_results(submission, limit=15):
     results = [(list_class_results[i].findAll(attrs={'class':'info'})[0].find('a')['href'],list_class_results[i].findAll(attrs={'class':'info'})[0].find('a').contents[0]) for i in xrange(limit)]
     return results
 
+def get_yandex_results(submission, limit=15):
+    image = submission.url
+    headers = {}
+    headers['User-Agent'] = "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"
+    response_text = requests.get("https://www.yandex.com/images/search?img_url={0}&rpt=imageview&uinfo=sw-1440-sh-900-ww-1440-wh-775-pd-1-wp-16x10_1440x900".format(image), headers=headers).content
+    response_text = response_text[response_text.find("Sites where the image is displayed"):]
+    tree = BeautifulSoup.BeautifulSoup(response_text)
+    list_class_results = tree.findAll(attrs={'class':'link other-sites__title-link i-bem'})
+    if len(list_class_results) == 0:
+        raise IndexError('No results')
+    results = []
+    for a in list_class_results:
+        a = str(a)
+        b = "https:"+a[a.find('href="')+6:a.find('" target="')]
+        filtered_link = re.compile(r'\b(amp;)\b', flags=re.IGNORECASE).sub("",b)
+        try:
+            redirect_url = urllib2.urlopen(filtered_link).geturl()
+            text = a[a.find('"_blank">')+9:a.find('</a>')]
+            results.append((redirect_url,text))
+        except: pass #this site bands bots and cannot be accessed
+    if limit >= len(results):
+        limit = len(results)
+    return results[:limit]
+
 def get_karmadecay_results(submission, limit=15):
     image = submission.url
     headers = {}
@@ -56,7 +80,7 @@ def get_karmadecay_results(submission, limit=15):
     return results #[(link,text)]
 
 def get_domain(link):
-    result = re.search("http\w?:///?\w+\.(.+\.\w*)/?|http\w?:///?(.+\.\w*)/?",link)
+    result = re.search("http\w?:///?(\w+\..+\.\w*)/?|http\w?:///?(.+\.\w*)/?",link)
     try:
         group = result.group(1) if result.group(1) else result.group(2)
     except:
@@ -127,29 +151,39 @@ def give_more_info(comment):
     google_available = True
     bing_available = True
     karmadecay_available = True
+    yandex_available = True
+
     google_formatted = bing_formatted = karmadecay_formatted = []
     try:
         google_formatted = format_results(get_google_results(comment.submission))
     except IndexError:
         google_available = False
+
     try:
         bing_formatted = format_results(get_bing_results(comment.submission))
     except IndexError:
         bing_available = False
+
     karmadecay_formatted = format_results(get_karmadecay_results(comment.submission))
     if not karmadecay_formatted:
         karmadecay_available = False
 
+    try:
+        yandex_formatted = format_results(get_yandex_results(comment.submission))
+    except IndexError: yandex_available = False
+    if not yandex_formatted: yandex_available = False
+
     google_message = "**Best Google Guesses**\n\n{0}\n\n"
     bing_message = "**Best Bing Guesses**\n\n{0}\n\n"
+    yandex_message = "**Best Yandex Guesses**\n\n{0}\n\n"
     karmadecay_message = "**Best Karma Decay Guesses**\n\n{0}\n\n"
-    available_dict = {"google":google_available, "bing":bing_available, "karmadecay":karmadecay_available}
-    searchengine_dict = {"google":(google_message, google_formatted), "karmadecay":(karmadecay_message,karmadecay_formatted), "bing":(bing_message, bing_formatted)}
+    available_dict = {"google":google_available, "bing":bing_available, "karmadecay":karmadecay_available, "yandex":yandex_available}
+    searchengine_dict = {"google":(google_message, google_formatted), "karmadecay":(karmadecay_message,karmadecay_formatted), "bing":(bing_message, bing_formatted), "yandex":(yandex_message, yandex_formatted)}
     reply = ""
-    if not any((karmadecay_available, bing_available, google_available)):
+    if not any((karmadecay_available, bing_available, google_available, yandex_available)):
         reply = "Sorry, no information is available for this link."
     else:
-        for availability in ("google", "bing", "karmadecay"):
+        for availability in ("google", "bing", "yandex", "karmadecay"):
             #for each search engine, add the results if they're available, otherwise say there are no links from that search engine.
             if available_dict[availability]:
                 reply += searchengine_dict[availability][0].format(searchengine_dict[availability][1]) #0: message; 1: formatted results
