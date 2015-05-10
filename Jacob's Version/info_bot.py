@@ -88,6 +88,15 @@ def get_domain(link):
         group = link
     return group.decode('utf-8')
 
+def get_tld(link):
+    result = re.search("http\w?:///?\w+\.[^/]+(\.\w*)/?|http\w?:///?[^/]+(\.\w*)/?",link)
+    try:
+        group = result.group(1) if result.group(1) else result.group(2)
+    except:
+        #"ERROR: get_domain("+link+") could not find a working domain. Attempting to skip..."
+        group = link
+    return group.decode('utf-8')
+
 def get_nonspam_links(results):
     #comment the links on a post made by an alt account to see if they show up
     passed_domains = []
@@ -95,11 +104,16 @@ def get_nonspam_links(results):
         link = i[0]
         print link
         domain =  get_domain(link)
-        if ((domain not in [get_domain(k) for k in blacklist]) and (domain not in hard_blacklist) and (not any(i in domain for i in blacklist))) or (domain in whitelist):
+        good_tld = ''.join(letter for letter in get_tld(link) if letter!='.') not in tld_blacklist
+        good_domain = domain not in [get_domain(k) for k in blacklist]
+        not_in_hard_list = not any(item in domain for item in hard_blacklist)
+        no_spamlinks_in_link = not any(i in domain for i in blacklist)
+        print "Good tld: {0}\nGood Domain: {1}\nNot in hard list: {2}\nNo spamlinks in link: {3}".format(good_tld,good_domain,not_in_hard_list,no_spamlinks_in_link)
+        if all((good_tld,good_domain,not_in_hard_list,no_spamlinks_in_link)) or (domain in whitelist):
             submission = r.get_submission(submission_id=submission_id)
             submission.add_comment(link)
-            print "posted: "+link
-    time.sleep(2)
+            print "posted: "+link+"\n"
+    time.sleep(7)
     for msg in r2.get_unread(limit=40):
         domain = get_domain(msg.body)
         passed_domains.append(domain)
@@ -141,8 +155,11 @@ def format_results(results, display_limit=5): #returns a formatted and spam filt
     return formatted
 
 def comment_exists(comment):
-    if comment.author:
-        return True
+    try:
+        if comment.author:
+            return True
+    except:
+        pass
     print 'Comment was deleted'
     return False
 
@@ -228,27 +245,27 @@ def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to dis
 def find_username_mentions():
     for comment in r.get_unread(limit=100):
         if SEARCH_STRING in comment.body:
-            #print "search string in body"
+            print "search string in body"
             if comment.author: #check if the comment exists
-                #print "comment.author"
-                #print comment.subreddit
+                print "comment.author"
+                print comment.subreddit
                 if str(comment.subreddit) in subreddit_list: #check if it's in one of the right subs
-                    #print "comment.subreddit"
+                    print "comment.subreddit"
                     if (time.time()-comment.created_utc)/60 < time_limit_minutes: #if the age of the comment is less than the time limit
-                        #print "time"
+                        print "time"
                         try:
                             isPicture = any(i in str(comment.submission.url) for i in ['.tif', '.tiff', '.gif', '.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd', '.png'])
                         except UnicodeEncodeError:
                             isPicture = False #non-ascii url
                         if isPicture:
-                            #print "isPicture"
+                            print "isPicture"
                             top_level = [i.replies for i in comment.submission.comments]
                             submission_comments = []
                             for i in top_level:
                                 for j in i:
                                     submission_comments.append(j)
                             if not any(i for i in submission_comments if config['EXTRA_MESSAGE'] in i.body): #If there are no link replies
-                                #print "no link replies"
+                                print "no link replies"
                                 if comment.id not in already_done and comment.author != user:
                                     #print "not already done and not its own user"
                                     give_more_info(comment)
@@ -343,6 +360,7 @@ for domain in rarchives_spam_domains:
                 blacklist.append(domain)
 hard_blacklist = ["tumblr.com"]
 whitelist = ["reddit.com"]
+tld_blacklist = [''.join(letter for letter in tld if letter!=".") for tld in get_filter('tld')]
 
 with open('config.json') as json_data:
     config = json.load(json_data)
