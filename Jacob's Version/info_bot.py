@@ -99,41 +99,34 @@ def get_tld(link):
 
 def get_nonspam_links(results):
     #comment the links on a post made by an alt account to see if they show up
+    nonspam_links = []
     passed_domains = []
     for i in results:
         link = i[0]
         print link
-        domain =  get_domain(link)
         good_tld = ''.join(letter for letter in get_tld(link) if letter!='.') not in tld_blacklist
-        good_domain = domain not in [get_domain(k) for k in blacklist]
-        not_in_hard_list = not any(item in domain for item in hard_blacklist)
-        no_spamlinks_in_link = not any(i in domain for i in blacklist)
-        print "Good tld: {0}\nGood Domain: {1}\nNot in hard list: {2}\nNo spamlinks in link: {3}".format(good_tld,good_domain,not_in_hard_list,no_spamlinks_in_link)
-        if all((good_tld,good_domain,not_in_hard_list,no_spamlinks_in_link)) or (domain in whitelist):
-            submission = r.get_submission(submission_id=submission_id)
-            submission.add_comment(link)
-            print "posted: "+link+"\n"
-    time.sleep(7)
-    for msg in r2.get_unread(limit=40):
-        domain = get_domain(msg.body)
-        passed_domains.append(domain)
-        msg.mark_as_read()
-    nonspam_links = []
-    for i in results:
-        text = i[1]
-        link = i[0]
-        print "checking "+link
-        domain = get_domain(link)
-        if domain in passed_domains:
+        #not_in_hard_list = not any(item in get_domain(link) for item in hard_blacklist)
+        no_spamlinks_in_link = not any(j in link for j in link_filter)
+        #print "Good tld: {0}\\nNot in hard list: {1}\nNo spamlinks in link: {2}".format(good_tld,not_in_hard_list,no_spamlinks_in_link)
+        if good_tld and no_spamlinks_in_link:
             nonspam_links.append([i[0],i[1]])
             print link + " IS CLEAN\n"
+            submission = r.get_submission(submission_id=submission_id)
+            if link:
+                submission.add_comment(link)
+            print "posted: "+link+"\n"
         else:
             print link + " IS SPAM\n"
-            if domain not in blacklist:
-                spam_domain = get_domain(link)
-                blacklist.append(spam_domain)
-    print nonspam_links
-    return nonspam_links
+    time.sleep(7)
+    for msg in r2.get_unread(limit=40):
+        if msg.body in [i[0] for i in nonspam_links]:
+            passed_domains.append([i for i in nonspam_links if i[0]==msg.body][0])
+            print "read:   " + msg.body
+            #print [i for i in nonspam_links if i[0]==msg.body][0]
+        msg.mark_as_read()
+    print "passed domains: "+ passed_domains
+    return passed_domains
+
 
 def format_results(results, display_limit=5): #returns a formatted and spam filtered list of the results. Change 5 to adjust number of results to display per provider. Fi
     ascii = [[''.join(k for k in i[j] if (ord(k)<128 and k not in '[]()')) for j in xrange(2)] for i in results] #eliminates non-ascii characters
@@ -156,7 +149,7 @@ def format_results(results, display_limit=5): #returns a formatted and spam filt
 
 def comment_exists(comment):
     try:
-        if comment.author:
+        if r.get_info(thing_id = comment.id):
             return True
     except:
         pass
@@ -170,7 +163,10 @@ def give_more_info(comment):
     karmadecay_available = True
     yandex_available = True
 
-    google_formatted = bing_formatted = karmadecay_formatted = []
+    google_formatted = []
+    bing_formatted = []
+    karmadecay_formatted = []
+    yandex_formatted = []
     try:
         google_formatted = format_results(get_google_results(comment.submission))
     except IndexError:
@@ -301,7 +297,9 @@ def find_keywords(all_comments):
                                                 print "\ndetected keyword: "+ comment.body.lower()
                                             except UnicodeEncodeError:
                                                 print "\ndetected keyword: ",
-                                                print comment.body
+                                                try:
+                                                    print comment.body
+                                                except: pass #print ''.join(k for k in i[j] if (ord(k)<128 and k not in '[]()')) for j in xrange(2)
                                             if comment.id not in already_done and comment.author != user:
                                                 done = False
                                                 attempt = 1
@@ -350,7 +348,7 @@ def get_all_comments(stream):
 
 blacklist = pickle.load(open("blacklist.p", "rb"))
 print 'Adding Rarchives links to blacklist.'
-rarchives_spam_domains = get_filter('link')
+rarchives_spam_domains = link_filter = get_filter('link')
 for domain in rarchives_spam_domains:
     if 'http' not in domain and domain[0] != '.':
         domain = "http://"+domain
