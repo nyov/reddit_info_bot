@@ -102,13 +102,15 @@ def get_nonspam_links(results):
     nonspam_links = []
     passed_domains = []
     for i in results:
-        link = i[0]
+        link = i[0].lower()
+        text = i[1].lower()
         print link
         good_tld = ''.join(letter for letter in get_tld(link) if letter!='.') not in tld_blacklist
         #not_in_hard_list = not any(item in get_domain(link) for item in hard_blacklist)
         no_spamlinks_in_link = not any(j in link for j in link_filter)
-        #print "Good tld: {0}\\nNot in hard list: {1}\nNo spamlinks in link: {2}".format(good_tld,not_in_hard_list,no_spamlinks_in_link)
-        if good_tld and no_spamlinks_in_link:
+        no_text_spam = not any(j in text for j in text_filter)
+        print "Good tld: {0}\nNo spamlinks in link: {1}\nNo text spam: {2}\n".format(good_tld,no_spamlinks_in_link,no_text_spam)
+        if good_tld and no_spamlinks_in_link and no_text_spam:
             nonspam_links.append([i[0],i[1]])
             print link + " IS CLEAN\n"
             submission = r.get_submission(submission_id=submission_id)
@@ -124,7 +126,7 @@ def get_nonspam_links(results):
             print "read:   " + msg.body
             #print [i for i in nonspam_links if i[0]==msg.body][0]
         msg.mark_as_read()
-    print "passed domains: "+ passed_domains
+    print "passed domains: "+ str(passed_domains)
     return passed_domains
 
 
@@ -148,6 +150,7 @@ def format_results(results, display_limit=5): #returns a formatted and spam filt
     return formatted
 
 def comment_exists(comment):
+    return True
     try:
         if r.get_info(thing_id = comment.id):
             return True
@@ -348,7 +351,8 @@ def get_all_comments(stream):
 
 blacklist = pickle.load(open("blacklist.p", "rb"))
 print 'Adding Rarchives links to blacklist.'
-rarchives_spam_domains = link_filter = get_filter('link')
+rarchives_spam_domains = link_filter = get_filter('link') + get_filter('thumb')
+text_filter = get_filter('text') + get_filter('user')
 for domain in rarchives_spam_domains:
     if 'http' not in domain and domain[0] != '.':
         domain = "http://"+domain
