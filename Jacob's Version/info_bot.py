@@ -12,6 +12,17 @@ from praw.errors import RateLimitExceeded
 import itertools
 import random
 
+class submission:
+	def __init__(self,link):
+		self.url = link
+
+class comment:
+	def __init__(self,link):
+		self.submission = submission(link)
+		self.id = "dummy comment"
+	def reply(self,text):
+		print text
+
 def get_google_results(submission, limit=15): #limit is the max number of results to grab (not the max to display)
     image = submission.url
     headers = {}
@@ -20,6 +31,8 @@ def get_google_results(submission, limit=15): #limit is the max number of result
     response_text += requests.get('http://www.google.com/searchbyimage?image_url={0}&start=10'.format(image), headers=headers).content
     #response_text = response_text[response_text.find('Pages that include'):]
     tree = BeautifulSoup.BeautifulSoup(response_text)
+    print len(response_text)
+    print response_text
     list_class_results = tree.findAll(attrs={'class':'r'})
     if len(list_class_results) == 0:
         raise IndexError('No results')
@@ -116,7 +129,9 @@ def get_nonspam_links(results):
             submission = r.get_submission(submission_id=submission_id)
             if link:
                 submission.add_comment(link)
-            print "posted: "+link+"\n"
+            	print "posted: "+link+"\n"
+            else:
+            	print "link is NOT!!!!"
         else:
             print link + " IS SPAM\n"
     time.sleep(7)
@@ -170,24 +185,40 @@ def give_more_info(comment):
     bing_formatted = []
     karmadecay_formatted = []
     yandex_formatted = []
-    try:
-        google_formatted = format_results(get_google_results(comment.submission))
-    except IndexError:
-        google_available = False
+    link = re.sub("/","*",comment.submission.url)
+    print link
+    results = eval(urllib2.urlopen("https://sleepy-tundra-5659.herokuapp.com/search/"+link).read())
 
     try:
-        bing_formatted = format_results(get_bing_results(comment.submission))
+    	print "GOOGLE:"
+        google_formatted = format_results(results[0])
+    except IndexError,e:
+        google_available = False
+        print e
+
+    try:
+    	print "BING:"
+        bing_formatted = format_results(results[1])
     except IndexError:
         bing_available = False
 
-    karmadecay_formatted = format_results(get_karmadecay_results(comment.submission))
+    try:
+    	print "YANDEX:"
+        yandex_formatted = format_results(results[2])
+    except IndexError:
+        yandex_available = False
+
+    print "KARMA DECAY:"
+    karmadecay_formatted = format_results(results[3])
+
     if not karmadecay_formatted:
         karmadecay_available = False
-
-    try:
-        yandex_formatted = format_results(get_yandex_results(comment.submission))
-    except IndexError: yandex_available = False
-    if not yandex_formatted: yandex_available = False
+    if not yandex_formatted:
+    	yandex_available = False
+    if not bing_formatted:
+    	bing_available = False
+    if not google_formatted:
+    	google_available = False
 
     google_message = "**Best Google Guesses**\n\n{0}\n\n"
     bing_message = "**Best Bing Guesses**\n\n{0}\n\n"
@@ -197,14 +228,14 @@ def give_more_info(comment):
     searchengine_dict = {"google":(google_message, google_formatted), "karmadecay":(karmadecay_message,karmadecay_formatted), "bing":(bing_message, bing_formatted), "yandex":(yandex_message, yandex_formatted)}
     reply = ""
     if not any((karmadecay_available, bing_available, google_available, yandex_available)):
-        reply = "Sorry, no information is available for this link."
+        reply = "Sorry, the bot was not able to automatically find results for this link. \n\n We'll try to find it manually and comment back.  Results may be delayed."
     else:
         for availability in ("google", "bing", "yandex", "karmadecay"):
             #for each search engine, add the results if they're available, otherwise say there are no links from that search engine.
             if available_dict[availability]:
                 reply += searchengine_dict[availability][0].format(searchengine_dict[availability][1]) #0: message; 1: formatted results
             else:
-                reply += searchengine_dict[availability][0].format("No links from this search engine found")
+                reply += searchengine_dict[availability][0].format("No available links from this search engine found.")
 
     try:
         reply += extra_message
@@ -353,13 +384,14 @@ blacklist = pickle.load(open("blacklist.p", "rb"))
 print 'Adding Rarchives links to blacklist.'
 rarchives_spam_domains = link_filter = get_filter('link') + get_filter('thumb')
 text_filter = get_filter('text') + get_filter('user')
-for domain in rarchives_spam_domains:
+"""for domain in rarchives_spam_domains:
     if 'http' not in domain and domain[0] != '.':
         domain = "http://"+domain
     if not re.search('\.[^\.]+/.+$',domain): #if the link isn't to a specific page (has stuff after the final /) instead of an actual domain
         if domain[0] != '.':
             if domain not in blacklist:
                 blacklist.append(domain)
+"""
 hard_blacklist = ["tumblr.com"]
 whitelist = ["reddit.com"]
 tld_blacklist = [''.join(letter for letter in tld if letter!=".") for tld in get_filter('tld')]
@@ -403,25 +435,32 @@ session_client.modhash = the_json['json']['data']['modhash']
 
 comment_stream_urls = get_comment_stream_urls(subreddit_list)
 
-while True:
-    try:
-        for stream in comment_stream_urls: #uses separate comment streams for large subreddit list due to URL length limit
-            a = time.time()
-            all_comments = get_all_comments(stream)
-            if not all_comments:
-                continue
-            print time.time()-a
-            find_keywords(all_comments)
-            print "finding username mentions..."
-            find_username_mentions()
-            start_time = check_downvotes(user,start_time)
+def main():
+	start_time = time.time()
+	while True:
+	    try:
+	        for stream in comment_stream_urls: #uses separate comment streams for large subreddit list due to URL length limit
+	            a = time.time()
+	            all_comments = get_all_comments(stream)
+	            if not all_comments:
+	                continue
+	            print time.time()-a
+	            find_keywords(all_comments)
+	            print "finding username mentions..."
+	            find_username_mentions()
+	            start_time = check_downvotes(user,start_time)
 
-            pickle.dump(already_done, open("already_done.p", "wb"))
-            pickle.dump(blacklist, open("blacklist.p", "wb"))
+	            pickle.dump(already_done, open("already_done.p", "wb"))
+	            pickle.dump(blacklist, open("blacklist.p", "wb"))
 
-            print 'Finished a round of comments. Waiting two seconds.\n'
-            time.sleep(2)
-    except ConnectionError:
-        print 'Connection Error'
-    except HTTPError:
-        print 'HTTP Error'
+	            print 'Finished a round of comments. Waiting two seconds.\n'
+	            time.sleep(2)
+	    except ConnectionError:
+	        print 'Connection Error'
+	    except HTTPError:
+	        print 'HTTP Error'
+
+
+#give_more_info(comment("http://i.imgur.com/zfJb6nZ.jpg"))
+
+main()
