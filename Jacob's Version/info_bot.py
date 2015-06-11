@@ -127,7 +127,7 @@ def get_nonspam_links(results):
             nonspam_links.append([i[0],i[1]])
             print link + " IS CLEAN\n"
             submission = r.get_submission(submission_id=submission_id)
-            if link:
+            if len(link) > 5:
                 submission.add_comment(link)
             	print "posted: "+link+"\n"
             else:
@@ -187,7 +187,14 @@ def give_more_info(comment):
     yandex_formatted = []
     link = re.sub("/","*",comment.submission.url)
     print link
-    results = eval(urllib2.urlopen("https://sleepy-tundra-5659.herokuapp.com/search/"+link).read())
+    results = ''
+    i = 0
+    while not results:
+        i += 1
+        try:
+            results = eval(urllib2.urlopen("https://sleepy-tundra-5659.herokuapp.com/search/"+link).read())
+        except urllib2.HTTPError:
+            print "503 Service Unavailable. Retrying "+str(i)
 
     try:
     	print "GOOGLE:"
