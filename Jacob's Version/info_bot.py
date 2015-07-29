@@ -1,3 +1,4 @@
+import os
 import time
 import praw
 import pickle
@@ -12,16 +13,18 @@ from praw.errors import RateLimitExceeded
 import itertools
 import random
 
+os.chdir("/usr/redditbot")
+
 class submission:
-	def __init__(self,link):
-		self.url = link
+    def __init__(self,link):
+        self.url = link
 
 class comment:
-	def __init__(self,link):
-		self.submission = submission(link)
-		self.id = "dummy comment"
-	def reply(self,text):
-		print text
+    def __init__(self,link):
+        self.submission = submission(link)
+        self.id = "dummy comment"
+    def reply(self,text):
+        print text
 
 def get_google_results(submission, limit=15): #limit is the max number of results to grab (not the max to display)
     image = submission.url
@@ -129,9 +132,9 @@ def get_nonspam_links(results):
             submission = r.get_submission(submission_id=submission_id)
             if len(link) > 5:
                 submission.add_comment(link)
-            	print "posted: "+link+"\n"
+                print "posted: "+link+"\n"
             else:
-            	print "link is NOT!!!!"
+                print "link is NOT!!!!"
         else:
             print link + " IS SPAM\n"
     time.sleep(7)
@@ -197,20 +200,20 @@ def give_more_info(comment):
             print "503 Service Unavailable. Retrying "+str(i)
 
     try:
-    	print "GOOGLE:"
+        print "GOOGLE:"
         google_formatted = format_results(results[0])
     except IndexError,e:
         google_available = False
         print e
 
     try:
-    	print "BING:"
+        print "BING:"
         bing_formatted = format_results(results[1])
     except IndexError:
         bing_available = False
 
     try:
-    	print "YANDEX:"
+        print "YANDEX:"
         yandex_formatted = format_results(results[2])
     except IndexError:
         yandex_available = False
@@ -221,11 +224,11 @@ def give_more_info(comment):
     if not karmadecay_formatted:
         karmadecay_available = False
     if not yandex_formatted:
-    	yandex_available = False
+        yandex_available = False
     if not bing_formatted:
-    	bing_available = False
+        bing_available = False
     if not google_formatted:
-    	google_available = False
+        google_available = False
 
     google_message = "**Best Google Guesses**\n\n{0}\n\n"
     bing_message = "**Best Bing Guesses**\n\n{0}\n\n"
@@ -235,7 +238,7 @@ def give_more_info(comment):
     searchengine_dict = {"google":(google_message, google_formatted), "karmadecay":(karmadecay_message,karmadecay_formatted), "bing":(bing_message, bing_formatted), "yandex":(yandex_message, yandex_formatted)}
     reply = ""
     if not any((karmadecay_available, bing_available, google_available, yandex_available)):
-        reply = "Sorry, the bot was not able to automatically find results for this link. \n\n We'll try to find it manually and comment back.  Results may be delayed."
+        reply = "Well that's embarrassing.  Not for me, but for the search engines. \n\n I was not able to automatically find results for this link.  \n\n ^^If ^^this ^^is ^^a ^^.gifv ^^I ^^am ^^working ^^on ^^adding ^^them ^^to ^^searches."
     else:
         for availability in ("google", "bing", "yandex", "karmadecay"):
             #for each search engine, add the results if they're available, otherwise say there are no links from that search engine.
@@ -443,29 +446,29 @@ session_client.modhash = the_json['json']['data']['modhash']
 comment_stream_urls = get_comment_stream_urls(subreddit_list)
 
 def main():
-	start_time = time.time()
-	while True:
-	    try:
-	        for stream in comment_stream_urls: #uses separate comment streams for large subreddit list due to URL length limit
-	            a = time.time()
-	            all_comments = get_all_comments(stream)
-	            if not all_comments:
-	                continue
-	            print time.time()-a
-	            find_keywords(all_comments)
-	            print "finding username mentions..."
-	            find_username_mentions()
-	            start_time = check_downvotes(user,start_time)
+    start_time = time.time()
+    while True:
+        try:
+            for stream in comment_stream_urls: #uses separate comment streams for large subreddit list due to URL length limit
+                a = time.time()
+                all_comments = get_all_comments(stream)
+                if not all_comments:
+                    continue
+                print time.time()-a
+                find_keywords(all_comments)
+                print "finding username mentions..."
+                find_username_mentions()
+                start_time = check_downvotes(user,start_time)
 
-	            pickle.dump(already_done, open("already_done.p", "wb"))
-	            pickle.dump(blacklist, open("blacklist.p", "wb"))
+                pickle.dump(already_done, open("already_done.p", "wb"))
+                pickle.dump(blacklist, open("blacklist.p", "wb"))
 
-	            print 'Finished a round of comments. Waiting two seconds.\n'
-	            time.sleep(2)
-	    except ConnectionError:
-	        print 'Connection Error'
-	    except HTTPError:
-	        print 'HTTP Error'
+                print 'Finished a round of comments. Waiting two seconds.\n'
+                time.sleep(2)
+        except ConnectionError:
+            print 'Connection Error'
+        except HTTPError:
+            print 'HTTP Error'
 
 
 #give_more_info(comment("http://i.imgur.com/zfJb6nZ.jpg"))
