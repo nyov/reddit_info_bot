@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import sys
 import os
 import time
 import praw
@@ -14,7 +15,6 @@ from praw.errors import RateLimitExceeded
 import itertools
 import random
 
-os.chdir("/usr/redditbot")
 
 class submission:
     def __init__(self,link):
@@ -391,7 +391,26 @@ def get_all_comments(stream):
     except ValueError:
         return None
 
-blacklist = pickle.load(open("blacklist.p", "rb"))
+
+with open('config.json') as json_data:
+    config = json.load(json_data)
+
+WORKDIR = None
+if 'BOT_WORKDIR' in config:
+    WORKDIR = config["BOT_WORKDIR"]
+if WORKDIR: # If no BOT_WORKDIR was specified in the config, run in current dir
+    if os.path.exists(WORKDIR):
+        os.chdir(WORKDIR)
+    else: # BOT_WORKDIR was requested, but does not exist. That's a failure.
+        errmsg = "Requested BOT_WORKDIR '{0}' does not exist, aborting.".format(WORKDIR)
+        #print errmsg
+        sys.exit(errmsg)
+
+
+blacklist = []
+if os.path.isfile("blacklist.p"):
+    with open("blacklist.p", "rb") as f:
+        blacklist = pickle.load(f)
 print 'Adding Rarchives links to blacklist.'
 rarchives_spam_domains = link_filter = get_filter('link') + get_filter('thumb')
 text_filter = get_filter('text') + get_filter('user')
@@ -406,9 +425,6 @@ text_filter = get_filter('text') + get_filter('user')
 hard_blacklist = ["tumblr.com"]
 whitelist = ["reddit.com"]
 tld_blacklist = [''.join(letter for letter in tld if letter!=".") for tld in get_filter('tld')]
-
-with open('config.json') as json_data:
-    config = json.load(json_data)
 
 COMMENT = 'comment'
 PM = 'PM'
@@ -430,7 +446,10 @@ r2 = praw.Reddit(config['BOT_NAME']) #load a second praw instance for the second
 r2.login(config['SECOND_ACCOUNT_NAME'],config['SECOND_ACCOUNT_PASS'])
 
 user = r.get_redditor(config['USER_NAME'])
-already_done = pickle.load(open("already_done.p", "rb"))
+already_done = []
+if os.path.isfile("already_done.p"):
+    with open("already_done.p", "rb") as f:
+        already_done = pickle.load(f)
 start_time = int(time.time()/60) #time in minutes for downvote checking
 
 subreddit_list = [r.get_subreddit(i).display_name for i in config['SUBREDDITS']]
@@ -461,8 +480,10 @@ def main():
                 find_username_mentions()
                 start_time = check_downvotes(user,start_time)
 
-                pickle.dump(already_done, open("already_done.p", "wb"))
-                pickle.dump(blacklist, open("blacklist.p", "wb"))
+                with open("already_done.p", "wb") as df:
+                    pickle.dump(already_done, df)
+                with open("blacklist.p", "wb") as bf:
+                    pickle.dump(blacklist, bf)
 
                 print 'Finished a round of comments. Waiting two seconds.\n'
                 time.sleep(2)
@@ -474,4 +495,5 @@ def main():
 
 #give_more_info(comment("http://i.imgur.com/zfJb6nZ.jpg"))
 
-main()
+if __name__ == "__main__":
+    main()

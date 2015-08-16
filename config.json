@@ -23,5 +23,6 @@
 	"SUBREDDITS": [
 				"*****"
 	],
-	"USE_KEYWORDS":		true
+	"USE_KEYWORDS":		true,
+	"BOT_WORKDIR":		"/usr/redditbot"
 }
