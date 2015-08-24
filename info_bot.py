@@ -15,7 +15,7 @@ from praw.errors import RateLimitExceeded
 import itertools
 import random
 
-
+# mock objects to emulate praw interface
 class submission:
     def __init__(self,link):
         self.url = link
@@ -130,7 +130,8 @@ def get_nonspam_links(results):
         if good_tld and no_spamlinks_in_link and no_text_spam:
             nonspam_links.append([i[0],i[1]])
             print link + " IS CLEAN\n"
-            submission = r.get_submission(submission_id=submission_id)
+            # post link, check reddit blacklist
+            submission = account1.get_submission(submission_id=submission_id)
             if len(link) > 5:
                 submission.add_comment(link)
                 print "posted: "+link+"\n"
@@ -139,7 +140,7 @@ def get_nonspam_links(results):
         else:
             print link + " IS SPAM\n"
     time.sleep(7)
-    for msg in r2.get_unread(limit=40):
+    for msg in account2.get_unread(limit=40):
         if msg.body in [i[0] for i in nonspam_links]:
             passed_domains.append([i for i in nonspam_links if i[0]==msg.body][0])
             print "read:   " + msg.body
@@ -171,7 +172,7 @@ def format_results(results, display_limit=5): #returns a formatted and spam filt
 def comment_exists(comment):
     return True
     try:
-        if r.get_info(thing_id = comment.id):
+        if account1.get_info(thing_id = comment.id):
             return True
     except:
         pass
@@ -270,7 +271,7 @@ def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to dis
         elif mode == LOG:
             print reply
         elif mode == PM:
-             print r.send_message(comment.author, 'Info Bot Information', reply)
+             print account1.send_message(comment.author, 'Info Bot Information', reply)
         print "replied to potential comment: {0}".format(comment.body)
         done = True
         already_done.append(comment.id)
@@ -284,7 +285,7 @@ def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to dis
     return done
 
 def find_username_mentions():
-    for comment in r.get_unread(limit=100):
+    for comment in account1.get_unread(limit=100):
         if SEARCH_STRING in comment.body:
             print "search string in body"
             if comment.author: #check if the comment exists
@@ -327,7 +328,7 @@ def find_keywords(all_comments):
                     if isPicture:
                         body = comment['body'].lower()
                         if any(word.lower() in body.lower() for word in keyword_list):
-                            comment = r.get_submission(url="http://www.reddit.com/r/{0}/comments/{1}/aaaa/{2}".format(comment['subreddit'],comment['link_id'][3:],comment['id'])).comments
+                            comment = account1.get_submission(url="http://www.reddit.com/r/{0}/comments/{1}/aaaa/{2}".format(comment['subreddit'],comment['link_id'][3:],comment['id'])).comments
                             if comment: #get_submission returns a valid comment object
                                 comment = comment[0]
                                 top_level = [i.replies for i in comment.submission.comments]
@@ -437,24 +438,30 @@ def startup():
     keyword_list = config['KEYWORDS']
     time_limit_minutes = config['TIME_LIMIT_MINUTES'] #how long before a comment will be ignored for being too old
     comment_deleting_wait_time = config["DELETE_WAIT_TIME"] #how many minutes to wait before deleting downvoted comments
-    r = praw.Reddit(config['BOT_NAME'])
-    r.login(config['USER_NAME'],config['PASSWORD'])
 
-    r2 = praw.Reddit(config['BOT_NAME']) #load a second praw instance for the second account (the one used to check the spam links)
-    r2.login(config['SECOND_ACCOUNT_NAME'],config['SECOND_ACCOUNT_PASS'])
+    # login to accounts
+    account1 = praw.Reddit(config['BOT_NAME'])
+    account1.login(config['USER_NAME'],config['PASSWORD'])
 
-    user = r.get_redditor(config['USER_NAME'])
+    account2 = praw.Reddit(config['BOT_NAME']) #load a second praw instance for the second account (the one used to check the spam links)
+    account2.login(config['SECOND_ACCOUNT_NAME'],config['SECOND_ACCOUNT_PASS'])
+
+    user = account1.get_redditor(config['USER_NAME'])
     already_done = []
     if os.path.isfile("already_done.p"):
         with open("already_done.p", "rb") as f:
             already_done = pickle.load(f)
     start_time = int(time.time()/60) #time in minutes for downvote checking
 
-    subreddit_list = [r.get_subreddit(i).display_name for i in config['SUBREDDITS']]
+    subreddit_list = [account1.get_subreddit(i).display_name for i in config['SUBREDDITS']]
     #load the word list:
     bad_words = get_filter('text')
 
-    credentials = {'user': config["USER_NAME"], 'passwd': config["PASSWORD"], 'api_type': 'json',}
+    credentials = {
+        'user': config["USER_NAME"],
+        'passwd': config["PASSWORD"],
+        'api_type': 'json',
+    }
     headers = {'user-agent': config["BOT_NAME"],}
     session_client = requests.session()
     r1 = session_client.post('http://www.reddit.com/api/login', data = credentials, headers=headers)
