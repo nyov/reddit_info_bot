@@ -1,6 +1,8 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import sys
 import os
+import logging
 import time
 import praw
 import pickle
@@ -15,6 +17,8 @@ from praw.errors import RateLimitExceeded
 import itertools
 import random
 
+logger = logging.getLogger(__name__)
+
 # mock objects to emulate praw interface
 class submission:
     def __init__(self,link):
@@ -25,7 +29,7 @@ class comment:
         self.submission = submission(link)
         self.id = "dummy comment"
     def reply(self,text):
-        print text
+        print(text)
 
 def get_google_results(submission, limit=15): #limit is the max number of results to grab (not the max to display)
     image = submission.url
@@ -35,8 +39,8 @@ def get_google_results(submission, limit=15): #limit is the max number of result
     response_text += requests.get('http://www.google.com/searchbyimage?image_url={0}&start=10'.format(image), headers=headers).content
     #response_text = response_text[response_text.find('Pages that include'):]
     tree = BeautifulSoup.BeautifulSoup(response_text)
-    print len(response_text)
-    print response_text
+    print(len(response_text))
+    print(response_text)
     list_class_results = tree.findAll(attrs={'class':'r'})
     if len(list_class_results) == 0:
         raise IndexError('No results')
@@ -121,32 +125,32 @@ def get_nonspam_links(results):
     for i in results:
         link = i[0].lower()
         text = i[1].lower()
-        print link
+        print(link)
         good_tld = ''.join(letter for letter in get_tld(link) if letter!='.') not in tld_blacklist
         #not_in_hard_list = not any(item in get_domain(link) for item in hard_blacklist)
         no_spamlinks_in_link = not any(j in link for j in link_filter)
         no_text_spam = not any(j in text for j in text_filter)
-        print "Good tld: {0}\nNo spamlinks in link: {1}\nNo text spam: {2}\n".format(good_tld,no_spamlinks_in_link,no_text_spam)
+        print("Good tld: {0}\nNo spamlinks in link: {1}\nNo text spam: {2}\n".format(good_tld,no_spamlinks_in_link,no_text_spam))
         if good_tld and no_spamlinks_in_link and no_text_spam:
             nonspam_links.append([i[0],i[1]])
-            print link + " IS CLEAN\n"
+            print(link + " IS CLEAN\n")
             # post link, check reddit blacklist
             submission = account1.get_submission(submission_id=submission_id)
             if len(link) > 5:
                 submission.add_comment(link)
-                print "posted: "+link+"\n"
+                print("posted: "+link+"\n")
             else:
-                print "link is NOT!!!!"
+                print("link is NOT!!!!")
         else:
-            print link + " IS SPAM\n"
+            print(link + " IS SPAM\n")
     time.sleep(7)
     for msg in account2.get_unread(limit=40):
         if msg.body in [i[0] for i in nonspam_links]:
             passed_domains.append([i for i in nonspam_links if i[0]==msg.body][0])
-            print "read:   " + msg.body
-            #print [i for i in nonspam_links if i[0]==msg.body][0]
+            print("read:   " + msg.body)
+            #print([i for i in nonspam_links if i[0]==msg.body][0])
         msg.mark_as_read()
-    print "passed domains: "+ str(passed_domains)
+    print("passed domains: "+ str(passed_domains))
     return passed_domains
 
 
@@ -176,7 +180,7 @@ def comment_exists(comment):
             return True
     except:
         pass
-    print 'Comment was deleted'
+    print('Comment was deleted')
     return False
 
 def give_more_info(comment):
@@ -191,7 +195,7 @@ def give_more_info(comment):
     karmadecay_formatted = []
     yandex_formatted = []
     link = re.sub("/","*",comment.submission.url)
-    print link
+    print(link)
     results = ''
     i = 0
     while not results:
@@ -199,28 +203,28 @@ def give_more_info(comment):
         try:
             results = eval(urllib2.urlopen("https://sleepy-tundra-5659.herokuapp.com/search/"+link).read())
         except urllib2.HTTPError:
-            print "503 Service Unavailable. Retrying "+str(i)
+            print("503 Service Unavailable. Retrying "+str(i))
 
     try:
-        print "GOOGLE:"
+        print("GOOGLE:")
         google_formatted = format_results(results[0])
-    except IndexError,e:
+    except IndexError as e:
         google_available = False
-        print e
+        print(e)
 
     try:
-        print "BING:"
+        print("BING:")
         bing_formatted = format_results(results[1])
     except IndexError:
         bing_available = False
 
     try:
-        print "YANDEX:"
+        print("YANDEX:")
         yandex_formatted = format_results(results[2])
     except IndexError:
         yandex_available = False
 
-    print "KARMA DECAY:"
+    print("KARMA DECAY:")
     karmadecay_formatted = format_results(results[3])
 
     if not karmadecay_formatted:
@@ -253,9 +257,9 @@ def give_more_info(comment):
         reply += extra_message
         if comment_exists(comment):
             comment.reply(reply)
-            print 'replied to comment with more info'
+            print('replied to comment with more info')
     except HTTPError:
-        print 'HTTP Error. Bot might be banned from this sub'
+        print('HTTP Error. Bot might be banned from this sub')
 
 def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to disable this feature
     if (not use_keywords):
@@ -269,47 +273,47 @@ def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to dis
             if comment_exists(comment):
                 comment.reply(reply)
         elif mode == LOG:
-            print reply
+            print(reply)
         elif mode == PM:
-             print account1.send_message(comment.author, 'Info Bot Information', reply)
-        print "replied to potential comment: {0}".format(comment.body)
+             print(account1.send_message(comment.author, 'Info Bot Information', reply))
+        print("replied to potential comment: {0}".format(comment.body))
         done = True
         already_done.append(comment.id)
     except HTTPError:
         done = True
-        print 'HTTP Error. Bot might be banned from this sub'
+        print('HTTP Error. Bot might be banned from this sub')
         already_done.append(comment.id)
     except RateLimitExceeded:
-        print 'submission rate exceeded! attempt %i'%attempt
+        print('submission rate exceeded! attempt %i'%attempt)
         time.sleep(30)
     return done
 
 def find_username_mentions():
     for comment in account1.get_unread(limit=100):
         if SEARCH_STRING in comment.body:
-            print "search string in body"
+            print("search string in body")
             if comment.author: #check if the comment exists
-                print "comment.author"
-                print comment.subreddit
+                print("comment.author")
+                print(comment.subreddit)
                 if str(comment.subreddit) in subreddit_list: #check if it's in one of the right subs
-                    print "comment.subreddit"
+                    print("comment.subreddit")
                     if (time.time()-comment.created_utc)/60 < time_limit_minutes: #if the age of the comment is less than the time limit
-                        print "time"
+                        print("time")
                         try:
                             isPicture = any(i in str(comment.submission.url) for i in ['.tif', '.tiff', '.gif', '.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd', '.png'])
                         except UnicodeEncodeError:
                             isPicture = False #non-ascii url
                         if isPicture:
-                            print "isPicture"
+                            print("isPicture")
                             top_level = [i.replies for i in comment.submission.comments]
                             submission_comments = []
                             for i in top_level:
                                 for j in i:
                                     submission_comments.append(j)
                             if not any(i for i in submission_comments if config['EXTRA_MESSAGE'] in i.body): #If there are no link replies
-                                print "no link replies"
+                                print("no link replies")
                                 if comment.id not in already_done and comment.author != user:
-                                    #print "not already done and not its own user"
+                                    #print("not already done and not its own user")
                                     give_more_info(comment)
                                     already_done.append(comment.id)
         comment.mark_as_read()
@@ -317,7 +321,7 @@ def find_username_mentions():
 
 def find_keywords(all_comments):
     for comment in all_comments:
-        print ".",
+        print(".", end="")
         if comment['author']: #check if the comment exists
             if comment['subreddit'] in subreddit_list: #check if it's in one of the right subs
                 if (time.time()-comment['created_utc'])/60 < time_limit_minutes: #if the age of the comment is less than the time limit
@@ -340,12 +344,12 @@ def find_keywords(all_comments):
                                     if not any(i for i in submission_comments if i.body == config['INFORMATION_REPLY']): #If there are no information replies
                                         if any(word.lower() in comment.body.lower() for word in keyword_list):
                                             try:
-                                                print "\ndetected keyword: "+ comment.body.lower()
+                                                print("\ndetected keyword: "+ comment.body.lower())
                                             except UnicodeEncodeError:
-                                                print "\ndetected keyword: ",
+                                                print("\ndetected keyword: ", end="")
                                                 try:
-                                                    print comment.body
-                                                except: pass #print ''.join(k for k in i[j] if (ord(k)<128 and k not in '[]()')) for j in xrange(2)
+                                                    print(comment.body)
+                                                except: pass #print(''.join(k for k in i[j] if (ord(k)<128 and k not in '[]()')) for j in xrange(2))
                                             if comment.id not in already_done and comment.author != user:
                                                 done = False
                                                 attempt = 1
@@ -359,7 +363,7 @@ def check_downvotes(user,start_time):
         for comment in my_comments:
             if comment.score < 1:
                 comment.delete()
-                print 'deleted a comment'
+                print('deleted a comment')
         return current_time
     return start_time
 
@@ -394,15 +398,14 @@ def get_all_comments(stream):
 
 
 def startup():
-    WORKDIR = None
+    wd = None
     if 'BOT_WORKDIR' in config:
-        WORKDIR = config["BOT_WORKDIR"]
-    if WORKDIR: # If no BOT_WORKDIR was specified in the config, run in current dir
-        if os.path.exists(WORKDIR):
-            os.chdir(WORKDIR)
+        wd = config["BOT_WORKDIR"]
+    if wd: # If no BOT_WORKDIR was specified in the config, run in current dir
+        if os.path.exists(wd):
+            os.chdir(wd)
         else: # BOT_WORKDIR was requested, but does not exist. That's a failure.
-            errmsg = "Requested BOT_WORKDIR '{0}' does not exist, aborting.".format(WORKDIR)
-            #print errmsg
+            errmsg = "Requested BOT_WORKDIR '{0}' does not exist, aborting.".format(wd)
             sys.exit(errmsg)
 
 
@@ -410,7 +413,7 @@ def startup():
     if os.path.isfile("blacklist.p"):
         with open("blacklist.p", "rb") as f:
             blacklist = pickle.load(f)
-    print 'Adding Rarchives links to blacklist.'
+    print('Adding Rarchives links to blacklist.')
     rarchives_spam_domains = link_filter = get_filter('link') + get_filter('thumb')
     text_filter = get_filter('text') + get_filter('user')
     """for domain in rarchives_spam_domains:
@@ -480,9 +483,9 @@ def main():
                 all_comments = get_all_comments(stream)
                 if not all_comments:
                     continue
-                print time.time()-a
+                print(time.time()-a)
                 find_keywords(all_comments)
-                print "finding username mentions..."
+                print("finding username mentions...")
                 find_username_mentions()
                 start_time = check_downvotes(user,start_time)
 
@@ -491,12 +494,12 @@ def main():
                 with open("blacklist.p", "wb") as bf:
                     pickle.dump(blacklist, bf)
 
-                print 'Finished a round of comments. Waiting two seconds.\n'
+                print('Finished a round of comments. Waiting two seconds.\n')
                 time.sleep(2)
         except ConnectionError:
-            print 'Connection Error'
+            print('Connection Error')
         except HTTPError:
-            print 'HTTP Error'
+            print('HTTP Error')
 
 
 if __name__ == "__main__":
