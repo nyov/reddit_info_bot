@@ -14,6 +14,7 @@ import re
 import json
 from requests import HTTPError,ConnectionError
 from praw.errors import RateLimitExceeded
+from parsel import Selector
 import itertools
 import random
 
@@ -99,6 +100,44 @@ def get_karmadecay_results(image_url, limit=15):
     results = [(i[i.find("(",i.find(']'))+1:i.find(")",i.find(']'))],i[i.find("[")+1:i.find("]")]) for i in raw_results]
     return results #[(link,text)]
 
+def get_tineye_results(image_url, limit=15):
+    def extract(r, count):
+        sel = Selector(text=r.content.decode(r.encoding))
+        page = sel.xpath('//div[@class="results"]//div[@class="row matches"]//div[contains(@class, "match-row")]')
+        if not page:
+            raise IndexError('No search results')
+
+        results = []
+        for found in page:
+            count -= 1
+            if count < 0:
+                break # stop after our search limit
+            source_image = found.xpath('.//div[@class="match"]/p[contains(@class, "short-image-link")]/a/@href').extract_first()
+            source_image_size = found.xpath('.//div[contains(@class, "match-thumb")]/p/span[2]/text()').extract_first()
+            source_link = found.xpath('.//div[@class="match"]/p[not(@class)]/a/@href').extract_first()
+            source_title = found.xpath('.//div[@class="match"]/h4[@title]/text()').extract_first()
+            #source_text = found.xpath('.//div[@class="match"]/p[@class="crawl-date"]/text()').extract_first()
+
+            image_name = os.path.basename(source_image)
+            text = '{0} {1} on {2}'.format(image_name, source_image_size, source_title)
+            results += [(source_link, text)]
+        return results # [(link,text)]
+
+    headers = {}
+    headers['User-Agent'] = USER_AGENT
+    response = requests.post("http://www.tineye.com/search", data={'url': image_url})
+
+    results = extract(response, limit)
+    limit = limit - len(results)
+    if limit > 0: # try another page
+        sel = Selector(text=response.content.decode(response.encoding))
+        next_link = sel.xpath('//div[@class="pagination"]/span[@class="current"]/following-sibling::a/@href').extract_first()
+        if next_link:
+            response = requests.get(response.url + '?page=2')
+            results += extract(response, limit)
+
+    return results
+
 
 def get_domain(link):
     #result = re.search("http\w?:///?(\w+\..+\.\w*)/?|http\w?:///?(.+\.\w*)/?",link)
@@ -158,6 +197,7 @@ def format_results(results, display_limit=5): #returns a formatted and spam filt
                 text += char
         ascii_filtered.append([i[0],text])
 
+    #ascii_final = ascii_filtered # test without spamfilter
     ascii_final = get_nonspam_links(ascii_filtered) #filter the links for spam
     if len(ascii_final) > display_limit:
         ascii_final = ascii_final[:display_limit] #limit the list to 5 items
@@ -181,11 +221,13 @@ def give_more_info(submission_url):
     bing_available = True
     karmadecay_available = True
     yandex_available = True
+    tineye_available = True
 
     google_formatted = []
     bing_formatted = []
     karmadecay_formatted = []
     yandex_formatted = []
+    tineye_formatted = []
     link = re.sub("/","*", submission_url)
     print(link)
     results = ''
@@ -193,7 +235,8 @@ def give_more_info(submission_url):
     while not results:
         i += 1
         try:
-            results = eval(urllib2.urlopen("https://sleepy-tundra-5659.herokuapp.com/search/"+link).read())
+            response = urllib2.urlopen("https://sleepy-tundra-5659.herokuapp.com/search/"+link).read()
+            results = eval(response)
         except urllib2.HTTPError:
             print("503 Service Unavailable. Retrying "+str(i))
 
@@ -219,6 +262,15 @@ def give_more_info(submission_url):
     print("KARMA DECAY:")
     karmadecay_formatted = format_results(results[3])
 
+    try:
+        print("TINEYE:")
+        tineye_results = get_tineye_results(submission_url)
+        tineye_formatted = format_results(tineye_results)
+    except IndexError:
+        tineye_available = False
+
+    if not tineye_formatted:
+        tineye_available = False
     if not karmadecay_formatted:
         karmadecay_available = False
     if not yandex_formatted:
@@ -232,13 +284,14 @@ def give_more_info(submission_url):
     bing_message = "**Best Bing Guesses**\n\n{0}\n\n"
     yandex_message = "**Best Yandex Guesses**\n\n{0}\n\n"
     karmadecay_message = "**Best Karma Decay Guesses**\n\n{0}\n\n"
-    available_dict = {"google":google_available, "bing":bing_available, "karmadecay":karmadecay_available, "yandex":yandex_available}
-    searchengine_dict = {"google":(google_message, google_formatted), "karmadecay":(karmadecay_message,karmadecay_formatted), "bing":(bing_message, bing_formatted), "yandex":(yandex_message, yandex_formatted)}
+    tineye_message = "**Best Tineye Guesses**\n\n{0}\n\n"
+    available_dict = {"google":google_available, "bing":bing_available, "karmadecay":karmadecay_available, "yandex":yandex_available, "tineye":tineye_available}
+    searchengine_dict = {"google":(google_message, google_formatted), "karmadecay":(karmadecay_message,karmadecay_formatted), "bing":(bing_message, bing_formatted), "yandex":(yandex_message, yandex_formatted), "tineye":(tineye_message, tineye_formatted)}
     reply = ""
     if not any((karmadecay_available, bing_available, google_available, yandex_available)):
         reply = "Well that's embarrassing.  Not for me, but for the search engines. \n\n I was not able to automatically find results for this link.  \n\n ^^If ^^this ^^is ^^a ^^.gifv ^^I ^^am ^^working ^^on ^^adding ^^them ^^to ^^searches."
     else:
-        for availability in ("google", "bing", "yandex", "karmadecay"):
+        for availability in ("google", "bing", "yandex", "karmadecay", "tineye"):
             #for each search engine, add the results if they're available, otherwise say there are no links from that search engine.
             if available_dict[availability]:
                 reply += searchengine_dict[availability][0].format(searchengine_dict[availability][1]) #0: message; 1: formatted results
@@ -505,7 +558,9 @@ if __name__ == "__main__":
     with open('config.json') as json_data:
         config = json.load(json_data)
 
-    #give_more_info("http://i.imgur.com/zfJb6nZ.jpg")
-
     startup()
+
+    #url = 'https://i.imgur.com/yZKXDPV.jpg'
+    #print(give_more_info(url))
+
     main()
