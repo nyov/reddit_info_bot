@@ -31,12 +31,13 @@ class comment:
     def reply(self,text):
         print(text)
 
-def get_google_results(submission, limit=15): #limit is the max number of results to grab (not the max to display)
-    image = submission.url
+USER_AGENT = "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"
+
+def get_google_results(image_url, limit=15): #limit is the max number of results to grab (not the max to display)
     headers = {}
-    headers['User-Agent'] = "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"
-    response_text = requests.get('http://www.google.com/searchbyimage?image_url={0}'.format(image), headers=headers).content
-    response_text += requests.get('http://www.google.com/searchbyimage?image_url={0}&start=10'.format(image), headers=headers).content
+    headers['User-Agent'] = USER_AGENT
+    response_text = requests.get('http://www.google.com/searchbyimage?image_url={0}'.format(image_url), headers=headers).content
+    response_text += requests.get('http://www.google.com/searchbyimage?image_url={0}&start=10'.format(image_url), headers=headers).content
     #response_text = response_text[response_text.find('Pages that include'):]
     tree = BeautifulSoup.BeautifulSoup(response_text)
     print(len(response_text))
@@ -49,12 +50,12 @@ def get_google_results(submission, limit=15): #limit is the max number of result
     results = [(list_class_results[i].find('a')['href'],re.sub('<.*?>', '', re.sub('&#\d\d;', "'", ''.join([str(j) for j in list_class_results[i].find('a').contents])))) for i in xrange(limit)]
     return results
 
-def get_bing_results(submission, limit=15):
-    image = submission.url
+def get_bing_results(image_url, limit=15):
     cj = cookielib.MozillaCookieJar('cookies.txt')
     cj.load()
     opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
-    response_text = opener.open("https://www.bing.com/images/searchbyimage?FORM=IRSBIQ&cbir=sbi&imgurl="+image).read()
+    opener.addheaders = [('User-Agent', USER_AGENT)]
+    response_text = opener.open("https://www.bing.com/images/searchbyimage?FORM=IRSBIQ&cbir=sbi&imgurl="+image_url).read()
     tree = BeautifulSoup.BeautifulSoup(response_text)
     list_class_results = tree.findAll(attrs={'class':'sbi_sp'})
     if len(list_class_results) == 0:
@@ -64,11 +65,10 @@ def get_bing_results(submission, limit=15):
     results = [(list_class_results[i].findAll(attrs={'class':'info'})[0].find('a')['href'],list_class_results[i].findAll(attrs={'class':'info'})[0].find('a').contents[0]) for i in xrange(limit)]
     return results
 
-def get_yandex_results(submission, limit=15):
-    image = submission.url
+def get_yandex_results(image_url, limit=15):
     headers = {}
-    headers['User-Agent'] = "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"
-    response_text = requests.get("https://www.yandex.com/images/search?img_url={0}&rpt=imageview&uinfo=sw-1440-sh-900-ww-1440-wh-775-pd-1-wp-16x10_1440x900".format(image), headers=headers).content
+    headers['User-Agent'] = USER_AGENT
+    response_text = requests.get("https://www.yandex.com/images/search?img_url={0}&rpt=imageview&uinfo=sw-1440-sh-900-ww-1440-wh-775-pd-1-wp-16x10_1440x900".format(image_url), headers=headers).content
     response_text = response_text[response_text.find("Sites where the image is displayed"):]
     tree = BeautifulSoup.BeautifulSoup(response_text)
     list_class_results = tree.findAll(attrs={'class':'link other-sites__title-link i-bem'})
@@ -88,11 +88,10 @@ def get_yandex_results(submission, limit=15):
         limit = len(results)
     return results[:limit]
 
-def get_karmadecay_results(submission, limit=15):
-    image = submission.url
+def get_karmadecay_results(image_url, limit=15):
     headers = {}
-    headers['User-Agent'] = "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"
-    response_text = requests.get("http://www.karmadecay.com/search?kdtoolver=b1&q="+image, headers=headers).content
+    headers['User-Agent'] = USER_AGENT
+    response_text = requests.get("http://www.karmadecay.com/search?kdtoolver=b1&q="+image_url, headers=headers).content
     if "No very similar images were found." in response_text:
         return []
     raw_results_text = response_text[response_text.find(":--|:--|:--|:--|:--")+20:response_text.find("*[Source: karmadecay]")-2]
@@ -100,16 +99,9 @@ def get_karmadecay_results(submission, limit=15):
     results = [(i[i.find("(",i.find(']'))+1:i.find(")",i.find(']'))],i[i.find("[")+1:i.find("]")]) for i in raw_results]
     return results #[(link,text)]
 
-def get_domain(link):
-    result = re.search("http\w?:///?(\w+\..+\.\w*)/?|http\w?:///?(.+\.\w*)/?",link)
-    try:
-        group = result.group(1) if result.group(1) else result.group(2)
-    except:
-        #"ERROR: get_domain("+link+") could not find a working domain. Attempting to skip..."
-        group = link
-    return group.decode('utf-8')
 
-def get_tld(link):
+def get_domain(link):
+    #result = re.search("http\w?:///?(\w+\..+\.\w*)/?|http\w?:///?(.+\.\w*)/?",link)
     result = re.search("http\w?:///?\w+\.[^/]+(\.\w*)/?|http\w?:///?[^/]+(\.\w*)/?",link)
     try:
         group = result.group(1) if result.group(1) else result.group(2)
@@ -126,7 +118,7 @@ def get_nonspam_links(results):
         link = i[0].lower()
         text = i[1].lower()
         print(link)
-        good_tld = ''.join(letter for letter in get_tld(link) if letter!='.') not in tld_blacklist
+        good_tld = ''.join(letter for letter in get_domain(link) if letter!='.') not in tld_blacklist
         #not_in_hard_list = not any(item in get_domain(link) for item in hard_blacklist)
         no_spamlinks_in_link = not any(j in link for j in link_filter)
         no_text_spam = not any(j in text for j in text_filter)
@@ -183,7 +175,7 @@ def comment_exists(comment):
     print('Comment was deleted')
     return False
 
-def give_more_info(comment):
+def give_more_info(submission_url):
     extra_message = config["EXTRA_MESSAGE"]
     google_available = True
     bing_available = True
@@ -194,7 +186,7 @@ def give_more_info(comment):
     bing_formatted = []
     karmadecay_formatted = []
     yandex_formatted = []
-    link = re.sub("/","*",comment.submission.url)
+    link = re.sub("/","*", submission_url)
     print(link)
     results = ''
     i = 0
@@ -252,19 +244,19 @@ def give_more_info(comment):
                 reply += searchengine_dict[availability][0].format(searchengine_dict[availability][1]) #0: message; 1: formatted results
             else:
                 reply += searchengine_dict[availability][0].format("No available links from this search engine found.")
+    reply += extra_message
+    return reply
 
-    try:
-        reply += extra_message
-        if comment_exists(comment):
-            comment.reply(reply)
-            print('replied to comment with more info')
-    except HTTPError:
-        print('HTTP Error. Bot might be banned from this sub')
+#
+# Bot actions
+#
+
+IMAGE_FORMATS = ['.tif', '.tiff', '.gif', '.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd', '.png']
 
 def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to disable this feature
     if (not use_keywords):
         return True
-    if not any(i in str(comment.submission.url) for i in ['.tif', '.tiff', '.gif', '.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd', '.png']):
+    if not any(i in str(comment.submission.url) for i in IMAGE_FORMATS):
         return True
     done = False
     try:
@@ -300,7 +292,7 @@ def find_username_mentions():
                     if (time.time()-comment.created_utc)/60 < time_limit_minutes: #if the age of the comment is less than the time limit
                         print("time")
                         try:
-                            isPicture = any(i in str(comment.submission.url) for i in ['.tif', '.tiff', '.gif', '.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd', '.png'])
+                            isPicture = any(i in str(comment.submission.url) for i in IMAGE_FORMATS)
                         except UnicodeEncodeError:
                             isPicture = False #non-ascii url
                         if isPicture:
@@ -314,7 +306,14 @@ def find_username_mentions():
                                 print("no link replies")
                                 if comment.id not in already_done and comment.author != user:
                                     #print("not already done and not its own user")
-                                    give_more_info(comment)
+                                    reply = give_more_info(comment.submission.url)
+                                    try:
+                                        if comment_exists(comment):
+                                            comment.reply(reply)
+                                            print('replied to comment with more info')
+                                    except HTTPError:
+                                        print('HTTP Error. Bot might be banned from this sub')
+
                                     already_done.append(comment.id)
         comment.mark_as_read()
 
@@ -326,7 +325,7 @@ def find_keywords(all_comments):
             if comment['subreddit'] in subreddit_list: #check if it's in one of the right subs
                 if (time.time()-comment['created_utc'])/60 < time_limit_minutes: #if the age of the comment is less than the time limit
                     try:
-                        isPicture = any(i in str(comment['link_url']) for i in ['.tif', '.tiff', '.gif', '.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd', '.png'])
+                        isPicture = any(i in str(comment['link_url']) for i in IMAGE_FORMATS)
                     except UnicodeEncodeError:
                         isPicture = False #non-ascii url
                     if isPicture:
@@ -506,7 +505,7 @@ if __name__ == "__main__":
     with open('config.json') as json_data:
         config = json.load(json_data)
 
-    #give_more_info(comment("http://i.imgur.com/zfJb6nZ.jpg"))
+    #give_more_info("http://i.imgur.com/zfJb6nZ.jpg")
 
     startup()
     main()
