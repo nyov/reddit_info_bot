@@ -420,7 +420,27 @@ def check_downvotes(user,start_time):
     return start_time
 
 def get_filter(filter_type):
-    filters=json.load(urllib2.urlopen('http://spambot.rarchives.com/api.cgi?method=get_filters&start=0&count=2000&type={0}'.format(filter_type)))['filters']
+    def cache_filters(filter_type):
+        response = urllib2.urlopen('http://spambot.rarchives.com/api.cgi?method=get_filters&start=0&count=3000&type={0}'.format(filter_type))
+        with open(filename, 'wb') as outf:
+            outf.write(response.read())
+
+    filename = 'spamfilter_{0}.json'.format(filter_type)
+    if not os.path.isfile(filename) or \
+            (int(time.time() - os.path.getmtime(filename)) > 43200): # cache 24 hours
+        cache_filters(filter_type)
+
+    filters = None
+    try:
+        with open(filename, 'rb') as inf:
+            filters = json.load(inf)['filters']
+    except ValueError: # cached file contents invalid
+        os.unlink(filename)
+        # retry? potential loop
+        #get_filter(filter_type)
+        errmsg = "Could not load spam filters. Network failure?"
+        sys.exit(errmsg)
+
     return [i['spamtext'] for i in filters]
 
 def get_comment_stream_urls(subreddit_list):
@@ -494,6 +514,7 @@ def startup():
     time_limit_minutes = config['TIME_LIMIT_MINUTES'] #how long before a comment will be ignored for being too old
     comment_deleting_wait_time = config["DELETE_WAIT_TIME"] #how many minutes to wait before deleting downvoted comments
 
+def reddit_login():
     # login to accounts
     account1 = praw.Reddit(config['BOT_NAME'])
     account1.login(config['USER_NAME'],config['PASSWORD'])
@@ -563,4 +584,5 @@ if __name__ == "__main__":
     #url = 'https://i.imgur.com/yZKXDPV.jpg'
     #print(give_more_info(url))
 
+    reddit_login()
     main()
