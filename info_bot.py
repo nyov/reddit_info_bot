@@ -162,16 +162,16 @@ def get_nonspam_links(results):
         no_spamlinks_in_link = not any(j in link for j in link_filter)
         no_text_spam = not any(j in text for j in text_filter)
         print("Good tld: {0}\nNo spamlinks in link: {1}\nNo text spam: {2}\n".format(good_tld,no_spamlinks_in_link,no_text_spam))
+        if len(link) < 6:
+            print("Skipping invalid URL: {0}".format(link))
+            continue
         if good_tld and no_spamlinks_in_link and no_text_spam:
             nonspam_links.append([i[0],i[1]])
             print(link + " IS CLEAN\n")
             # post link, check reddit blacklist
             submission = account1.get_submission(submission_id=submission_id)
-            if len(link) > 5:
-                submission.add_comment(link)
-                print("posted: "+link+"\n")
-            else:
-                print("link is NOT!!!!")
+            submission.add_comment(link)
+            print("posted: "+link+"\n")
         else:
             print(link + " IS SPAM\n")
     time.sleep(7)
@@ -197,8 +197,10 @@ def format_results(results, display_limit=5): #returns a formatted and spam filt
                 text += char
         ascii_filtered.append([i[0],text])
 
-    #ascii_final = ascii_filtered # test without spamfilter
-    ascii_final = get_nonspam_links(ascii_filtered) #filter the links for spam
+    if account2:
+        ascii_final = get_nonspam_links(ascii_filtered) #filter the links for spam
+    else: # skip spamfilter, for testing only (FIXME)
+        ascii_final = ascii_filtered
     if len(ascii_final) > display_limit:
         ascii_final = ascii_final[:display_limit] #limit the list to 5 items
     linkified = ["["+i[1]+"]("+i[0]+")" for i in ascii_final] #reformats the results into markdown links
@@ -314,12 +316,12 @@ def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to dis
     done = False
     try:
         reply = config["INFORMATION_REPLY"]
-        if mode == COMMENT:
+        if botmode == COMMENT:
             if comment_exists(comment):
                 comment.reply(reply)
-        elif mode == LOG:
+        elif botmode == LOG:
             print(reply)
-        elif mode == PM:
+        elif botmode == PM:
              print(account1.send_message(comment.author, 'Info Bot Information', reply))
         print("replied to potential comment: {0}".format(comment.body))
         done = True
@@ -361,9 +363,12 @@ def find_username_mentions():
                                     #print("not already done and not its own user")
                                     reply = give_more_info(comment.submission.url)
                                     try:
-                                        if comment_exists(comment):
-                                            comment.reply(reply)
-                                            print('replied to comment with more info')
+                                        if botmode == LOG:
+                                            print(reply)
+                                        else:
+                                            if comment_exists(comment):
+                                                comment.reply(reply)
+                                                print('replied to comment with more info')
                                     except HTTPError:
                                         print('HTTP Error. Bot might be banned from this sub')
 
@@ -501,9 +506,10 @@ def startup():
     tld_blacklist = [''.join(letter for letter in tld if letter!=".") for tld in get_filter('tld')]
 
     COMMENT = 'comment'
-    PM = 'PM'
+    PM = 'pm'
     LOG = 'log'
-    mode = config['MODE']
+    botmode = config['MODE']
+    botmode = botmode.lower()
     submission_id = config['SUBMISSION_ID']
 
     SEARCH_STRING = config["SEARCH_STRING"]
@@ -519,8 +525,11 @@ def reddit_login():
     account1 = praw.Reddit(config['BOT_NAME'])
     account1.login(config['USER_NAME'],config['PASSWORD'])
 
-    account2 = praw.Reddit(config['BOT_NAME']) #load a second praw instance for the second account (the one used to check the spam links)
-    account2.login(config['SECOND_ACCOUNT_NAME'],config['SECOND_ACCOUNT_PASS'])
+    if config['SECOND_ACCOUNT_NAME'] and config['SECOND_ACCOUNT_PASS']:
+        account2 = praw.Reddit(config['BOT_NAME']) #load a second praw instance for the second account (the one used to check the spam links)
+        account2.login(config['SECOND_ACCOUNT_NAME'],config['SECOND_ACCOUNT_PASS'])
+    else:
+        account2 = False
 
     user = account1.get_redditor(config['USER_NAME'])
     already_done = []
