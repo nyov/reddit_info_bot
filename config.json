@@ -24,5 +24,9 @@
 				"*****"
 	],
 	"USE_KEYWORDS":		true,
-	"BOT_WORKDIR":		"/usr/redditbot"
+	"BOT_WORKDIR":		"/usr/redditbot",
+	"IMAGE_FORMATS": [
+				".tif", ".tiff", ".gif", ".jpeg", "jpg", ".jif", ".jfif", ".jp2", ".jpx", ".j2k", ".j2c", ".fpx", ".pcd", ".png"
+	],
+	"SEARCH_USER_AGENT":	"Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"
 }

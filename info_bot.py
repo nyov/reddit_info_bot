@@ -32,11 +32,9 @@ class comment:
     def reply(self,text):
         print(text)
 
-USER_AGENT = "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"
-
 def get_google_results(image_url, limit=15): #limit is the max number of results to grab (not the max to display)
     headers = {}
-    headers['User-Agent'] = USER_AGENT
+    headers['User-Agent'] = config['SEARCH_USER_AGENT']
     response_text = requests.get('http://www.google.com/searchbyimage?image_url={0}'.format(image_url), headers=headers).content
     response_text += requests.get('http://www.google.com/searchbyimage?image_url={0}&start=10'.format(image_url), headers=headers).content
     #response_text = response_text[response_text.find('Pages that include'):]
@@ -55,7 +53,7 @@ def get_bing_results(image_url, limit=15):
     cj = cookielib.MozillaCookieJar('cookies.txt')
     cj.load()
     opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
-    opener.addheaders = [('User-Agent', USER_AGENT)]
+    opener.addheaders = [('User-Agent', config['SEARCH_USER_AGENT'])]
     response_text = opener.open("https://www.bing.com/images/searchbyimage?FORM=IRSBIQ&cbir=sbi&imgurl="+image_url).read()
     tree = BeautifulSoup.BeautifulSoup(response_text)
     list_class_results = tree.findAll(attrs={'class':'sbi_sp'})
@@ -68,7 +66,7 @@ def get_bing_results(image_url, limit=15):
 
 def get_yandex_results(image_url, limit=15):
     headers = {}
-    headers['User-Agent'] = USER_AGENT
+    headers['User-Agent'] = config['SEARCH_USER_AGENT']
     response_text = requests.get("https://www.yandex.com/images/search?img_url={0}&rpt=imageview&uinfo=sw-1440-sh-900-ww-1440-wh-775-pd-1-wp-16x10_1440x900".format(image_url), headers=headers).content
     response_text = response_text[response_text.find("Sites where the image is displayed"):]
     tree = BeautifulSoup.BeautifulSoup(response_text)
@@ -91,7 +89,7 @@ def get_yandex_results(image_url, limit=15):
 
 def get_karmadecay_results(image_url, limit=15):
     headers = {}
-    headers['User-Agent'] = USER_AGENT
+    headers['User-Agent'] = config['SEARCH_USER_AGENT']
     response_text = requests.get("http://www.karmadecay.com/search?kdtoolver=b1&q="+image_url, headers=headers).content
     if "No very similar images were found." in response_text:
         return []
@@ -124,7 +122,7 @@ def get_tineye_results(image_url, limit=15):
         return results # [(link,text)]
 
     headers = {}
-    headers['User-Agent'] = USER_AGENT
+    headers['User-Agent'] = config['SEARCH_USER_AGENT']
     response = requests.post("http://www.tineye.com/search", data={'url': image_url})
 
     results = extract(response, limit)
@@ -169,7 +167,7 @@ def get_nonspam_links(results):
             nonspam_links.append([i[0],i[1]])
             print(link + " IS CLEAN\n")
             # post link, check reddit blacklist
-            submission = account1.get_submission(submission_id=submission_id)
+            submission = account1.get_submission(submission_id=config['SUBMISSION_ID'])
             submission.add_comment(link)
             print("posted: "+link+"\n")
         else:
@@ -306,12 +304,10 @@ def give_more_info(submission_url):
 # Bot actions
 #
 
-IMAGE_FORMATS = ['.tif', '.tiff', '.gif', '.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd', '.png']
-
 def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to disable this feature
-    if (not use_keywords):
+    if (not config['USE_KEYWORDS']):
         return True
-    if not any(i in str(comment.submission.url) for i in IMAGE_FORMATS):
+    if not any(i in str(comment.submission.url) for i in config['IMAGE_FORMATS']):
         return True
     done = False
     try:
@@ -337,7 +333,7 @@ def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to dis
 
 def find_username_mentions():
     for comment in account1.get_unread(limit=100):
-        if SEARCH_STRING in comment.body:
+        if config['SEARCH_STRING'] in comment.body:
             print("search string in body")
             if comment.author: #check if the comment exists
                 print("comment.author")
@@ -347,7 +343,7 @@ def find_username_mentions():
                     if (time.time()-comment.created_utc)/60 < time_limit_minutes: #if the age of the comment is less than the time limit
                         print("time")
                         try:
-                            isPicture = any(i in str(comment.submission.url) for i in IMAGE_FORMATS)
+                            isPicture = any(i in str(comment.submission.url) for i in config['IMAGE_FORMATS'])
                         except UnicodeEncodeError:
                             isPicture = False #non-ascii url
                         if isPicture:
@@ -377,13 +373,14 @@ def find_username_mentions():
 
 
 def find_keywords(all_comments):
+    keyword_list = config['KEYWORDS']
     for comment in all_comments:
         print(".", end="")
         if comment['author']: #check if the comment exists
             if comment['subreddit'] in subreddit_list: #check if it's in one of the right subs
                 if (time.time()-comment['created_utc'])/60 < time_limit_minutes: #if the age of the comment is less than the time limit
                     try:
-                        isPicture = any(i in str(comment['link_url']) for i in IMAGE_FORMATS)
+                        isPicture = any(i in str(comment['link_url']) for i in config['IMAGE_FORMATS'])
                     except UnicodeEncodeError:
                         isPicture = False #non-ascii url
                     if isPicture:
@@ -413,7 +410,7 @@ def find_keywords(all_comments):
                                                 while not done:
                                                     done = reply_to_potential_comment(comment,attempt)
 
-def check_downvotes(user,start_time):
+def check_downvotes(user, start_time):
     current_time = int(time.time()/60)
     if (current_time - start_time) >= comment_deleting_wait_time:
         my_comments = user.get_comments(limit=None)
@@ -506,7 +503,7 @@ text_filter = get_filter('text') + get_filter('user')
                 blacklist.append(domain)
 """
 hard_blacklist = ["tumblr.com"]
-whitelist = ["reddit.com"]
+#whitelist = ["reddit.com"]
 tld_blacklist = [''.join(letter for letter in tld if letter!=".") for tld in get_filter('tld')]
 
 COMMENT = 'comment'
@@ -515,13 +512,6 @@ LOG = 'log'
 botmode = config['MODE']
 botmode = botmode.lower()
 
-submission_id = config['SUBMISSION_ID']
-
-SEARCH_STRING = config["SEARCH_STRING"]
-
-use_keywords = config['USE_KEYWORDS']
-
-keyword_list = config['KEYWORDS']
 time_limit_minutes = config['TIME_LIMIT_MINUTES'] #how long before a comment will be ignored for being too old
 comment_deleting_wait_time = config["DELETE_WAIT_TIME"] #how many minutes to wait before deleting downvoted comments
 
@@ -531,12 +521,13 @@ comment_deleting_wait_time = config["DELETE_WAIT_TIME"] #how many minutes to wai
 
 # login to reddit accounts
 
+print('Logging into accounts')
 account1 = praw.Reddit(config['BOT_NAME'])
-account1.login(config['USER_NAME'],config['PASSWORD'])
+account1.login(config['USER_NAME'], config['PASSWORD'], disable_warning=True) # drop the warning for now (working on it)
 
 if config['SECOND_ACCOUNT_NAME'] and config['SECOND_ACCOUNT_PASS']:
     account2 = praw.Reddit(config['BOT_NAME']) #load a second praw instance for the second account (the one used to check the spam links)
-    account2.login(config['SECOND_ACCOUNT_NAME'],config['SECOND_ACCOUNT_PASS'])
+    account2.login(config['SECOND_ACCOUNT_NAME'], config['SECOND_ACCOUNT_PASS'], disable_warning=True)
 else:
     account2 = False
 
@@ -547,6 +538,7 @@ if os.path.isfile("already_done.p"):
         already_done = pickle.load(f)
 start_time = int(time.time()/60) #time in minutes for downvote checking
 
+print('Fetching Subreddit list')
 subreddit_list = [account1.get_subreddit(i).display_name for i in config['SUBREDDITS']]
 #load the word list:
 bad_words = get_filter('text')
@@ -562,11 +554,13 @@ r1 = session_client.post('http://www.reddit.com/api/login', data = credentials, 
 the_json = json.loads(r1.text)
 session_client.modhash = the_json['json']['data']['modhash']
 
+print('Fetching comment stream urls')
 comment_stream_urls = get_comment_stream_urls(subreddit_list)
 
 
 def main():
     start_time = time.time()
+    print('Starting run...')
     while True:
         try:
             for stream in comment_stream_urls: #uses separate comment streams for large subreddit list due to URL length limit
