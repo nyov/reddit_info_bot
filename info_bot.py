@@ -35,8 +35,8 @@ class comment:
 def get_google_results(image_url, limit=15): #limit is the max number of results to grab (not the max to display)
     headers = {}
     headers['User-Agent'] = config['SEARCH_USER_AGENT']
-    response_text = requests.get('http://www.google.com/searchbyimage?image_url={0}'.format(image_url), headers=headers).content
-    response_text += requests.get('http://www.google.com/searchbyimage?image_url={0}&start=10'.format(image_url), headers=headers).content
+    response_text = requests.get('https://www.google.com/searchbyimage?image_url={0}'.format(image_url), headers=headers).content
+    response_text += requests.get('https://www.google.com/searchbyimage?image_url={0}&start=10'.format(image_url), headers=headers).content
     #response_text = response_text[response_text.find('Pages that include'):]
     tree = BeautifulSoup.BeautifulSoup(response_text)
     print(len(response_text))
@@ -123,7 +123,7 @@ def get_tineye_results(image_url, limit=15):
 
     headers = {}
     headers['User-Agent'] = config['SEARCH_USER_AGENT']
-    response = requests.post("http://www.tineye.com/search", data={'url': image_url})
+    response = requests.post("https://www.tineye.com/search", data={'url': image_url})
 
     results = extract(response, limit)
     limit = limit - len(results)
@@ -386,7 +386,7 @@ def find_keywords(all_comments):
                     if isPicture:
                         body = comment['body'].lower()
                         if any(word.lower() in body.lower() for word in keyword_list):
-                            comment = account1.get_submission(url="http://www.reddit.com/r/{0}/comments/{1}/aaaa/{2}".format(comment['subreddit'],comment['link_id'][3:],comment['id'])).comments
+                            comment = account1.get_submission(url="https://www.reddit.com/r/{0}/comments/{1}/aaaa/{2}".format(comment['subreddit'],comment['link_id'][3:],comment['id'])).comments
                             if comment: #get_submission returns a valid comment object
                                 comment = comment[0]
                                 top_level = [i.replies for i in comment.submission.comments]
@@ -452,10 +452,10 @@ def get_comment_stream_urls(subreddit_list):
     for i in subreddit_list:
         new_element = i + "+"
         if len(subreddit_chain) + len(new_element) > MAX_LENGTH:
-            url_list.append("http://reddit.com/r/{0}/comments.json".format(subreddit_chain[:-1]))
+            url_list.append("https://reddit.com/r/{0}/comments.json".format(subreddit_chain[:-1]))
             subreddit_chain = ""
         subreddit_chain += new_element
-    url_list.append("http://reddit.com/r/{0}/comments.json".format(subreddit_chain[:-1]))
+    url_list.append("https://reddit.com/r/{0}/comments.json".format(subreddit_chain[:-1]))
     return url_list
 
 def get_all_comments(stream):
@@ -550,7 +550,7 @@ credentials = {
 }
 headers = {'user-agent': config["BOT_NAME"],}
 session_client = requests.session()
-r1 = session_client.post('http://www.reddit.com/api/login', data = credentials, headers=headers)
+r1 = session_client.post('https://www.reddit.com/api/login', data = credentials, headers=headers)
 the_json = json.loads(r1.text)
 session_client.modhash = the_json['json']['data']['modhash']
 
