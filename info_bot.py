@@ -104,6 +104,11 @@ def get_tineye_results(image_url, limit=15):
         page = sel.xpath('//div[@class="results"]//div[@class="row matches"]//div[contains(@class, "match-row")]')
         if not page:
             raise IndexError('No search results')
+        if 'Your IP has been blocked' in page:
+            print('IP banned')
+            raise IndexError('No search results')
+        if '403 Forbidden' in page: # hmm, something else?
+            raise IndexError('No search results')
 
         results = []
         for found in page:
@@ -116,9 +121,10 @@ def get_tineye_results(image_url, limit=15):
             source_title = found.xpath('.//div[@class="match"]/h4[@title]/text()').extract_first()
             #source_text = found.xpath('.//div[@class="match"]/p[@class="crawl-date"]/text()').extract_first()
 
-            image_name = os.path.basename(source_image)
-            text = '{0} {1} on {2}'.format(image_name, source_image_size, source_title)
-            results += [(source_link, text)]
+            if source_image:
+                source_image = os.path.basename(source_image)
+                text = '{0} {1} on {2}'.format(source_image, source_image_size, source_title)
+                results += [(source_link, text)]
         return results # [(link,text)]
 
     headers = {}
@@ -265,7 +271,8 @@ def give_more_info(submission_url):
     try:
         print("TINEYE:")
         tineye_results = get_tineye_results(submission_url)
-        tineye_formatted = format_results(tineye_results)
+        if tineye_results:
+            tineye_formatted = format_results(tineye_results)
     except IndexError:
         tineye_available = False
 
