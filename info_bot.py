@@ -18,6 +18,8 @@ from parsel import Selector
 import itertools
 import random
 
+os.chdir("/usr/redditbot")
+
 logger = logging.getLogger(__name__)
 
 # mock objects to emulate praw interface
@@ -509,7 +511,7 @@ if os.path.isfile("blacklist.p"):
     with open("blacklist.p", "rb") as f:
         blacklist = pickle.load(f)
 print('Adding Rarchives links to blacklist.')
-rarchives_spam_domains = link_filter = get_filter('link') + get_filter('thumb')
+rarchives_spam_domains = link_filter = get_filter('tld') + get_filter('thumb')
 text_filter = get_filter('text') + get_filter('user')
 """for domain in rarchives_spam_domains:
     if 'http' not in domain and domain[0] != '.':
