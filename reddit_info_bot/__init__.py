@@ -489,91 +489,88 @@ def get_all_comments(stream):
         return None
 
 
-with open('config.json') as json_data:
-    config = json.load(json_data)
-
-# startup
-
-wd = None
-if 'BOT_WORKDIR' in config:
-    wd = config["BOT_WORKDIR"]
-if wd: # If no BOT_WORKDIR was specified in the config, run in current dir
-    if os.path.exists(wd):
-        os.chdir(wd)
-    else: # BOT_WORKDIR was requested, but does not exist. That's a failure.
-        errmsg = "Requested BOT_WORKDIR '{0}' does not exist, aborting.".format(wd)
-        sys.exit(errmsg)
+def startup():
+    wd = None
+    if 'BOT_WORKDIR' in config:
+        wd = config["BOT_WORKDIR"]
+    if wd: # If no BOT_WORKDIR was specified in the config, run in current dir
+        if os.path.exists(wd):
+            os.chdir(wd)
+        else: # BOT_WORKDIR was requested, but does not exist. That's a failure.
+            errmsg = "Requested BOT_WORKDIR '{0}' does not exist, aborting.".format(wd)
+            sys.exit(errmsg)
 
 
-blacklist = []
-if os.path.isfile("blacklist.p"):
-    with open("blacklist.p", "rb") as f:
-        blacklist = pickle.load(f)
-print('Adding Rarchives links to blacklist.')
-rarchives_spam_domains = link_filter = get_filter('link') + get_filter('thumb')
-text_filter = get_filter('text') + get_filter('user')
-"""for domain in rarchives_spam_domains:
-    if 'http' not in domain and domain[0] != '.':
-        domain = "http://"+domain
-    if not re.search('\.[^\.]+/.+$',domain): #if the link isn't to a specific page (has stuff after the final /) instead of an actual domain
-        if domain[0] != '.':
-            if domain not in blacklist:
-                blacklist.append(domain)
-"""
-hard_blacklist = ["tumblr.com"]
-#whitelist = ["reddit.com"]
-tld_blacklist = [''.join(letter for letter in tld if letter!=".") for tld in get_filter('tld')]
+    blacklist = []
+    if os.path.isfile("blacklist.p"):
+        with open("blacklist.p", "rb") as f:
+            blacklist = pickle.load(f)
+    print('Adding Rarchives links to blacklist.')
+    rarchives_spam_domains = link_filter = get_filter('link') + get_filter('thumb')
+    text_filter = get_filter('text') + get_filter('user')
+    """for domain in rarchives_spam_domains:
+        if 'http' not in domain and domain[0] != '.':
+            domain = "http://"+domain
+        if not re.search('\.[^\.]+/.+$',domain): #if the link isn't to a specific page (has stuff after the final /) instead of an actual domain
+            if domain[0] != '.':
+                if domain not in blacklist:
+                    blacklist.append(domain)
+    """
+    hard_blacklist = ["tumblr.com"]
+    #whitelist = ["reddit.com"]
+    tld_blacklist = [''.join(letter for letter in tld if letter!=".") for tld in get_filter('tld')]
 
-COMMENT = 'comment'
-PM = 'pm'
-LOG = 'log'
-botmode = config['MODE']
-botmode = botmode.lower()
+    COMMENT = 'comment'
+    PM = 'pm'
+    LOG = 'log'
+    botmode = config['MODE']
+    botmode = botmode.lower()
 
-time_limit_minutes = config['TIME_LIMIT_MINUTES'] #how long before a comment will be ignored for being too old
-comment_deleting_wait_time = config["DELETE_WAIT_TIME"] #how many minutes to wait before deleting downvoted comments
+    time_limit_minutes = config['TIME_LIMIT_MINUTES'] #how long before a comment will be ignored for being too old
+    comment_deleting_wait_time = config["DELETE_WAIT_TIME"] #how many minutes to wait before deleting downvoted comments
 
-#url = 'https://i.imgur.com/yZKXDPV.jpg'
-#print(give_more_info(url))
-#sys.exit()
+    #url = 'https://i.imgur.com/yZKXDPV.jpg'
+    #print(give_more_info(url))
+    #sys.exit()
 
-# login to reddit accounts
 
-print('Logging into accounts')
-account1 = praw.Reddit(config['BOT_NAME'])
-account1.login(config['USER_NAME'], config['PASSWORD'], disable_warning=True) # drop the warning for now (working on it)
+def reddit_login():
+    # login to reddit accounts
+    print('Logging into accounts')
+    account1 = praw.Reddit(config['BOT_NAME'])
+    account1.login(config['USER_NAME'], config['PASSWORD'], disable_warning=True) # drop the warning for now (working on it)
 
-if config['SECOND_ACCOUNT_NAME'] and config['SECOND_ACCOUNT_PASS']:
-    account2 = praw.Reddit(config['BOT_NAME']) #load a second praw instance for the second account (the one used to check the spam links)
-    account2.login(config['SECOND_ACCOUNT_NAME'], config['SECOND_ACCOUNT_PASS'], disable_warning=True)
-else:
-    account2 = False
+    if config['SECOND_ACCOUNT_NAME'] and config['SECOND_ACCOUNT_PASS']:
+        account2 = praw.Reddit(config['BOT_NAME']) #load a second praw instance for the second account (the one used to check the spam links)
+        account2.login(config['SECOND_ACCOUNT_NAME'], config['SECOND_ACCOUNT_PASS'], disable_warning=True)
+    else:
+        account2 = False
 
-user = account1.get_redditor(config['USER_NAME'])
-already_done = []
-if os.path.isfile("already_done.p"):
-    with open("already_done.p", "rb") as f:
-        already_done = pickle.load(f)
-start_time = int(time.time()/60) #time in minutes for downvote checking
+    user = account1.get_redditor(config['USER_NAME'])
+    already_done = []
+    if os.path.isfile("already_done.p"):
+        with open("already_done.p", "rb") as f:
+            already_done = pickle.load(f)
+    start_time = int(time.time()/60) #time in minutes for downvote checking
 
-print('Fetching Subreddit list')
-subreddit_list = [account1.get_subreddit(i).display_name for i in config['SUBREDDITS']]
-#load the word list:
-bad_words = get_filter('text')
+    print('Fetching Subreddit list')
+    subreddit_list = [account1.get_subreddit(i).display_name for i in config['SUBREDDITS']]
+    #load the word list:
+    bad_words = get_filter('text')
 
-credentials = {
-    'user': config["USER_NAME"],
-    'passwd': config["PASSWORD"],
-    'api_type': 'json',
-}
-headers = {'user-agent': config["BOT_NAME"],}
-session_client = requests.session()
-r1 = session_client.post('https://www.reddit.com/api/login', data = credentials, headers=headers)
-the_json = json.loads(r1.text)
-session_client.modhash = the_json['json']['data']['modhash']
+    credentials = {
+        'user': config["USER_NAME"],
+        'passwd': config["PASSWORD"],
+        'api_type': 'json',
+    }
+    headers = {'user-agent': config["BOT_NAME"],}
+    session_client = requests.session()
+    r1 = session_client.post('https://www.reddit.com/api/login', data = credentials, headers=headers)
+    the_json = json.loads(r1.text)
+    session_client.modhash = the_json['json']['data']['modhash']
 
-print('Fetching comment stream urls')
-comment_stream_urls = get_comment_stream_urls(subreddit_list)
+    print('Fetching comment stream urls')
+    comment_stream_urls = get_comment_stream_urls(subreddit_list)
 
 
 def main():
@@ -606,5 +603,13 @@ def main():
 
 
 if __name__ == "__main__":
+    with open('config.json') as json_data:
+        config = json.load(json_data)
 
+    startup()
+
+    #url = 'https://i.imgur.com/yZKXDPV.jpg'
+    #print(give_more_info(url))
+
+    reddit_login()
     main()
