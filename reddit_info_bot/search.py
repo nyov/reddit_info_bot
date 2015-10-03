@@ -3,6 +3,7 @@ from __future__ import absolute_import, unicode_literals
 import os
 import logging
 import string
+import json
 from collections import OrderedDict
 from six.moves.urllib.parse import urlsplit, urlunsplit
 
@@ -34,30 +35,69 @@ def optimize_image_url(image_url):
             logger.debug('Found potential %s video - using gif url: %s' % (domain, image_url))
     return image_url
 
-def image_search(settings, image_url):
+def image_search(settings, image_url=None, image_data=None, num_results=15):
+    from .spiders import crawler_setup
+
+    if not image_url and not image_data:
+        return
 
     logger.info('Image-searching for %s' % image_url)
 
-    image_url = optimize_image_url(image_url)
+    # FIXME: dont "optimize" gifv's for karmadecay
+    #if image_url:
+    #    image_url = optimize_image_url(image_url)
 
-    search_engines = OrderedDict([
-        ('Google', None),
-        ('Bing',   None),
-        ('Yandex', None),
-        ('Tineye', None),
-        ('Karma Decay', None),
-    ])
+    pipein, pipeout = os.pipe()
+    pid = os.fork()
+    if pid < 0:
+        raise OSError('Forking child process failed.')
 
-    results = OrderedDict()
+    if pid == 0: # child process
+        os.close(pipein)
+        writer = os.fdopen(pipeout, 'wb')
+        statuscode = crawler_setup(settings, writer=writer, image_url=image_url, image_data=image_data, num_results=num_results)
+        writer.flush()
+        writer.close()
+        if not statuscode:
+            statuscode = 0
+        os._exit(int(statuscode))
+        return # finis
 
-    for provider, search_engine in search_engines.items():
+    # parent process
+    os.close(pipeout)
+    reader = os.fdopen(pipein, 'rb')
+
+    results = {}
+    while True:
+        # simple line-based protocol
+        data = reader.readline()[:-1]
+        if not data or len(data) == 0:
+            break
+
+        response = None
         try:
-            result = search_engine(image_url, settings)
-        except IndexError as e:
-            logger.error('Failed fetching %s results: %s' % (provider, e))
+            response = json.loads(data)
+        except ValueError:
+            logger.error('Error decoding Spider data: %s' % (data,))
+        if response:
+            provider = None
+            link = title = ''
+            if 'provider' in response:
+                provider = response['provider']
+            if 'link' in response:
+                link = response['link']
+            if 'title' in response:
+                title = response['title']
 
-        results[provider] = result
+            if not provider in results:
+                results[provider] = []
+            results[provider].append([link, title])
 
+    pid, status = os.waitpid(pid, 0)
+    reader.close()
+
+    # sort for constant key order
+    results = OrderedDict(sorted(results.items()))
     return results
 
 def filter_image_search(settings, search_results, account1=None, account2=None):

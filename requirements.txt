@@ -5,3 +5,4 @@ parsel>=1.0.0
 lockfile
 python-daemon
 setproctitle # optional
+scrapy>=1.1.0

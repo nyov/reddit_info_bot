@@ -76,7 +76,7 @@ def reddit_login(settings):
     use_login = account_name and account_pass
     if not use_login:
         raise ConfigurationError('Missing REDDIT_ACCOUNT_NAME setting')
-    shadowbanned = check_shadowban(account_name, settings.get('SEARCH_USER_AGENT'))
+    shadowbanned = check_shadowban(account_name, settings.get('USER_AGENT'))
     if shadowbanned:
         logger.warning("User '%s' may be shadowbanned." % account_name)
     if use_oauth and use_login:
@@ -96,7 +96,7 @@ def reddit_login(settings):
     use_second_oauth = client2_id and client2_secret
     use_second_login = account2_name and account2_pass
     if use_second_login:
-        shadowbanned = check_shadowban(account2_name, settings.get('SEARCH_USER_AGENT'))
+        shadowbanned = check_shadowban(account2_name, settings.get('USER_AGENT'))
         if shadowbanned:
             logger.warning('%s may be shadowbanned.' % account2_name)
         if use_second_oauth:
