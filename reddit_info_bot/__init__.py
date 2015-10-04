@@ -20,6 +20,7 @@ from .search import (
     #get_karmadecay_results,
     get_tineye_results,
 )
+from .antispam import spamfilter_lists
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,11 @@ def get_domain(link):
         group = link
     return group.decode('utf-8')
 
-def get_nonspam_links(results):
+# reddit_pm_filter_links
+# - pm URLs from one reddit account to another
+# - check second account for received URLs
+# - if URL was received, whitelist it
+def _get_nonspam_links(results):
     #comment the links on a post made by an alt account to see if they show up
     nonspam_links = []
     passed_domains = []
@@ -82,7 +87,7 @@ def get_nonspam_links(results):
     return passed_domains
 
 
-def format_results(results, display_limit=5): #returns a formatted and spam filtered list of the results. Change 5 to adjust number of results to display per provider. Fi
+def _format_results(results, display_limit=5): #returns a formatted and spam filtered list of the results. Change 5 to adjust number of results to display per provider. Fi
     ascii = [[''.join(k for k in i[j] if (ord(k)<128 and k not in '[]()')) for j in xrange(2)] for i in results] #eliminates non-ascii characters
     #filter the links and words.
     ascii_filtered = []
@@ -95,7 +100,7 @@ def format_results(results, display_limit=5): #returns a formatted and spam filt
         ascii_filtered.append([i[0],text])
 
     if account2:
-        ascii_final = get_nonspam_links(ascii_filtered) #filter the links for spam
+        ascii_final = _get_nonspam_links(ascii_filtered) #filter the links for spam
     else: # skip spamfilter, for testing only (FIXME)
         ascii_final = ascii_filtered
     if len(ascii_final) > display_limit:
@@ -141,31 +146,31 @@ def give_more_info(submission_url):
 
     try:
         print("GOOGLE:")
-        google_formatted = format_results(results[0])
+        google_formatted = _format_results(results[0])
     except IndexError as e:
         google_available = False
         print(e)
 
     try:
         print("BING:")
-        bing_formatted = format_results(results[1])
+        bing_formatted = _format_results(results[1])
     except IndexError:
         bing_available = False
 
     try:
         print("YANDEX:")
-        yandex_formatted = format_results(results[2])
+        yandex_formatted = _format_results(results[2])
     except IndexError:
         yandex_available = False
 
     print("KARMA DECAY:")
-    karmadecay_formatted = format_results(results[3])
+    karmadecay_formatted = _format_results(results[3])
 
     try:
         print("TINEYE:")
         tineye_results = get_tineye_results(submission_url)
         if tineye_results:
-            tineye_formatted = format_results(tineye_results)
+            tineye_formatted = _format_results(tineye_results)
     except IndexError:
         tineye_available = False
 
@@ -321,40 +326,6 @@ def check_downvotes(user, start_time):
         return current_time
     return start_time
 
-def get_filter(filter_type):
-    def cache_filters(filter_type):
-        try:
-            response = urllib2.urlopen('http://spambot.rarchives.com/api.cgi?method=get_filters&start=0&count=3000&type={0}'.format(filter_type)).read()
-            # test if the response is valid for us
-            json.loads(response)['filters']
-        except (urllib2.HTTPError, KeyError, Exception) as e:
-            msg = 'Spamfilter update failed with error "{0}", using cached files (if available)'.format(str(e))
-            print(msg)
-        else:
-            with open(filename, 'wb') as outf:
-                outf.write(response)
-
-    filename = 'spamfilter_{0}.json'.format(filter_type)
-    if not os.path.isfile(filename) or \
-            (int(time.time() - os.path.getmtime(filename)) > 43200): # cache 24 hours
-        cache_filters(filter_type)
-        if not os.path.isfile(filename):
-            errmsg = "Could not load spam filters. Cached files invalid or Network failure."
-            sys.exit(errmsg) # quick&ugly, sorry
-
-    filters = None
-    try:
-        with open(filename, 'rb') as inf:
-            filters = json.load(inf)['filters']
-    except (ValueError, KeyError): # cached file contents invalid
-        os.unlink(filename)
-        # retry? potential loop
-        #get_filter(filter_type)
-        errmsg = "Could not load spam filters. Cached files invalid or Network failure."
-        sys.exit(errmsg)
-
-    return [i['spamtext'] for i in filters]
-
 def get_comment_stream_urls(subreddit_list):
     MAX_LENGTH = 2010
     url_list = []
@@ -392,26 +363,6 @@ def startup():
             errmsg = "Requested BOT_WORKDIR '{0}' does not exist, aborting.".format(wd)
             sys.exit(errmsg)
 
-
-    blacklist = []
-    if os.path.isfile("blacklist.p"):
-        with open("blacklist.p", "rb") as f:
-            blacklist = pickle.load(f)
-    print('Adding Rarchives links to blacklist.')
-    rarchives_spam_domains = link_filter = get_filter('link') + get_filter('thumb')
-    text_filter = get_filter('text') + get_filter('user')
-    """for domain in rarchives_spam_domains:
-        if 'http' not in domain and domain[0] != '.':
-            domain = "http://"+domain
-        if not re.search('\.[^\.]+/.+$',domain): #if the link isn't to a specific page (has stuff after the final /) instead of an actual domain
-            if domain[0] != '.':
-                if domain not in blacklist:
-                    blacklist.append(domain)
-    """
-    hard_blacklist = ["tumblr.com"]
-    #whitelist = ["reddit.com"]
-    tld_blacklist = [''.join(letter for letter in tld if letter!=".") for tld in get_filter('tld')]
-
     COMMENT = 'comment'
     PM = 'pm'
     LOG = 'log'
@@ -421,9 +372,15 @@ def startup():
     time_limit_minutes = config['TIME_LIMIT_MINUTES'] #how long before a comment will be ignored for being too old
     comment_deleting_wait_time = config["DELETE_WAIT_TIME"] #how many minutes to wait before deleting downvoted comments
 
-    #url = 'https://i.imgur.com/yZKXDPV.jpg'
-    #print(give_more_info(url))
-    #sys.exit()
+    # load spam lists
+    (
+        link_filter,
+        text_filter,
+        word_filter,
+        hard_blacklist,
+        whitelist,
+        tld_blacklist,
+    ) = spamfilter_lists()
 
 
 def reddit_login():
@@ -447,8 +404,6 @@ def reddit_login():
 
     print('Fetching Subreddit list')
     subreddit_list = [account1.get_subreddit(i).display_name for i in config['SUBREDDITS']]
-    #load the word list:
-    bad_words = get_filter('text')
 
     credentials = {
         'user': config["USER_NAME"],
