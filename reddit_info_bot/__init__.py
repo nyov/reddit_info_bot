@@ -21,6 +21,7 @@ from .search import (
     get_tineye_results,
 )
 from .antispam import spamfilter_lists
+from .util import domain_suffix, tld_from_suffix
 
 logger = logging.getLogger(__name__)
 
@@ -37,30 +38,22 @@ class comment:
         print(text)
 
 
-def get_domain(link):
-    #result = re.search("http\w?:///?(\w+\..+\.\w*)/?|http\w?:///?(.+\.\w*)/?",link)
-    result = re.search("http\w?:///?\w+\.[^/]+(\.\w*)/?|http\w?:///?[^/]+(\.\w*)/?",link)
-    try:
-        group = result.group(1) if result.group(1) else result.group(2)
-    except:
-        #"ERROR: get_domain("+link+") could not find a working domain. Attempting to skip..."
-        group = link
-    return group.decode('utf-8')
-
-# reddit_pm_filter_links
-# - pm URLs from one reddit account to another
-# - check second account for received URLs
-# - if URL was received, whitelist it
-def _get_nonspam_links(results):
-    #comment the links on a post made by an alt account to see if they show up
+def reddit_pm_linkfilter(results):
+    """comment the links on a post made by an alt account to see if they show up
+    - pm URLs from one reddit account to another
+    - check second account for received URLs
+    - if URL was received, whitelist it
+    """
     nonspam_links = []
     passed_domains = []
     for i in results:
         link = i[0].lower()
         text = i[1].lower()
         print(link)
-        good_tld = ''.join(letter for letter in get_domain(link) if letter!='.') not in tld_blacklist
-        #not_in_hard_list = not any(item in get_domain(link) for item in hard_blacklist)
+        domain = domain_suffix(link)
+        tld = tld_from_suffix(domain)
+        good_tld = tld not in tld_blacklist
+        #not_in_hard_list = domain not in hard_blacklist
         no_spamlinks_in_link = not any(j in link for j in link_filter)
         no_text_spam = not any(j in text for j in text_filter)
         print("Good tld: {0}\nNo spamlinks in link: {1}\nNo text spam: {2}\n".format(good_tld,no_spamlinks_in_link,no_text_spam))
@@ -100,7 +93,7 @@ def _format_results(results, display_limit=5): #returns a formatted and spam fil
         ascii_filtered.append([i[0],text])
 
     if account2:
-        ascii_final = _get_nonspam_links(ascii_filtered) #filter the links for spam
+        ascii_final = reddit_pm_linkfilter(ascii_filtered) #filter the links for spam
     else: # skip spamfilter, for testing only (FIXME)
         ascii_final = ascii_filtered
     if len(ascii_final) > display_limit:
