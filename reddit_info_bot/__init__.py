@@ -281,19 +281,21 @@ def find_keywords(all_comments):
     keyword_list = config['KEYWORDS']
     for comment in all_comments:
         print(".", end="")
-        if comment['author']: #check if the comment exists
-            if comment['subreddit'] in subreddit_list: #check if it's in one of the right subs
-                if (time.time()-comment['created_utc'])/60 < time_limit_minutes: #if the age of the comment is less than the time limit
+        if comment.author: #check if the comment exists
+            if comment.subreddit in subreddit_list: #check if it's in one of the right subs
+                if (time.time()-comment.created_utc)/60 < time_limit_minutes: #if the age of the comment is less than the time limit
                     try:
-                        isPicture = any(i in str(comment['link_url']) for i in config['IMAGE_FORMATS'])
+                        isPicture = any(i in str(comment.link_url) for i in config['IMAGE_FORMATS'])
                     except UnicodeEncodeError:
                         isPicture = False #non-ascii url
                     if isPicture:
-                        body = comment['body'].lower()
+                        body = comment.body.lower()
                         if any(word.lower() in body.lower() for word in keyword_list):
-                            comment = account1.get_submission(url="https://www.reddit.com/r/{0}/comments/{1}/aaaa/{2}".format(comment['subreddit'],comment['link_id'][3:],comment['id'])).comments
-                            if comment: #get_submission returns a valid comment object
-                                comment = comment[0]
+                            ##comments = account1.get_submission(url="https://www.reddit.com/r/{0}/comments/{1}/aaaa/{2}".format(comment.subreddit, comment.link_id[3:], comment.id)).comments
+                            #comments = comment.submission.comments
+                            #if comments: #get_submission returns a valid comment object
+                            #    comment = comments[0]
+                            if True:
                                 top_level = [i.replies for i in comment.submission.comments]
                                 submission_comments = []
                                 for i in top_level:
@@ -326,30 +328,31 @@ def check_downvotes(user, start_time):
         return current_time
     return start_time
 
-def get_comment_stream_urls(subreddit_list):
-    MAX_LENGTH = 2010
-    url_list = []
-    subreddit_chain = ""
-    for i in subreddit_list:
-        new_element = i + "+"
-        if len(subreddit_chain) + len(new_element) > MAX_LENGTH:
-            url_list.append("https://reddit.com/r/{0}/comments.json".format(subreddit_chain[:-1]))
-            subreddit_chain = ""
-        subreddit_chain += new_element
-    url_list.append("https://reddit.com/r/{0}/comments.json".format(subreddit_chain[:-1]))
-    return url_list
+MAX_URL_LENGTH = 2010
+
+def build_subreddit_feeds(subreddits, max_url_length=MAX_URL_LENGTH):
+    """combine subreddits into 'feeds' for requests
+    """
+    base_length = 35 # length of 'https://reddit.com/r/%s/comments.json'
+    url_length = 0
+    subredditlist = []
+    feed_urls = []
+    for subreddit in subreddits:
+        url_length += len(subreddit) + 1 # +1 for '+' delimiter
+        subredditlist += [subreddit]
+        if url_length + base_length >= max_url_length:
+            feed_urls += ['+'.join(subredditlist)]
+            # reset
+            subredditlist = []
+            url_length = 0
+    return feed_urls
 
 def get_all_comments(stream):
-    a = session_client.get(stream, headers=headers)
-    try:
-        js = json.loads(a.content)
-        if not 'data' in js:
-            return None
-        b =  js['data']['children']
-        comments_json = [i['data'] for i in b]
-        return comments_json
-    except ValueError:
-        return None
+    # paginated
+    #feed_comments = stream.get_comments(limit=None)
+    # using default limit (old implementation)
+    feed_comments = stream.get_comments()
+    return feed_comments
 
 
 def startup():
@@ -405,19 +408,8 @@ def reddit_login():
     print('Fetching Subreddit list')
     subreddit_list = [account1.get_subreddit(i).display_name for i in config['SUBREDDITS']]
 
-    credentials = {
-        'user': config["USER_NAME"],
-        'passwd': config["PASSWORD"],
-        'api_type': 'json',
-    }
-    headers = {'user-agent': config["BOT_NAME"],}
-    session_client = requests.session()
-    r1 = session_client.post('https://www.reddit.com/api/login', data = credentials, headers=headers)
-    the_json = json.loads(r1.text)
-    session_client.modhash = the_json['json']['data']['modhash']
-
     print('Fetching comment stream urls')
-    comment_stream_urls = get_comment_stream_urls(subreddit_list)
+    comment_stream_urls = [account1.get_subreddit(subredditlist) for subredditlist in build_subreddit_feeds(subreddit_list)]
 
 
 def main():
