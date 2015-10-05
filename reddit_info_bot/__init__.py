@@ -5,7 +5,6 @@ import sys
 import os
 import logging
 import time
-import praw
 import pickle
 import urllib2
 import requests
@@ -27,6 +26,7 @@ from .search import (
     #get_karmadecay_results,
     get_tineye_results,
 )
+from .reddit import reddit_login
 from .antispam import spamfilter_lists
 from .util import domain_suffix, tld_from_suffix
 
@@ -385,28 +385,12 @@ def startup():
         tld_blacklist,
     ) = spamfilter_lists()
 
-
-def reddit_login():
-    # login to reddit accounts
-    print('Logging into accounts')
-    account1 = praw.Reddit(config['BOT_NAME'])
-    account1.login(config['USER_NAME'], config['PASSWORD'], disable_warning=True) # drop the warning for now (working on it)
-
-    if config['SECOND_ACCOUNT_NAME'] and config['SECOND_ACCOUNT_PASS']:
-        account2 = praw.Reddit(config['BOT_NAME']) #load a second praw instance for the second account (the one used to check the spam links)
-        account2.login(config['SECOND_ACCOUNT_NAME'], config['SECOND_ACCOUNT_PASS'], disable_warning=True)
-    else:
-        account2 = False
-
-    user = account1.get_redditor(config['USER_NAME'])
     already_done = []
     if os.path.isfile("already_done.p"):
         with open("already_done.p", "rb") as f:
             already_done = pickle.load(f)
-    start_time = int(time.time()/60) #time in minutes for downvote checking
 
-    print('Fetching Subreddit list')
-    subreddit_list = [account1.get_subreddit(i).display_name for i in config['SUBREDDITS']]
+    (account1, account2, user, subreddit_list) = reddit_login(config)
 
     print('Fetching comment stream urls')
     comment_stream_urls = [account1.get_subreddit(subredditlist) for subredditlist in build_subreddit_feeds(subreddit_list)]
@@ -450,5 +434,4 @@ if __name__ == "__main__":
     #url = 'https://i.imgur.com/yZKXDPV.jpg'
     #print(give_more_info(url))
 
-    reddit_login()
     main()
