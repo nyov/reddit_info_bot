@@ -237,85 +237,123 @@ def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to dis
     return done
 
 def find_username_mentions():
+    count = 0
     for comment in account1.get_unread(limit=100):
-        if config['SEARCH_STRING'] in comment.body:
-            print("search string in body")
-            if comment.author: #check if the comment exists
-                print("comment.author")
-                print(comment.subreddit)
-                if str(comment.subreddit) in subreddit_list: #check if it's in one of the right subs
-                    print("comment.subreddit")
-                    if (time.time()-comment.created_utc)/60 < time_limit_minutes: #if the age of the comment is less than the time limit
-                        print("time")
-                        try:
-                            isPicture = any(i in str(comment.submission.url) for i in config['IMAGE_FORMATS'])
-                        except UnicodeEncodeError:
-                            isPicture = False #non-ascii url
-                        if isPicture:
-                            print("isPicture")
-                            top_level = [i.replies for i in comment.submission.comments]
-                            submission_comments = []
-                            for i in top_level:
-                                for j in i:
-                                    submission_comments.append(j)
-                            if not any(i for i in submission_comments if config['EXTRA_MESSAGE'] in i.body): #If there are no link replies
-                                print("no link replies")
-                                if comment.id not in already_done and comment.author != user:
-                                    #print("not already done and not its own user")
-                                    reply = give_more_info(comment.submission.url)
-                                    try:
-                                        if botmode == LOG:
-                                            print(reply)
-                                        else:
-                                            if comment_exists(comment):
-                                                comment.reply(reply)
-                                                print('replied to comment with more info')
-                                    except requests.HTTPError:
-                                        print('HTTP Error. Bot might be banned from this sub')
+        count += 1
+        if config['SEARCH_STRING'] not in comment.body:
+            print('.', end='')
+            continue
+        if not comment.author: #check if the comment exists
+            print('x', end='')
+            continue
+        if str(comment.subreddit) not in subreddit_list: #check if it's in one of the right subs
+            print('!', end='')
+            continue
+        if (time.time()-comment.created_utc)/60 > time_limit_minutes: #if the age of the comment is more than the time limit
+            print('o', end='')
+            continue
+        try:
+            isPicture = any(i in str(comment.submission.url) for i in config['IMAGE_FORMATS'])
+        except UnicodeEncodeError:
+            isPicture = False #non-ascii url
+        if not isPicture:
+            print('t', end='')
+            continue
+        top_level = [i.replies for i in comment.submission.comments]
+        submission_comments = []
+        for i in top_level:
+            for j in i:
+                submission_comments.append(j)
+        if any(i for i in submission_comments if config['EXTRA_MESSAGE'] in i.body): #If there are link replies
+            print('p', end='')
+            continue
+        if comment.id in already_done:
+            print('r', end='')
+            continue
+        if comment.author == user:
+            # oops
+            print('u', end='')
+            continue
+        reply = give_more_info(comment.submission.url)
+        try:
+            if botmode == LOG:
+                print(reply)
+            else:
+                if comment_exists(comment):
+                    comment.reply(reply)
+                    print('replied to comment with more info', end='')
+            print('.', end='')
+        except requests.HTTPError:
+            print('HTTP Error. Bot might be banned from this sub')
 
-                                    already_done.append(comment.id)
+        already_done.append(comment.id)
         comment.mark_as_read()
+    print(' (%d comments)' % (count,))
 
 
 def find_keywords(all_comments):
     keyword_list = config['KEYWORDS']
+    count = 0
     for comment in all_comments:
-        print(".", end="")
-        if comment.author: #check if the comment exists
-            if comment.subreddit in subreddit_list: #check if it's in one of the right subs
-                if (time.time()-comment.created_utc)/60 < time_limit_minutes: #if the age of the comment is less than the time limit
-                    try:
-                        isPicture = any(i in str(comment.link_url) for i in config['IMAGE_FORMATS'])
-                    except UnicodeEncodeError:
-                        isPicture = False #non-ascii url
-                    if isPicture:
-                        body = comment.body.lower()
-                        if any(word.lower() in body.lower() for word in keyword_list):
-                            ##comments = account1.get_submission(url="https://www.reddit.com/r/{0}/comments/{1}/aaaa/{2}".format(comment.subreddit, comment.link_id[3:], comment.id)).comments
-                            #comments = comment.submission.comments
-                            #if comments: #get_submission returns a valid comment object
-                            #    comment = comments[0]
-                            if True:
-                                top_level = [i.replies for i in comment.submission.comments]
-                                submission_comments = []
-                                for i in top_level:
-                                    for j in i:
-                                        submission_comments.append(j)
-                                if not any(i for i in submission_comments if config['EXTRA_MESSAGE'] in i.body): #If there are no link replies
-                                    if not any(i for i in submission_comments if i.body == config['INFORMATION_REPLY']): #If there are no information replies
-                                        if any(word.lower() in comment.body.lower() for word in keyword_list):
-                                            try:
-                                                print("\ndetected keyword: "+ comment.body.lower())
-                                            except UnicodeEncodeError:
-                                                print("\ndetected keyword: ", end="")
-                                                try:
-                                                    print(comment.body)
-                                                except: pass #print(''.join(k for k in i[j] if (ord(k)<128 and k not in '[]()')) for j in xrange(2))
-                                            if comment.id not in already_done and comment.author != user:
-                                                done = False
-                                                attempt = 1
-                                                while not done:
-                                                    done = reply_to_potential_comment(comment,attempt)
+        count += 1
+        if not comment.author: #check if the comment exists
+            print('x', end='')
+            continue
+        if str(comment.subreddit) not in subreddit_list: #check if it's in one of the right subs
+            print('!', end='')
+            continue
+        if (time.time()-comment.created_utc)/60 > time_limit_minutes: #if the age of the comment is more than the time limit
+            print('o', end='')
+            continue
+        try:
+            isPicture = any(i in str(comment.link_url) for i in config['IMAGE_FORMATS'])
+        except UnicodeEncodeError:
+            isPicture = False #non-ascii url
+        if not isPicture:
+            print('t', end='')
+            continue
+        body = comment.body.lower()
+        if not any(word.lower() in body.lower() for word in keyword_list):
+            print('p', end='')
+            continue
+        ##comments = account1.get_submission(url="https://www.reddit.com/r/{0}/comments/{1}/aaaa/{2}".format(comment.subreddit, comment.link_id[3:], comment.id)).comments
+        #comments = comment.submission.comments
+        #if comments: #get_submission returns a valid comment object
+        #    comment = comments[0]
+        top_level = [i.replies for i in comment.submission.comments]
+        submission_comments = []
+        for i in top_level:
+            for j in i:
+                submission_comments.append(j)
+        if any(i for i in submission_comments if config['EXTRA_MESSAGE'] in i.body): #If there are link replies
+            print('R', end='')
+            continue
+        if not any(i for i in submission_comments if i.body == config['INFORMATION_REPLY']): #If there are information replies
+            print('R', end='')
+            continue
+        # previously determined already
+        #if any(word.lower() in comment.body.lower() for word in keyword_list):
+        try:
+            print("\ndetected keyword: "+ comment.body.lower())
+        except UnicodeEncodeError:
+            print("\ndetected keyword: ", end="")
+            try:
+                print(comment.body)
+            except: pass #print(''.join(k for k in i[j] if (ord(k)<128 and k not in '[]()')) for j in xrange(2))
+        if comment.id in already_done:
+            print('r', end='')
+            continue
+        if comment.author == user:
+            # oops
+            print('u', end='')
+            continue
+        done = False
+        attempt = 1
+        while not done:
+            done = reply_to_potential_comment(comment, attempt)
+    #se = '/'.join(['%d %s' % (v, k) for k, v in stats])
+    #print(' (%d comments - %s)' % (count, se))
+    print(' (%d comments)' % (count,))
 
 def check_downvotes(user, start_time):
     current_time = int(time.time()/60)
@@ -373,7 +411,7 @@ def main():
                     continue
                 print(time.time()-a)
                 find_keywords(all_comments)
-                print("finding username mentions...")
+                print('finding username mentions: ', end='')
                 find_username_mentions()
                 start_time = check_downvotes(user,start_time)
 
