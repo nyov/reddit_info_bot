@@ -76,4 +76,5 @@ def spamfilter_lists():
         hard_blacklist,
         whitelist,
         tld_blacklist,
+        blacklist,
     )

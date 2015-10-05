@@ -14,7 +14,7 @@ from praw.errors import RateLimitExceeded
 
 # version
 import pkgutil
-__version__ = pkgutil.get_data(__package__, 'VERSION').decode('ascii').strip()
+__version__ = pkgutil.get_data(__package__ or __name__, 'VERSION').decode('ascii').strip()
 version_info = tuple(int(v) if v.isdigit() else v
                      for v in __version__.split('.'))
 del pkgutil
@@ -168,7 +168,7 @@ def give_more_info(submission_url):
 
     try:
         print("TINEYE:")
-        tineye_results = get_tineye_results(submission_url)
+        tineye_results = get_tineye_results(submission_url, config)
         if tineye_results:
             tineye_formatted = _format_results(tineye_results)
     except IndexError:
@@ -339,12 +339,17 @@ def build_subreddit_feeds(subreddits, max_url_length=MAX_URL_LENGTH):
     feed_urls = []
     for subreddit in subreddits:
         url_length += len(subreddit) + 1 # +1 for '+' delimiter
+        #print('%4d' % url_length, subreddit)
         subredditlist += [subreddit]
         if url_length + base_length >= max_url_length:
             feed_urls += ['+'.join(subredditlist)]
             # reset
             subredditlist = []
             url_length = 0
+    feed_urls += ['+'.join(subredditlist)]
+    # reset
+    subredditlist = []
+    url_length = 0
     return feed_urls
 
 def get_all_comments(stream):
@@ -355,7 +360,40 @@ def get_all_comments(stream):
     return feed_comments
 
 
-def startup():
+def main():
+    start_time = time.time()
+    print('Starting run...')
+    while True:
+        try:
+            for count, stream in enumerate(comment_stream_urls): #uses separate comment streams for large subreddit list due to URL length limit
+                print('visiting comment stream %d/%d "%s..."' % (count+1, len(comment_stream_urls), str(stream)[:60]))
+                a = time.time()
+                all_comments = get_all_comments(stream)
+                if not all_comments:
+                    continue
+                print(time.time()-a)
+                find_keywords(all_comments)
+                print("finding username mentions...")
+                find_username_mentions()
+                start_time = check_downvotes(user,start_time)
+
+                with open("already_done.p", "wb") as df:
+                    pickle.dump(already_done, df)
+                with open("blacklist.p", "wb") as bf:
+                    pickle.dump(blacklist, bf)
+
+                print('Finished a round of comments. Waiting two seconds.\n')
+                time.sleep(2)
+        except requests.ConnectionError:
+            print('Connection Error')
+        except requests.HTTPError:
+            print('HTTP Error')
+
+
+if __name__ == "__main__" or True: # always do this, for now
+    with open('config.json') as json_data:
+        config = json.load(json_data)
+
     wd = None
     if 'BOT_WORKDIR' in config:
         wd = config["BOT_WORKDIR"]
@@ -383,6 +421,7 @@ def startup():
         hard_blacklist,
         whitelist,
         tld_blacklist,
+        blacklist,
     ) = spamfilter_lists()
 
     already_done = []
@@ -390,48 +429,19 @@ def startup():
         with open("already_done.p", "rb") as f:
             already_done = pickle.load(f)
 
+    #account2 = None
+    #url = 'https://i.imgur.com/yZKXDPV.jpg'
+    #print(give_more_info(url))
+
     (account1, account2, user, subreddit_list) = reddit_login(config)
 
     print('Fetching comment stream urls')
-    comment_stream_urls = [account1.get_subreddit(subredditlist) for subredditlist in build_subreddit_feeds(subreddit_list)]
-
-
-def main():
-    start_time = time.time()
-    print('Starting run...')
-    while True:
-        try:
-            for stream in comment_stream_urls: #uses separate comment streams for large subreddit list due to URL length limit
-                a = time.time()
-                all_comments = get_all_comments(stream)
-                if not all_comments:
-                    continue
-                print(time.time()-a)
-                find_keywords(all_comments)
-                print("finding username mentions...")
-                find_username_mentions()
-                start_time = check_downvotes(user,start_time)
-
-                with open("already_done.p", "wb") as df:
-                    pickle.dump(already_done, df)
-                with open("blacklist.p", "wb") as bf:
-                    pickle.dump(blacklist, bf)
-
-                print('Finished a round of comments. Waiting two seconds.\n')
-                time.sleep(2)
-        except requests.ConnectionError:
-            print('Connection Error')
-        except requests.HTTPError:
-            print('HTTP Error')
-
-
-if __name__ == "__main__":
-    with open('config.json') as json_data:
-        config = json.load(json_data)
-
-    startup()
-
-    #url = 'https://i.imgur.com/yZKXDPV.jpg'
-    #print(give_more_info(url))
+    #comment_stream_urls = [account1.get_subreddit(subredditlist) for subredditlist in build_subreddit_feeds(subreddit_list)]
+    comment_stream_urls = []
+    for count, subredditlist in enumerate(build_subreddit_feeds(subreddit_list)):
+        print('loading comment stream %2d "%s..."' % (count+1, subredditlist[:60]))
+        comment_feed = account1.get_subreddit(subredditlist)
+        # lazy objects, nothing done yet
+        comment_stream_urls += [comment_feed]
 
     main()

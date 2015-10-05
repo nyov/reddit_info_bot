@@ -26,4 +26,4 @@ def reddit_login(config):
     print('Fetching Subreddit list')
     subreddit_list = [account1.get_subreddit(i).display_name for i in config['SUBREDDITS']]
 
-    return (account1, account2, user, subreddit_list)
+    return (account1, account2, user, set(subreddit_list))

@@ -12,7 +12,7 @@ from parsel import Selector
 logger = logging.getLogger(__name__)
 
 
-def get_google_results(image_url, limit=15): #limit is the max number of results to grab (not the max to display)
+def get_google_results(image_url, config, limit=15): #limit is the max number of results to grab (not the max to display)
     headers = {}
     headers['User-Agent'] = config['SEARCH_USER_AGENT']
     response_text = requests.get('https://www.google.com/searchbyimage?image_url={0}'.format(image_url), headers=headers).content
@@ -29,7 +29,7 @@ def get_google_results(image_url, limit=15): #limit is the max number of results
     results = [(list_class_results[i].find('a')['href'],re.sub('<.*?>', '', re.sub('&#\d\d;', "'", ''.join([str(j) for j in list_class_results[i].find('a').contents])))) for i in xrange(limit)]
     return results
 
-def get_bing_results(image_url, limit=15):
+def get_bing_results(image_url, config, limit=15):
     cj = cookielib.MozillaCookieJar('cookies.txt')
     cj.load()
     opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
@@ -44,7 +44,7 @@ def get_bing_results(image_url, limit=15):
     results = [(list_class_results[i].findAll(attrs={'class':'info'})[0].find('a')['href'],list_class_results[i].findAll(attrs={'class':'info'})[0].find('a').contents[0]) for i in xrange(limit)]
     return results
 
-def get_yandex_results(image_url, limit=15):
+def get_yandex_results(image_url, config, limit=15):
     headers = {}
     headers['User-Agent'] = config['SEARCH_USER_AGENT']
     response_text = requests.get("https://www.yandex.com/images/search?img_url={0}&rpt=imageview&uinfo=sw-1440-sh-900-ww-1440-wh-775-pd-1-wp-16x10_1440x900".format(image_url), headers=headers).content
@@ -67,7 +67,7 @@ def get_yandex_results(image_url, limit=15):
         limit = len(results)
     return results[:limit]
 
-def get_karmadecay_results(image_url, limit=15):
+def get_karmadecay_results(image_url, config, limit=15):
     headers = {}
     headers['User-Agent'] = config['SEARCH_USER_AGENT']
     response_text = requests.get("http://www.karmadecay.com/search?kdtoolver=b1&q="+image_url, headers=headers).content
@@ -78,7 +78,7 @@ def get_karmadecay_results(image_url, limit=15):
     results = [(i[i.find("(",i.find(']'))+1:i.find(")",i.find(']'))],i[i.find("[")+1:i.find("]")]) for i in raw_results]
     return results #[(link,text)]
 
-def get_tineye_results(image_url, limit=15):
+def get_tineye_results(image_url, config, limit=15):
     def extract(r, count):
         sel = Selector(text=r.content.decode(r.encoding))
         page = sel.xpath('//div[@class="results"]//div[@class="row matches"]//div[contains(@class, "match-row")]')
