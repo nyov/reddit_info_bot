@@ -1,0 +1,4 @@
+praw
+six
+parsel>=1.0.0
+publicsuffix>=1.0.5
