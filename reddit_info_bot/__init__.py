@@ -11,6 +11,8 @@ import requests
 import re
 import json
 from praw.errors import RateLimitExceeded
+from collections import OrderedDict
+from six.moves.urllib.parse import urlsplit
 
 # version
 import pkgutil
@@ -33,18 +35,6 @@ from .util import remove_control_characters
 
 logger = logging.getLogger(__name__)
 
-# mock objects to emulate praw interface
-class submission:
-    def __init__(self,link):
-        self.url = link
-
-class comment:
-    def __init__(self,link):
-        self.submission = submission(link)
-        self.id = "dummy comment"
-    def reply(self,text):
-        print(text)
-
 
 def isspam(result):
     """check search result for spammy content
@@ -52,30 +42,31 @@ def isspam(result):
     url, text = result[0].lower(), result[1].lower()
 
     if len(url) < 6: # shorter than '//a.bc' can't be a useable absolute HTTP URL
-        print('Skipping invalid URL: {0}'.format(url))
+        print('Skipping invalid URL: "{0}"'.format(url))
         return True
     # domain from URL using publicsuffix (not a validator)
     domain = domain_suffix(url)
     if not domain:
-        print('Failed to lookup PSL/Domain for: {0}'.format(url))
+        print('Failed to lookup PSL/Domain for: "{0}"'.format(url))
         return True
     tld = tld_from_suffix(domain)
     if not tld or tld == '':
-        print('Failed to lookup TLD from publicsuffix for: {0}'.format(url))
+        print('Failed to lookup TLD from publicsuffix for: "{0}"'.format(url))
+        return True
+    if domain in whitelist:
+        # higher prio than the blacklist
+        return False
+    if domain in hard_blacklist:
+        print('Skipping blacklisted Domain "{0}": {1}'.format(domain, url))
         return True
     if tld in tld_blacklist:
         print('Skipping blacklisted TLD "{0}": {1}'.format(tld, url))
         return True
-    if domain in hard_blacklist:
-        print('Skipping blacklisted Domain "{0}": {1}'.format(domain, url))
+    if url in link_filter:
+        print('Skipping spammy link match "{0}": {1}'.format(link_filter[url], url))
         return True
-    if any(j in url for j in link_filter):
-        # TODO, return hit
-        print('Skipping spammy link match "{0}": {1}'.format(domain, url))
-        return True
-    if any(j in text for j in text_filter):
-        # TODO, return hit
-        print('Skipping spammy text match: "{1}"'.format(text))
+    if text in text_filter:
+        print('Skipping spammy text match "{0}": "{1}"'.format(text_filter[text], text))
         return True
     # no spam, result is good
     return False
@@ -188,17 +179,7 @@ def comment_exists(comment):
 def give_more_info(submission_url):
     extra_message = config['EXTRA_MESSAGE']
     no_results_message = config['NO_SEARCH_RESULTS_MESSAGE']
-    google_available = True
-    bing_available = True
-    karmadecay_available = True
-    yandex_available = True
-    tineye_available = True
 
-    google_formatted = []
-    bing_formatted = []
-    karmadecay_formatted = []
-    yandex_formatted = []
-    tineye_formatted = []
     link = re.sub("/","*", submission_url)
     print(link)
     print('searching')
@@ -209,74 +190,58 @@ def give_more_info(submission_url):
         try:
             response = urllib2.urlopen("https://sleepy-tundra-5659.herokuapp.com/search/"+link).read()
             results = eval(response)
-        except urllib2.HTTPError:
-            print("503 Service Unavailable. Retrying "+str(i))
+        except urllib2.HTTPError as e:
+            print(e)
+            print("Retrying %d" % i)
 
-    try:
-        print('GOOGLE:')
-        google_formatted = _format_results(results[0])
-    except IndexError as e:
-        google_available = False
-        print('GOOGLE error:', e)
+    search_engines = OrderedDict([
+        ('google', 'Google'),
+        ('bing', 'Bing'),
+        ('yandex', 'Yandex'),
+        ('tineye', 'Tineye'),
+        ('karmadecay', 'Karma Decay'),
+    ])
 
-    try:
-        print('BING:')
-        bing_formatted = _format_results(results[1])
-    except IndexError as e:
-        bing_available = False
-        print('BING error:', e)
+    message = '**Best %s Guesses**\n\n%s\n\n'
+    reply = ''
 
-    try:
-        print('YANDEX:')
-        yandex_formatted = _format_results(results[2])
-    except IndexError as e:
-        yandex_available = False
-        print('YANDEX error:', e)
+    for engine, provider in search_engines.items():
+        try:
+            # hardcoded results
+            if engine == 'google':
+                result = results[0]
+                #print('google:', result)
+            if engine == 'bing':
+                result = results[1]
+                #print('bing:', result)
+            if engine == 'yandex':
+                result = results[2]
+                #print('yandex:', result)
+            if engine == 'karmadecay':
+                result = results[3]
+                # sometimes we get nonempty empty results...
+                if result == [(u'', u'')]:
+                    result = []
+                #print('karma:', result)
+            if engine == 'tineye':
+                result = get_tineye_results(submission_url, config)
+                #print('tineye:', result)
+        except IndexError as e:
+            print('Failed fetching %s results: %s' % (provider, e))
 
-    try:
-        print('KARMA DECAY:')
-        karmadecay_formatted = _format_results(results[3])
-    except IndexError as e:
-        karmadecay_available = False
-        print('KARMA DECAY error:', e)
+        if not result:
+            reply += message % (provider, 'No available links from this search engine found.')
+            del search_engines[engine]
+            continue
 
-    try:
-        print('TINEYE:')
-        tineye_results = get_tineye_results(submission_url, config)
-        if tineye_results:
-            tineye_formatted = _format_results(tineye_results)
-    except IndexError as e:
-        tineye_available = False
-        print('TINEYE error:', e)
+        # format results
+        formatted = _format_results(result)
 
-    if not tineye_formatted:
-        tineye_available = False
-    if not karmadecay_formatted:
-        karmadecay_available = False
-    if not yandex_formatted:
-        yandex_available = False
-    if not bing_formatted:
-        bing_available = False
-    if not google_formatted:
-        google_available = False
+        reply += message % (provider, formatted)
 
-    google_message = "**Best Google Guesses**\n\n{0}\n\n"
-    bing_message = "**Best Bing Guesses**\n\n{0}\n\n"
-    yandex_message = "**Best Yandex Guesses**\n\n{0}\n\n"
-    karmadecay_message = "**Best Karma Decay Guesses**\n\n{0}\n\n"
-    tineye_message = "**Best Tineye Guesses**\n\n{0}\n\n"
-    available_dict = {"google":google_available, "bing":bing_available, "karmadecay":karmadecay_available, "yandex":yandex_available, "tineye":tineye_available}
-    searchengine_dict = {"google":(google_message, google_formatted), "karmadecay":(karmadecay_message,karmadecay_formatted), "bing":(bing_message, bing_formatted), "yandex":(yandex_message, yandex_formatted), "tineye":(tineye_message, tineye_formatted)}
-    reply = ""
-    if not any((karmadecay_available, bing_available, google_available, yandex_available, tineye_available)):
+    if not search_engines:
         reply = no_results_message
-    else:
-        for availability in ("google", "bing", "yandex", "karmadecay", "tineye"):
-            #for each search engine, add the results if they're available, otherwise say there are no links from that search engine.
-            if available_dict[availability]:
-                reply += searchengine_dict[availability][0].format(searchengine_dict[availability][1]) #0: message; 1: formatted results
-            else:
-                reply += searchengine_dict[availability][0].format("No available links from this search engine found.")
+
     reply += extra_message
     return reply
 
@@ -284,7 +249,7 @@ def give_more_info(submission_url):
 # Bot actions
 #
 
-def reply_to_potential_comment(comment,attempt): #uncomment 'return true' to disable this feature
+def reply_to_potential_comment(comment, attempt): #uncomment 'return true' to disable this feature
     if (not config['USE_KEYWORDS']):
         return True
     if not any(i in str(comment.submission.url) for i in config['IMAGE_FORMATS']):
