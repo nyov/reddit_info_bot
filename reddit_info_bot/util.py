@@ -2,6 +2,7 @@
 from __future__ import (absolute_import, unicode_literals, print_function)
 
 import codecs
+import unicodedata
 from six.moves.urllib.parse import urlsplit
 from six.moves.urllib.request import urlopen, Request
 from publicsuffix import PublicSuffixList
@@ -42,3 +43,7 @@ def tld_from_suffix(suffix):
 def domain_suffix(link):
     parse = urlsplit(link)
     return psl.get_public_suffix(parse.netloc)
+
+
+def remove_control_characters(string):
+    return ''.join(c for c in string if unicodedata.category(c)[0] != 'C')

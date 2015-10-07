@@ -29,6 +29,7 @@ from .search import (
 from .reddit import reddit_login
 from .antispam import spamfilter_lists
 from .util import domain_suffix, tld_from_suffix
+from .util import remove_control_characters
 
 logger = logging.getLogger(__name__)
 
@@ -79,64 +80,99 @@ def isspam(result):
     # no spam, result is good
     return False
 
-def reddit_msg_linkfilter(results, sending_account, receiving_account, submission_id):
-    """comment the links on a post made by an alt account to see if they show up
+def reddit_msg_linkfilter(messages, sending_account, receiving_account, submission_id):
+    """ Post reddit comments with one account and check from second account
+    to see if they were filtered out.
     """
-    queue_url, queue_work = [], []
+    queue = []
     submission = sending_account.get_submission(submission_id)
-    # post links with first account
-    for result in results:
-        # post link to check against reddit blacklist
-        url = result[0].lower()
+    # post with first account
+    for message in messages:
         try:
-            submission.add_comment(url)
+            submission.add_comment(message)
         except Exception as e:
-            print('reddit_msg_linkfilter Failed to post url "%s"' % (url,))
+            print('reddit_msg_linkfilter failed to post "%s"' % (message,))
             print(e)
             # FIXME: check exception for http errors (retry?) or other (spam?)
             continue
-        queue_url += [url]
-        queue_work += [result]
+        queue += [message]
     time.sleep(7) # wait a bit
-    # fetch posted links from second account
-    verified_results = []
-    urlcheck_messages = receiving_account.get_unread(limit=40)
-    for msg in urlcheck_messages:
-        if msg.body in queue_url:
-            idx = queue_url.index(msg.body)
-            url = queue_url.pop(idx)
-            result = queue_work.pop(idx)
-            assert url == result[0], 'queue_url and queue_work were not in sync (%s != %s)' % (url, result[0])
+    # fetch posts from second account
+    verified_messages = []
+    fetched_messages = receiving_account.get_unread(limit=40)
+    for msg in fetched_messages:
+        if msg.body in queue:
+            message = queue.pop(queue.index(msg.body))
             msg.mark_as_read()
-            verified_results += [result]
+            verified_messages += [message]
         else:
-            print('skipping unknown message "%s"' % msg.body)
-    failed_results = [r for r in results if r not in verified_results]
-    if failed_results:
-        print('reddit_msg_linkfilter failed links: %s' % ','.join([str(url) for url, text in failed_results]))
+            print('reddit_msg_linkfilter skipping unknown message "%s"' % msg.body)
+    if queue: # messages posted but not found
+        print('reddit_msg_linkfilter posted but did not find: %s' % str(queue))
+    failed_messages = [m for m in messages if (m not in verified_messages and m not in queue)]
+    if failed_messages:
+        print('reddit_msg_linkfilter failed on: %s' % str(failed_messages))
+    return verified_messages
+
+def _reddit_spamfilter(results, sending_account, receiving_account, submission_id):
+    urls = set([url for url, text in results])
+    verified_urls = reddit_msg_linkfilter(urls, sending_account, receiving_account, submission_id)
+    verified_results = []
+    for url, text in results:
+        if url in verified_urls:
+            verified_results += result
     return verified_results
 
 def _format_results(results, display_limit=5): #returns a formatted and spam filtered list of the results. Change 5 to adjust number of results to display per provider. Fi
-    ascii = [[''.join(k for k in i[j] if (ord(k)<128 and k not in '[]()')) for j in xrange(2)] for i in results] #eliminates non-ascii characters
-    #filter the links and words.
-    ascii_filtered = []
-    ASCII = ''.join(chr(x) for x in range(128))
-    for i in ascii:
-        text = ""
-        for char in i[1]:
-            if char in ASCII and char not in "\)([]^/":
-                text += char
-        ascii_filtered.append([i[0],text])
+    def sanitize_string(string):
+        # strip possible control characters
+        string = remove_control_characters(string)
+
+        # also strip non-ascii characters (old code)
+        # (not necessary, general unicode should be allowed)
+        #string = ''.join(c for c in string if ord(c) in range(32, 127))
+
+        string = string.strip()
+        return string
+
+    def escape_markdown(string):
+        # escape markdown characters
+        # from https://daringfireball.net/projects/markdown/syntax#backslash
+        # \   backslash
+        # `   backtick
+        # *   asterisk
+        # _   underscore
+        # {}  curly braces
+        # []  square brackets
+        # ()  parentheses
+        # #   hash mark
+        # +   plus sign
+        # -   minus sign (hyphen)
+        # .   dot
+        # !   exclamation mark
+        markdown_chars = r'\`*_{}[]()#+-.!'
+        reddit_chars = r'^~<>'
+        escape_chars = markdown_chars + reddit_chars
+        string = ''.join(c if c not in escape_chars else '\%s' % c for c in string)
+        return string
+
+    results = [[sanitize_string(v) for v in result]
+               for result in results]
 
     # filter results for spam
-    ascii_final = [result for result in ascii_filtered if not isspam(result)]
-    if account2:
-        # do reddit msg spamcheck
-        ascii_final = reddit_msg_linkfilter(ascii_final, account2, account1, config['SUBMISSION_ID'])
-    if len(ascii_final) > display_limit:
-        ascii_final = ascii_final[:display_limit] #limit the list to 5 items
-    linkified = ["["+i[1]+"]("+i[0]+")" for i in ascii_final] #reformats the results into markdown links
-    formatted = ''.join(i for i in '\n\n'.join(linkified))
+    results = [result for result in results if not isspam(result)]
+    if account2: # do reddit msg spamcheck if second account is configured
+        results = _reddit_spamfilter(results, account2, account1, config['SUBMISSION_ID'])
+
+    results = [[escape_markdown(v) for v in result]
+               for result in results]
+
+    # limit output to `display_limit` results
+    results = results[:display_limit]
+
+    # format output
+    markdown_links = ['[%s](%s)' % (text, url) for url, text in results]
+    formatted = '\n\n'.join(markdown_links)
     return formatted
 
 def comment_exists(comment):
@@ -474,12 +510,14 @@ if __name__ == "__main__" or True: # always do this, for now
     wd = None
     if 'BOT_WORKDIR' in config:
         wd = config["BOT_WORKDIR"]
-    if wd: # If no BOT_WORKDIR was specified in the config, run in current dir
+    if wd:
         if os.path.exists(wd):
             os.chdir(wd)
         else: # BOT_WORKDIR was requested, but does not exist. That's a failure.
             errmsg = "Requested BOT_WORKDIR '{0}' does not exist, aborting.".format(wd)
             sys.exit(errmsg)
+    else:
+        print('No BOT_WORKDIR was specified in the config, running in current directory.')
 
     COMMENT = 'comment'
     PM = 'pm'
