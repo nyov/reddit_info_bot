@@ -64,10 +64,10 @@ def spamfilter_lists():
                     blacklist.append(domain)
     """
     word_filter = get_filter('text')
-
-    hard_blacklist = ['tumblr.com']
-    whitelist = ['reddit.com']
     tld_blacklist = [''.join(letter for letter in tld if letter!=".") for tld in get_filter('tld')]
+
+    hard_blacklist = []
+    whitelist = ['reddit.com']
 
     return (
         link_filter,

@@ -47,3 +47,16 @@ def domain_suffix(link):
 
 def remove_control_characters(string):
     return ''.join(c for c in string if unicodedata.category(c)[0] != 'C')
+
+
+# mock objects to emulate praw interface
+class submission:
+    def __init__(self,link):
+        self.url = link
+
+class comment:
+    def __init__(self,link):
+        self.submission = submission(link)
+        self.id = "dummy comment"
+    def reply(self,text):
+        print(text)
