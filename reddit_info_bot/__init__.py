@@ -120,7 +120,8 @@ def comment_exists(comment):
     return False
 
 def give_more_info(submission_url):
-    extra_message = config["EXTRA_MESSAGE"]
+    extra_message = config['EXTRA_MESSAGE']
+    no_results_message = config['NO_SEARCH_RESULTS_MESSAGE']
     google_available = True
     bing_available = True
     karmadecay_available = True
@@ -134,6 +135,7 @@ def give_more_info(submission_url):
     tineye_formatted = []
     link = re.sub("/","*", submission_url)
     print(link)
+    print('searching')
     results = ''
     i = 0
     while not results:
@@ -145,34 +147,41 @@ def give_more_info(submission_url):
             print("503 Service Unavailable. Retrying "+str(i))
 
     try:
-        print("GOOGLE:")
+        print('GOOGLE:')
         google_formatted = _format_results(results[0])
     except IndexError as e:
         google_available = False
-        print(e)
+        print('GOOGLE error:', e)
 
     try:
-        print("BING:")
+        print('BING:')
         bing_formatted = _format_results(results[1])
-    except IndexError:
+    except IndexError as e:
         bing_available = False
+        print('BING error:', e)
 
     try:
-        print("YANDEX:")
+        print('YANDEX:')
         yandex_formatted = _format_results(results[2])
-    except IndexError:
+    except IndexError as e:
         yandex_available = False
-
-    print("KARMA DECAY:")
-    karmadecay_formatted = _format_results(results[3])
+        print('YANDEX error:', e)
 
     try:
-        print("TINEYE:")
+        print('KARMA DECAY:')
+        karmadecay_formatted = _format_results(results[3])
+    except IndexError as e:
+        karmadecay_available = False
+        print('KARMA DECAY error:', e)
+
+    try:
+        print('TINEYE:')
         tineye_results = get_tineye_results(submission_url, config)
         if tineye_results:
             tineye_formatted = _format_results(tineye_results)
-    except IndexError:
+    except IndexError as e:
         tineye_available = False
+        print('TINEYE error:', e)
 
     if not tineye_formatted:
         tineye_available = False
@@ -193,8 +202,8 @@ def give_more_info(submission_url):
     available_dict = {"google":google_available, "bing":bing_available, "karmadecay":karmadecay_available, "yandex":yandex_available, "tineye":tineye_available}
     searchengine_dict = {"google":(google_message, google_formatted), "karmadecay":(karmadecay_message,karmadecay_formatted), "bing":(bing_message, bing_formatted), "yandex":(yandex_message, yandex_formatted), "tineye":(tineye_message, tineye_formatted)}
     reply = ""
-    if not any((karmadecay_available, bing_available, google_available, yandex_available)):
-        reply = "Well that's embarrassing.  Not for me, but for the search engines. \n\n I was not able to automatically find results for this link.  \n\n ^^If ^^this ^^is ^^a ^^.gifv ^^I ^^am ^^working ^^on ^^adding ^^them ^^to ^^searches."
+    if not any((karmadecay_available, bing_available, google_available, yandex_available, tineye_available)):
+        reply = no_results_message
     else:
         for availability in ("google", "bing", "yandex", "karmadecay", "tineye"):
             #for each search engine, add the results if they're available, otherwise say there are no links from that search engine.
