@@ -45,47 +45,76 @@ class comment:
         print(text)
 
 
-def reddit_pm_linkfilter(results):
-    """comment the links on a post made by an alt account to see if they show up
-    - pm URLs from one reddit account to another
-    - check second account for received URLs
-    - if URL was received, whitelist it
+def isspam(result):
+    """check search result for spammy content
     """
-    nonspam_links = []
-    passed_domains = []
-    for i in results:
-        link = i[0].lower()
-        text = i[1].lower()
-        print(link)
-        domain = domain_suffix(link)
-        tld = tld_from_suffix(domain)
-        good_tld = tld not in tld_blacklist
-        #not_in_hard_list = domain not in hard_blacklist
-        no_spamlinks_in_link = not any(j in link for j in link_filter)
-        no_text_spam = not any(j in text for j in text_filter)
-        print("Good tld: {0}\nNo spamlinks in link: {1}\nNo text spam: {2}\n".format(good_tld,no_spamlinks_in_link,no_text_spam))
-        if len(link) < 6:
-            print("Skipping invalid URL: {0}".format(link))
-            continue
-        if good_tld and no_spamlinks_in_link and no_text_spam:
-            nonspam_links.append([i[0],i[1]])
-            print(link + " IS CLEAN\n")
-            # post link, check reddit blacklist
-            submission = account1.get_submission(submission_id=config['SUBMISSION_ID'])
-            submission.add_comment(link)
-            print("posted: "+link+"\n")
-        else:
-            print(link + " IS SPAM\n")
-    time.sleep(7)
-    for msg in account2.get_unread(limit=40):
-        if msg.body in [i[0] for i in nonspam_links]:
-            passed_domains.append([i for i in nonspam_links if i[0]==msg.body][0])
-            print("read:   " + msg.body)
-            #print([i for i in nonspam_links if i[0]==msg.body][0])
-        msg.mark_as_read()
-    print("passed domains: "+ str(passed_domains))
-    return passed_domains
+    url, text = result[0].lower(), result[1].lower()
 
+    if len(url) < 6: # shorter than '//a.bc' can't be a useable absolute HTTP URL
+        print('Skipping invalid URL: {0}'.format(url))
+        return True
+    # domain from URL using publicsuffix (not a validator)
+    domain = domain_suffix(url)
+    if not domain:
+        print('Failed to lookup PSL/Domain for: {0}'.format(url))
+        return True
+    tld = tld_from_suffix(domain)
+    if not tld or tld == '':
+        print('Failed to lookup TLD from publicsuffix for: {0}'.format(url))
+        return True
+    if tld in tld_blacklist:
+        print('Skipping blacklisted TLD "{0}": {1}'.format(tld, url))
+        return True
+    if domain in hard_blacklist:
+        print('Skipping blacklisted Domain "{0}": {1}'.format(domain, url))
+        return True
+    if any(j in url for j in link_filter):
+        # TODO, return hit
+        print('Skipping spammy link match "{0}": {1}'.format(domain, url))
+        return True
+    if any(j in text for j in text_filter):
+        # TODO, return hit
+        print('Skipping spammy text match: "{1}"'.format(text))
+        return True
+    # no spam, result is good
+    return False
+
+def reddit_msg_linkfilter(results, sending_account, receiving_account, submission_id):
+    """comment the links on a post made by an alt account to see if they show up
+    """
+    queue_url, queue_work = [], []
+    submission = sending_account.get_submission(submission_id)
+    # post links with first account
+    for result in results:
+        # post link to check against reddit blacklist
+        url = result[0].lower()
+        try:
+            submission.add_comment(url)
+        except Exception as e:
+            print('reddit_msg_linkfilter Failed to post url "%s"' % (url,))
+            print(e)
+            # FIXME: check exception for http errors (retry?) or other (spam?)
+            continue
+        queue_url += [url]
+        queue_work += [result]
+    time.sleep(7) # wait a bit
+    # fetch posted links from second account
+    verified_results = []
+    urlcheck_messages = receiving_account.get_unread(limit=40)
+    for msg in urlcheck_messages:
+        if msg.body in queue_url:
+            idx = queue_url.index(msg.body)
+            url = queue_url.pop(idx)
+            result = queue_work.pop(idx)
+            assert url == result[0], 'queue_url and queue_work were not in sync (%s != %s)' % (url, result[0])
+            msg.mark_as_read()
+            verified_results += [result]
+        else:
+            print('skipping unknown message "%s"' % msg.body)
+    failed_results = [r for r in results if r not in verified_results]
+    if failed_results:
+        print('reddit_msg_linkfilter failed links: %s' % ','.join([str(url) for url, text in failed_results]))
+    return verified_results
 
 def _format_results(results, display_limit=5): #returns a formatted and spam filtered list of the results. Change 5 to adjust number of results to display per provider. Fi
     ascii = [[''.join(k for k in i[j] if (ord(k)<128 and k not in '[]()')) for j in xrange(2)] for i in results] #eliminates non-ascii characters
@@ -99,10 +128,11 @@ def _format_results(results, display_limit=5): #returns a formatted and spam fil
                 text += char
         ascii_filtered.append([i[0],text])
 
+    # filter results for spam
+    ascii_final = [result for result in ascii_filtered if not isspam(result)]
     if account2:
-        ascii_final = reddit_pm_linkfilter(ascii_filtered) #filter the links for spam
-    else: # skip spamfilter, for testing only (FIXME)
-        ascii_final = ascii_filtered
+        # do reddit msg spamcheck
+        ascii_final = reddit_msg_linkfilter(ascii_final, account2, account1, config['SUBMISSION_ID'])
     if len(ascii_final) > display_limit:
         ascii_final = ascii_final[:display_limit] #limit the list to 5 items
     linkified = ["["+i[1]+"]("+i[0]+")" for i in ascii_final] #reformats the results into markdown links
