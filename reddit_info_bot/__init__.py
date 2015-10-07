@@ -10,6 +10,7 @@ import urllib2
 import requests
 import re
 import json
+import string
 from praw.errors import RateLimitExceeded
 from collections import OrderedDict
 from six.moves.urllib.parse import urlsplit
@@ -180,9 +181,22 @@ def give_more_info(submission_url):
     extra_message = config['EXTRA_MESSAGE']
     no_results_message = config['NO_SEARCH_RESULTS_MESSAGE']
 
+    print('Image-searching for %s' % submission_url)
+
+    # substitute videos with gif versions where possible
+    # (because search engines index those)
+    domain = domain_suffix(url)
+    if domain in ('imgur.com', 'gfycat.com'):
+        if submission_url.endswith(('.gifv', '.mp4', '.webm')):
+            submission_url = submission_url.replace('.mp4', '.gif')
+            submission_url = submission_url.replace('.gifv', '.gif')
+            submission_url = submission_url.replace('.webm', '.gif')
+            print('Found %s video - substituting with gif url: %s' % (domain, submission_url))
+        elif urlsplit(submission_url).path.rstrip(string.ascii_lowercase+string.ascii_uppercase) == '/':
+            submission_url += '.gif'
+            print('Found %s video - using gif url: %s' % (domain, submission_url))
+
     link = re.sub("/","*", submission_url)
-    print(link)
-    print('searching')
     results = ''
     i = 0
     while not results:
@@ -512,6 +526,7 @@ if __name__ == "__main__" or True: # always do this, for now
     #account2 = None
     #url = 'https://i.imgur.com/yZKXDPV.jpg'
     #print(give_more_info(url))
+    #sys.exit()
 
     (account1, account2, user, subreddit_list) = reddit_login(config)
 
