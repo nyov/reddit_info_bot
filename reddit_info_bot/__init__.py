@@ -45,11 +45,8 @@ def _reddit_spamfilter(results, sending_account, receiving_account, submission_i
             verified_results += result
     return verified_results
 
-def _format_results(results, display_limit=5):
-    """Format search results
-    Returns a markdown-formatted and spam-filtered list of the results.
-
-    `display_limit`: pass `None` to disable
+def _filter_results(results, account1, account2, check_submission_id):
+    """Filter search results
     """
     def sanitize_string(string):
         # strip possible control characters
@@ -61,6 +58,20 @@ def _format_results(results, display_limit=5):
         string = string.strip()
         return string
 
+    results = [[sanitize_string(v) for v in result]
+               for result in results]
+
+    # filter results for spam
+    results = [result for result in results if not isspam(result)]
+    if account2: # do reddit msg spamcheck if second account is configured
+        results = _reddit_spamfilter(results, account2, account1, check_submission_id)
+
+    return results
+
+def _format_results(results):
+    """Format search results
+    Returns a markdown-formatted and spam-filtered list of the results.
+    """
     def escape_markdown(string):
         # escape markdown characters
         # from https://daringfireball.net/projects/markdown/syntax#backslash
@@ -82,20 +93,8 @@ def _format_results(results, display_limit=5):
         string = ''.join(c if c not in escape_chars else '\%s' % c for c in string)
         return string
 
-    results = [[sanitize_string(v) for v in result]
-               for result in results]
-
-    # filter results for spam
-    results = [result for result in results if not isspam(result)]
-    if account2: # do reddit msg spamcheck if second account is configured
-        results = _reddit_spamfilter(results, account2, account1, config['SUBMISSION_ID'])
-
     results = [[escape_markdown(v) for v in result]
                for result in results]
-
-    # limit output to `display_limit` results
-    if display_limit:
-        results = results[:display_limit]
 
     # format output
     markdown_links = ['[%s](%s)' % (text, url) for url, text in results]
@@ -112,7 +111,9 @@ def comment_exists(comment):
     print('Comment was deleted')
     return False
 
-def give_more_info(submission_url):
+def give_more_info(submission_url, display_limit=None):
+    """
+    """
     extra_message = config['EXTRA_MESSAGE']
     no_results_message = config['NO_SEARCH_RESULTS_MESSAGE']
 
@@ -183,8 +184,15 @@ def give_more_info(submission_url):
             del search_engines[engine]
             continue
 
+        # spam-filter results
+        filtered  = _filter_results(result, account1, account2, config['SUBMISSION_ID'])
+
+        # limit output to `display_limit` results
+        if display_limit:
+            filtered = filtered[:display_limit]
+
         # format results
-        formatted = _format_results(result)
+        formatted = _format_results(filtered)
 
         reply += message % (provider, formatted)
 
@@ -206,13 +214,13 @@ def reply_to_potential_comment(comment, account):
     done = False
     try:
         reply = config["INFORMATION_REPLY"]
-        if botmode == COMMENT:
+        if ACTMODE & ACTMODE_LOG:
+            print(reply)
+        if ACTMODE & ACTMODE_COMMENT:
             if comment_exists(comment):
                 comment.reply(reply)
-        elif botmode == LOG:
-            print(reply)
-        elif botmode == PM:
-             print(account.send_message(comment.author, 'Info Bot Information', reply))
+        if ACTMODE & ACTMODE_PM:
+            print(account.send_message(comment.author, 'Info Bot Information', reply))
         print("replied to potential comment: {0}".format(comment.body))
         done = True
         already_done.append(comment.id)
@@ -260,15 +268,17 @@ def find_username_mentions():
             # oops
             print('u', end='')
             continue
-        reply = give_more_info(comment.submission.url)
+        reply = give_more_info(comment.submission.url, display_limit=5)
         try:
-            if botmode == LOG:
+            if ACTMODE & ACTMODE_LOG:
                 print(reply)
-            else:
+            if ACTMODE & ACTMODE_COMMENT:
                 if comment_exists(comment):
                     comment.reply(reply)
                     print('replied to comment with more info', end='')
-            print('.', end='')
+            #if ACTMODE & ACTMODE_PM:
+            #    print(account1.send_message(comment.author, 'Info Bot Information', reply))
+            print('>', end='')
         except requests.HTTPError:
             print('HTTP Error. Bot might be banned from this sub')
 
@@ -336,6 +346,7 @@ def find_keywords(all_comments):
         while not done:
             try:
                 done = reply_to_potential_comment(comment, account1)
+                print('>', end='')
             except RateLimitExceeded as e:
                 print('submission rate exceeded! attempt %i' % attempt)
                 print(e)
@@ -352,8 +363,14 @@ def check_downvotes(user, start_time):
         my_comments = user.get_comments(limit=None)
         for comment in my_comments:
             if comment.score < 1:
-                comment.delete()
-                print('deleted a comment')
+                comment_id = comment.id
+                if ACTMODE & ACTMODE_COMMENT:
+                    comment.delete()
+                    print('deleted comment: %s' % comment_id)
+                #if ACTMODE & ACTMODE_PM:
+                #    print('should delete comment: %s' % comment_id)
+                if ACTMODE & ACTMODE_LOG:
+                    print('would have deleted comment: %s' % comment_id)
         return current_time
     return start_time
 
@@ -427,17 +444,32 @@ if __name__ == "__main__" or True: # always do this, for now
     if wd:
         if os.path.exists(wd):
             os.chdir(wd)
+            if os.getcwd() != wd:
+                errmsg = 'Switching to workdir failed!'
+                sys.exit(errmsg)
         else: # BOT_WORKDIR was requested, but does not exist. That's a failure.
             errmsg = "Requested BOT_WORKDIR '{0}' does not exist, aborting.".format(wd)
             sys.exit(errmsg)
     else:
         print('No BOT_WORKDIR was specified in the config, running in current directory.')
 
-    COMMENT = 'comment'
-    PM = 'pm'
-    LOG = 'log'
-    botmode = config['MODE']
-    botmode = botmode.lower()
+    # how the bot handles actions
+    ACTMODE_NONE    = 0 # no action
+    ACTMODE_LOG     = 1 # log action
+    ACTMODE_PM      = 2 # pm/message action
+    ACTMODE_COMMENT = 4 # (reddit-) comment action
+    ACTMODES = (ACTMODE_LOG | ACTMODE_PM | ACTMODE_COMMENT)
+
+    # TODO: get a list from config
+    botmodes = [config['MODE'].lower()]
+    ACTMODE = ACTMODE_NONE
+    for botmode in botmodes:
+        if botmode == 'comment':
+            ACTMODE |= ACTMODE_COMMENT
+        if botmode == 'pm':
+            ACTMODE |= ACTMODE_PM
+        if botmode == 'log':
+            ACTMODE |= ACTMODE_LOG
 
     time_limit_minutes = config['TIME_LIMIT_MINUTES'] #how long before a comment will be ignored for being too old
     comment_deleting_wait_time = config["DELETE_WAIT_TIME"] #how many minutes to wait before deleting downvoted comments
@@ -447,9 +479,9 @@ if __name__ == "__main__" or True: # always do this, for now
         with open("already_done.p", "rb") as f:
             already_done = pickle.load(f)
 
-    #account2 = None
+    #account1 = account2 = None
     #url = 'https://i.imgur.com/yZKXDPV.jpg'
-    #print(give_more_info(url))
+    #print(give_more_info(url, display_limit=5))
     #sys.exit()
 
     (account1, account2, user, subreddit_list) = reddit_login(config)
