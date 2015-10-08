@@ -29,82 +29,12 @@ from .search import (
     #get_karmadecay_results,
     get_tineye_results,
 )
-from .reddit import reddit_login
-from .antispam import spamfilter_lists
-from .util import domain_suffix, tld_from_suffix
-from .util import remove_control_characters
+from .reddit import reddit_login, reddit_msg_linkfilter
+from .antispam import spamfilter_lists, isspam
+from .util import domain_suffix, remove_control_characters
 
 logger = logging.getLogger(__name__)
 
-
-def isspam(result):
-    """check search result for spammy content
-    """
-    url, text = result[0].lower(), result[1].lower()
-
-    if len(url) < 6: # shorter than '//a.bc' can't be a useable absolute HTTP URL
-        print('Skipping invalid URL: "{0}"'.format(url))
-        return True
-    # domain from URL using publicsuffix (not a validator)
-    domain = domain_suffix(url)
-    if not domain:
-        print('Failed to lookup PSL/Domain for: "{0}"'.format(url))
-        return True
-    tld = tld_from_suffix(domain)
-    if not tld or tld == '':
-        print('Failed to lookup TLD from publicsuffix for: "{0}"'.format(url))
-        return True
-    if domain in whitelist:
-        # higher prio than the blacklist
-        return False
-    if domain in hard_blacklist:
-        print('Skipping blacklisted Domain "{0}": {1}'.format(domain, url))
-        return True
-    if tld in tld_blacklist:
-        print('Skipping blacklisted TLD "{0}": {1}'.format(tld, url))
-        return True
-    if url in link_filter:
-        print('Skipping spammy link match "{0}": {1}'.format(link_filter[url], url))
-        return True
-    if text in text_filter:
-        print('Skipping spammy text match "{0}": "{1}"'.format(text_filter[text], text))
-        return True
-    # no spam, result is good
-    return False
-
-def reddit_msg_linkfilter(messages, sending_account, receiving_account, submission_id):
-    """ Post reddit comments with one account and check from second account
-    to see if they were filtered out.
-    """
-    queue = []
-    submission = sending_account.get_submission(submission_id)
-    # post with first account
-    for message in messages:
-        try:
-            submission.add_comment(message)
-        except Exception as e:
-            print('reddit_msg_linkfilter failed to post "%s"' % (message,))
-            print(e)
-            # FIXME: check exception for http errors (retry?) or other (spam?)
-            continue
-        queue += [message]
-    time.sleep(7) # wait a bit
-    # fetch posts from second account
-    verified_messages = []
-    fetched_messages = receiving_account.get_unread(limit=40)
-    for msg in fetched_messages:
-        if msg.body in queue:
-            message = queue.pop(queue.index(msg.body))
-            msg.mark_as_read()
-            verified_messages += [message]
-        else:
-            print('reddit_msg_linkfilter skipping unknown message "%s"' % msg.body)
-    if queue: # messages posted but not found
-        print('reddit_msg_linkfilter posted but did not find: %s' % str(queue))
-    failed_messages = [m for m in messages if (m not in verified_messages and m not in queue)]
-    if failed_messages:
-        print('reddit_msg_linkfilter failed on: %s' % str(failed_messages))
-    return verified_messages
 
 def _reddit_spamfilter(results, sending_account, receiving_account, submission_id):
     urls = set([url for url, text in results])
@@ -115,18 +45,33 @@ def _reddit_spamfilter(results, sending_account, receiving_account, submission_i
             verified_results += result
     return verified_results
 
-def _format_results(results, display_limit=5): #returns a formatted and spam filtered list of the results. Change 5 to adjust number of results to display per provider. Fi
+def _filter_results(results, account1, account2, check_submission_id):
+    """Filter search results
+    """
     def sanitize_string(string):
         # strip possible control characters
         string = remove_control_characters(string)
 
-        # also strip non-ascii characters (old code)
-        # (not necessary, general unicode should be allowed)
+        # also strip non-ascii characters
         #string = ''.join(c for c in string if ord(c) in range(32, 127))
 
         string = string.strip()
         return string
 
+    results = [[sanitize_string(v) for v in result]
+               for result in results]
+
+    # filter results for spam
+    results = [result for result in results if not isspam(result)]
+    if account2: # do reddit msg spamcheck if second account is configured
+        results = _reddit_spamfilter(results, account2, account1, check_submission_id)
+
+    return results
+
+def _format_results(results):
+    """Format search results
+    Returns a markdown-formatted and spam-filtered list of the results.
+    """
     def escape_markdown(string):
         # escape markdown characters
         # from https://daringfireball.net/projects/markdown/syntax#backslash
@@ -148,19 +93,8 @@ def _format_results(results, display_limit=5): #returns a formatted and spam fil
         string = ''.join(c if c not in escape_chars else '\%s' % c for c in string)
         return string
 
-    results = [[sanitize_string(v) for v in result]
-               for result in results]
-
-    # filter results for spam
-    results = [result for result in results if not isspam(result)]
-    if account2: # do reddit msg spamcheck if second account is configured
-        results = _reddit_spamfilter(results, account2, account1, config['SUBMISSION_ID'])
-
     results = [[escape_markdown(v) for v in result]
                for result in results]
-
-    # limit output to `display_limit` results
-    results = results[:display_limit]
 
     # format output
     markdown_links = ['[%s](%s)' % (text, url) for url, text in results]
@@ -177,7 +111,9 @@ def comment_exists(comment):
     print('Comment was deleted')
     return False
 
-def give_more_info(submission_url):
+def give_more_info(submission_url, display_limit=None):
+    """
+    """
     extra_message = config['EXTRA_MESSAGE']
     no_results_message = config['NO_SEARCH_RESULTS_MESSAGE']
 
@@ -185,12 +121,12 @@ def give_more_info(submission_url):
 
     # substitute videos with gif versions where possible
     # (because search engines index those)
-    domain = domain_suffix(url)
+    domain = domain_suffix(submission_url)
     if domain in ('imgur.com', 'gfycat.com'):
-        if submission_url.endswith(('.gifv', '.mp4', '.webm')):
-            submission_url = submission_url.replace('.mp4', '.gif')
-            submission_url = submission_url.replace('.gifv', '.gif')
-            submission_url = submission_url.replace('.webm', '.gif')
+        fileformats = ('.gifv', '.mp4', '.webm', '.ogg')
+        if submission_url.endswith(fileformats):
+            for ff in fileformats:
+                submission_url = submission_url.replace(ff, '.gif')
             print('Found %s video - substituting with gif url: %s' % (domain, submission_url))
         elif urlsplit(submission_url).path.rstrip(string.ascii_lowercase+string.ascii_uppercase) == '/':
             submission_url += '.gif'
@@ -248,8 +184,15 @@ def give_more_info(submission_url):
             del search_engines[engine]
             continue
 
+        # spam-filter results
+        filtered  = _filter_results(result, account1, account2, config['SUBMISSION_ID'])
+
+        # limit output to `display_limit` results
+        if display_limit:
+            filtered = filtered[:display_limit]
+
         # format results
-        formatted = _format_results(result)
+        formatted = _format_results(filtered)
 
         reply += message % (provider, formatted)
 
@@ -263,31 +206,28 @@ def give_more_info(submission_url):
 # Bot actions
 #
 
-def reply_to_potential_comment(comment, attempt): #uncomment 'return true' to disable this feature
-    if (not config['USE_KEYWORDS']):
+def reply_to_potential_comment(comment, account):
+    if not config['USE_KEYWORDS']:
         return True
     if not any(i in str(comment.submission.url) for i in config['IMAGE_FORMATS']):
         return True
     done = False
     try:
         reply = config["INFORMATION_REPLY"]
-        if botmode == COMMENT:
+        if ACTMODE & ACTMODE_LOG:
+            print(reply)
+        if ACTMODE & ACTMODE_COMMENT:
             if comment_exists(comment):
                 comment.reply(reply)
-        elif botmode == LOG:
-            print(reply)
-        elif botmode == PM:
-             print(account1.send_message(comment.author, 'Info Bot Information', reply))
+        if ACTMODE & ACTMODE_PM:
+            print(account.send_message(comment.author, 'Info Bot Information', reply))
         print("replied to potential comment: {0}".format(comment.body))
         done = True
         already_done.append(comment.id)
-    except requests.HTTPError:
+    except requests.HTTPError as e:
         done = True
-        print('HTTP Error. Bot might be banned from this sub')
+        print('HTTP Error. Bot might be banned from this sub:', e)
         already_done.append(comment.id)
-    except RateLimitExceeded:
-        print('submission rate exceeded! attempt %i'%attempt)
-        time.sleep(30)
     return done
 
 def find_username_mentions():
@@ -328,15 +268,17 @@ def find_username_mentions():
             # oops
             print('u', end='')
             continue
-        reply = give_more_info(comment.submission.url)
+        reply = give_more_info(comment.submission.url, display_limit=5)
         try:
-            if botmode == LOG:
+            if ACTMODE & ACTMODE_LOG:
                 print(reply)
-            else:
+            if ACTMODE & ACTMODE_COMMENT:
                 if comment_exists(comment):
                     comment.reply(reply)
                     print('replied to comment with more info', end='')
-            print('.', end='')
+            #if ACTMODE & ACTMODE_PM:
+            #    print(account1.send_message(comment.author, 'Info Bot Information', reply))
+            print('>', end='')
         except requests.HTTPError:
             print('HTTP Error. Bot might be banned from this sub')
 
@@ -385,8 +327,6 @@ def find_keywords(all_comments):
         if not any(i for i in submission_comments if i.body == config['INFORMATION_REPLY']): #If there are information replies
             print('R', end='')
             continue
-        # previously determined already
-        #if any(word.lower() in comment.body.lower() for word in keyword_list):
         try:
             print("\ndetected keyword: "+ comment.body.lower())
         except UnicodeEncodeError:
@@ -404,19 +344,33 @@ def find_keywords(all_comments):
         done = False
         attempt = 1
         while not done:
-            done = reply_to_potential_comment(comment, attempt)
+            try:
+                done = reply_to_potential_comment(comment, account1)
+                print('>', end='')
+            except RateLimitExceeded as e:
+                print('submission rate exceeded! attempt %i' % attempt)
+                print(e)
+                time.sleep(30)
+
     #se = '/'.join(['%d %s' % (v, k) for k, v in stats])
     #print(' (%d comments - %s)' % (count, se))
     print(' (%d comments)' % (count,))
 
 def check_downvotes(user, start_time):
+    # FIXME: should check for comment's creation time
     current_time = int(time.time()/60)
     if (current_time - start_time) >= comment_deleting_wait_time:
         my_comments = user.get_comments(limit=None)
         for comment in my_comments:
             if comment.score < 1:
-                comment.delete()
-                print('deleted a comment')
+                comment_id = comment.id
+                if ACTMODE & ACTMODE_COMMENT:
+                    comment.delete()
+                    print('deleted comment: %s' % comment_id)
+                #if ACTMODE & ACTMODE_PM:
+                #    print('should delete comment: %s' % comment_id)
+                if ACTMODE & ACTMODE_LOG:
+                    print('would have deleted comment: %s' % comment_id)
         return current_time
     return start_time
 
@@ -467,12 +421,10 @@ def main():
                 find_keywords(all_comments)
                 print('finding username mentions: ', end='')
                 find_username_mentions()
-                start_time = check_downvotes(user,start_time)
+                start_time = check_downvotes(user, start_time)
 
                 with open("already_done.p", "wb") as df:
                     pickle.dump(already_done, df)
-                with open("blacklist.p", "wb") as bf:
-                    pickle.dump(blacklist, bf)
 
                 print('Finished a round of comments. Waiting two seconds.\n')
                 time.sleep(2)
@@ -492,40 +444,44 @@ if __name__ == "__main__" or True: # always do this, for now
     if wd:
         if os.path.exists(wd):
             os.chdir(wd)
+            if os.getcwd() != wd:
+                errmsg = 'Switching to workdir failed!'
+                sys.exit(errmsg)
         else: # BOT_WORKDIR was requested, but does not exist. That's a failure.
             errmsg = "Requested BOT_WORKDIR '{0}' does not exist, aborting.".format(wd)
             sys.exit(errmsg)
     else:
         print('No BOT_WORKDIR was specified in the config, running in current directory.')
 
-    COMMENT = 'comment'
-    PM = 'pm'
-    LOG = 'log'
-    botmode = config['MODE']
-    botmode = botmode.lower()
+    # how the bot handles actions
+    ACTMODE_NONE    = 0 # no action
+    ACTMODE_LOG     = 1 # log action
+    ACTMODE_PM      = 2 # pm/message action
+    ACTMODE_COMMENT = 4 # (reddit-) comment action
+    ACTMODES = (ACTMODE_LOG | ACTMODE_PM | ACTMODE_COMMENT)
+
+    # TODO: get a list from config
+    botmodes = [config['MODE'].lower()]
+    ACTMODE = ACTMODE_NONE
+    for botmode in botmodes:
+        if botmode == 'comment':
+            ACTMODE |= ACTMODE_COMMENT
+        if botmode == 'pm':
+            ACTMODE |= ACTMODE_PM
+        if botmode == 'log':
+            ACTMODE |= ACTMODE_LOG
 
     time_limit_minutes = config['TIME_LIMIT_MINUTES'] #how long before a comment will be ignored for being too old
     comment_deleting_wait_time = config["DELETE_WAIT_TIME"] #how many minutes to wait before deleting downvoted comments
-
-    # load spam lists
-    (
-        link_filter,
-        text_filter,
-        word_filter,
-        hard_blacklist,
-        whitelist,
-        tld_blacklist,
-        blacklist,
-    ) = spamfilter_lists()
 
     already_done = []
     if os.path.isfile("already_done.p"):
         with open("already_done.p", "rb") as f:
             already_done = pickle.load(f)
 
-    #account2 = None
+    #account1 = account2 = None
     #url = 'https://i.imgur.com/yZKXDPV.jpg'
-    #print(give_more_info(url))
+    #print(give_more_info(url, display_limit=5))
     #sys.exit()
 
     (account1, account2, user, subreddit_list) = reddit_login(config)

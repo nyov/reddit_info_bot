@@ -8,6 +8,7 @@ import pickle
 import urllib2
 import re
 import json
+from .util import domain_suffix, tld_from_suffix
 
 logger = logging.getLogger(__name__)
 
@@ -78,3 +79,51 @@ def spamfilter_lists():
         tld_blacklist,
         blacklist,
     )
+
+
+# load spam lists
+(
+    link_filter,
+    text_filter,
+    word_filter,
+    hard_blacklist,
+    whitelist,
+    tld_blacklist,
+    blacklist,
+) = spamfilter_lists()
+
+
+def isspam(result):
+    """check search result for spammy content
+    """
+    url, text = result[0].lower(), result[1].lower()
+
+    if len(url) < 6: # shorter than '//a.bc' can't be a useable absolute HTTP URL
+        print('Skipping invalid URL: "{0}"'.format(url))
+        return True
+    # domain from URL using publicsuffix (not a validator)
+    domain = domain_suffix(url)
+    if not domain:
+        print('Failed to lookup PSL/Domain for: "{0}"'.format(url))
+        return True
+    tld = tld_from_suffix(domain)
+    if not tld or tld == '':
+        print('Failed to lookup TLD from publicsuffix for: "{0}"'.format(url))
+        return True
+    if domain in whitelist:
+        # higher prio than the blacklist
+        return False
+    if domain in hard_blacklist:
+        print('Skipping blacklisted Domain "{0}": {1}'.format(domain, url))
+        return True
+    if tld in tld_blacklist:
+        print('Skipping blacklisted TLD "{0}": {1}'.format(tld, url))
+        return True
+    if url in link_filter:
+        print('Skipping spammy link match "{0}": {1}'.format(link_filter[url], url))
+        return True
+    if text in text_filter:
+        print('Skipping spammy text match "{0}": "{1}"'.format(text_filter[text], text))
+        return True
+    # no spam, result is good
+    return False
