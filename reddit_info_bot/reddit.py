@@ -34,7 +34,7 @@ def reddit_msg_linkfilter(messages, sending_account, receiving_account, submissi
     to see if they were filtered out.
     """
     queue = []
-    submission = sending_account.get_submission(submission_id)
+    submission = sending_account.get_submission(submission_id=submission_id)
     # post with first account
     for message in messages:
         try:

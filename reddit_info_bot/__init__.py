@@ -1,5 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+"""
+reddit_info_bot
+"""
 from __future__ import (absolute_import, unicode_literals, print_function)
 import sys
 import os
