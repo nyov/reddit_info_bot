@@ -314,12 +314,10 @@ def find_username_mentions():
         try:
             if ACTMODE & ACTMODE_LOG:
                 print(reply)
-            if ACTMODE & ACTMODE_COMMENT:
+            if ACTMODE & ACTMODE_COMMENT or ACTMODE & ACTMODE_PM:
                 if comment_exists(comment):
                     comment.reply(reply)
                     print('replied to comment with more info', end='')
-            #if ACTMODE & ACTMODE_PM:
-            #    print(account1.send_message(comment.author, 'Info Bot Information', reply))
             print('>', end='')
         except requests.HTTPError as e:
             print('HTTP Error. Bot might be banned from this sub')
