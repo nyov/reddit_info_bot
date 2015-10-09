@@ -18,7 +18,8 @@ def reddit_login(config):
     user_agent = config['BOT_NAME']
 
     account1 = r_login(user_agent, config['USER_NAME'], config['PASSWORD'])
-    if config['SECOND_ACCOUNT_NAME'] and config['SECOND_ACCOUNT_PASS']:
+    if 'SECOND_ACCOUNT_NAME' in config and config['SECOND_ACCOUNT_NAME'] \
+            and 'SECOND_ACCOUNT_PASS' in config and config['SECOND_ACCOUNT_PASS']:
         # load a second praw instance for the second account (the one used to check the spam links)
         account2 = r_login(user_agent, config['SECOND_ACCOUNT_NAME'], config['SECOND_ACCOUNT_PASS'])
     else:
