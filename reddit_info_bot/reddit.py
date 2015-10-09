@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import praw
+import time
 
 def r_login(user_agent, username, password):
     """login to reddit account"""
