@@ -18,13 +18,7 @@ from praw.errors import RateLimitExceeded
 from collections import OrderedDict
 from six.moves.urllib.parse import urlsplit
 
-# version
-import pkgutil
-__version__ = pkgutil.get_data(__package__ or __name__, 'VERSION').decode('ascii').strip()
-version_info = tuple(int(v) if v.isdigit() else v
-                     for v in __version__.split('.'))
-del pkgutil
-
+from .version import __version__, version_info
 from .search import (
     #get_google_results,
     #get_bing_results,
