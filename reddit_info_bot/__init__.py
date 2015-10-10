@@ -117,6 +117,7 @@ def comment_exists(comment):
 def give_more_info(submission_url, display_limit=None):
     """
     """
+    from base64 import b64decode
     extra_message = config['EXTRA_MESSAGE']
     no_results_message = config['NO_SEARCH_RESULTS_MESSAGE']
 
@@ -138,10 +139,21 @@ def give_more_info(submission_url, display_limit=None):
     link = re.sub("/","*", submission_url)
     results = ''
     i = 0
+    app = unicode(b64decode('aHR0cHM6Ly9zbGVlcHktdHVuZHJhLTU2NTkuaGVyb2t1YXBwLmNvbS9zZWFyY2gv'))
     while not results:
         i += 1
         try:
-            response = urllib2.urlopen("https://sleepy-tundra-5659.herokuapp.com/search/"+link).read()
+            if 'DEBUG' in config and config['DEBUG']:
+                ### for debugging, cache response
+                _dumpfile = 'proxydebug'
+                if not os.path.exists(_dumpfile):
+                    response = urllib2.urlopen(app+link).read()
+                    with open(_dumpfile, 'wb') as f:
+                        f.write(response)
+                with open(_dumpfile, 'rb') as f:
+                    response = f.read()
+            else:
+                response = urllib2.urlopen(app+link).read()
             results = eval(response)
         except urllib2.HTTPError as e:
             print(e)
@@ -182,6 +194,28 @@ def give_more_info(submission_url, display_limit=None):
         except IndexError as e:
             print('Failed fetching %s results: %s' % (provider, e))
 
+        # sanity check on app's response:
+        _dropped = _ok = 0
+        _good = []
+        for idx, item in enumerate(result):
+            # result should always be '(url, text)', nothing else
+            if len(item) != 2:
+                _dropped += 1
+                continue
+            (url, text) = item
+            # quick check for *impossible* urls
+            if not url.strip().startswith(('http', 'ftp', '//')): # http | ftp | //:
+                _dropped += 1
+                continue
+            _ok += 1
+            _good += [item]
+        result = _good
+
+        if _dropped > 0:
+            print('Dropped %d invalid result(s) from proxy for %s, %d result(s) remaining' % \
+                    (_dropped, provider, _ok))
+        del _dropped, _ok, _good
+
         if not result:
             reply += message % (provider, 'No available links from this search engine found.')
             del search_engines[engine]
@@ -189,6 +223,11 @@ def give_more_info(submission_url, display_limit=None):
 
         # spam-filter results
         filtered  = _filter_results(result, account1, account2, config['SUBMISSION_ID'])
+
+        if not filtered:
+            reply += message % (provider, 'No available links from this search engine found.')
+            del search_engines[engine]
+            continue
 
         # limit output to `display_limit` results
         if display_limit:
@@ -275,15 +314,14 @@ def find_username_mentions():
         try:
             if ACTMODE & ACTMODE_LOG:
                 print(reply)
-            if ACTMODE & ACTMODE_COMMENT:
+            if ACTMODE & ACTMODE_COMMENT or ACTMODE & ACTMODE_PM:
                 if comment_exists(comment):
                     comment.reply(reply)
                     print('replied to comment with more info', end='')
-            #if ACTMODE & ACTMODE_PM:
-            #    print(account1.send_message(comment.author, 'Info Bot Information', reply))
             print('>', end='')
-        except requests.HTTPError:
+        except requests.HTTPError as e:
             print('HTTP Error. Bot might be banned from this sub')
+            print(e)
 
         already_done.append(comment.id)
         comment.mark_as_read()
@@ -484,6 +522,7 @@ if __name__ == "__main__" or True: # always do this, for now
 
     #account1 = account2 = None
     #url = 'https://i.imgur.com/yZKXDPV.jpg'
+    #url = 'http://i.imgur.com/mQ7Tuye.gifv'
     #print(give_more_info(url, display_limit=5))
     #sys.exit()
 
