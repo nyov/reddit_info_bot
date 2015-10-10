@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import (absolute_import, unicode_literals, print_function)
-
+import os
 import codecs
 import unicodedata
+import six
 from six.moves.urllib.parse import urlsplit
 from six.moves.urllib.request import urlopen, Request
 from publicsuffix import PublicSuffixList
@@ -47,6 +48,20 @@ def domain_suffix(link):
 
 def remove_control_characters(string):
     return ''.join(c for c in string if unicodedata.category(c)[0] != 'C')
+
+def string_translate(text, intab, outtab):
+    """Helper function for string translation
+
+    Replaces characters in `intab` with replacements from `outtab`
+    inside `text`.
+    """
+    if six.PY2:
+        from string import maketrans
+        transtab = maketrans(intab, outtab)
+        text = bytes(text)
+    else:
+        transtab = text.maketrans(intab, outtab)
+    return text.translate(transtab)
 
 
 # mock objects to emulate praw interface
