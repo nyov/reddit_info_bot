@@ -14,7 +14,7 @@ import requests
 import re
 import json
 import string
-from praw.errors import RateLimitExceeded
+import praw.errors
 from collections import OrderedDict
 from six.moves.urllib.parse import urlsplit
 
@@ -108,12 +108,13 @@ def comment_exists(comment):
     print('Comment was deleted')
     return False
 
-def give_more_info(submission_url, display_limit=None):
+def give_more_info(submission_url, display_limit=None, config):
     """
     """
     from base64 import b64decode
     extra_message = config['EXTRA_MESSAGE']
     no_results_message = config['NO_SEARCH_RESULTS_MESSAGE']
+    submission_id = config['SUBMISSION_ID']
 
     print('Image-searching for %s' % submission_url)
 
@@ -128,7 +129,7 @@ def give_more_info(submission_url, display_limit=None):
             print('Found %s video - substituting with gif url: %s' % (domain, submission_url))
         elif urlsplit(submission_url).path.rstrip(string.ascii_lowercase+string.ascii_uppercase) == '/':
             submission_url += '.gif'
-            print('Found %s video - using gif url: %s' % (domain, submission_url))
+            print('Found potential %s video - using gif url: %s' % (domain, submission_url))
 
     link = re.sub("/","*", submission_url)
     results = ''
@@ -216,7 +217,7 @@ def give_more_info(submission_url, display_limit=None):
             continue
 
         # spam-filter results
-        filtered  = _filter_results(result, account1, account2, config['SUBMISSION_ID'])
+        filtered  = _filter_results(result, account1, account2, submission_id)
 
         if not filtered:
             reply += message % (provider, 'No available links from this search engine found.')
@@ -242,7 +243,14 @@ def give_more_info(submission_url, display_limit=None):
 # Bot actions
 #
 
-def reply_to_potential_comment(comment, account):
+# how the bot handles actions
+ACTMODE_NONE    = 0 # no action
+ACTMODE_LOG     = 1 # log action
+ACTMODE_PM      = 2 # pm/message action
+ACTMODE_COMMENT = 4 # (reddit-) comment action
+ACTMODES = (ACTMODE_LOG | ACTMODE_PM | ACTMODE_COMMENT)
+
+def reply_to_potential_comment(comment, account, config):
     if not config['USE_KEYWORDS']:
         return True
     if not any(i in str(comment.submission.url) for i in config['IMAGE_FORMATS']):
@@ -266,7 +274,9 @@ def reply_to_potential_comment(comment, account):
         already_done.append(comment.id)
     return done
 
-def find_username_mentions():
+def find_username_mentions(config):
+    time_limit_minutes = config['TIME_LIMIT_MINUTES'] #how long before a comment will be ignored for being too old
+
     count = 0
     for comment in account1.get_unread(limit=100):
         count += 1
@@ -304,7 +314,7 @@ def find_username_mentions():
             # oops
             print('u', end='')
             continue
-        reply = give_more_info(comment.submission.url, display_limit=5)
+        reply = give_more_info(comment.submission.url, display_limit=5, config)
         try:
             if ACTMODE & ACTMODE_LOG:
                 print(reply)
@@ -324,8 +334,10 @@ def find_username_mentions():
     print(' (%d comments)' % (count,))
 
 
-def find_keywords(all_comments):
+def find_keywords(all_comments, config):
     keyword_list = config['KEYWORDS']
+    time_limit_minutes = config['TIME_LIMIT_MINUTES'] #how long before a comment will be ignored for being too old
+
     count = 0
     for comment in all_comments:
         count += 1
@@ -349,10 +361,6 @@ def find_keywords(all_comments):
         if not any(word.lower() in body.lower() for word in keyword_list):
             print('p', end='')
             continue
-        ##comments = account1.get_submission(url="https://www.reddit.com/r/{0}/comments/{1}/aaaa/{2}".format(comment.subreddit, comment.link_id[3:], comment.id)).comments
-        #comments = comment.submission.comments
-        #if comments: #get_submission returns a valid comment object
-        #    comment = comments[0]
         top_level = [i.replies for i in comment.submission.comments]
         submission_comments = []
         for i in top_level:
@@ -364,27 +372,20 @@ def find_keywords(all_comments):
         if not any(i for i in submission_comments if i.body == config['INFORMATION_REPLY']): #If there are information replies
             print('R', end='')
             continue
-        try:
-            print("\ndetected keyword: "+ comment.body.lower())
-        except UnicodeEncodeError:
-            print("\ndetected keyword: ", end="")
-            try:
-                print(comment.body)
-            except: pass #print(''.join(k for k in i[j] if (ord(k)<128 and k not in '[]()')) for j in xrange(2))
+        print('\ndetected keyword: %s' % comment.body.lower())
         if comment.id in already_done:
             print('r', end='')
             continue
         if comment.author == user:
-            # oops
             print('u', end='')
             continue
         done = False
         attempt = 1
         while not done:
             try:
-                done = reply_to_potential_comment(comment, account1)
+                done = reply_to_potential_comment(comment, account1, config)
                 print('>', end='')
-            except RateLimitExceeded as e:
+            except praw.errors.RateLimitExceeded as e:
                 print('submission rate exceeded! attempt %i' % attempt)
                 print(e)
                 time.sleep(30)
@@ -393,7 +394,7 @@ def find_keywords(all_comments):
     #print(' (%d comments - %s)' % (count, se))
     print(' (%d comments)' % (count,))
 
-def check_downvotes(user, start_time):
+def check_downvotes(user, start_time, comment_deleting_wait_time):
     # FIXME: should check for comment's creation time
     current_time = int(time.time()/60)
     if (current_time - start_time) >= comment_deleting_wait_time:
@@ -443,22 +444,30 @@ def get_all_comments(stream):
     return feed_comments
 
 
-def main():
+def main(config, account1, account2, user, subreddit_list, comment_stream_urls):
     start_time = time.time()
+    comment_deleting_wait_time = config["DELETE_WAIT_TIME"] #how many minutes to wait before deleting downvoted comments
+
+    already_done = []
+    if os.path.isfile("already_done.p"):
+        with open("already_done.p", "rb") as f:
+            already_done = pickle.load(f)
+
     print('Starting run...')
     while True:
         try:
             for count, stream in enumerate(comment_stream_urls): #uses separate comment streams for large subreddit list due to URL length limit
                 print('visiting comment stream %d/%d "%s..."' % (count+1, len(comment_stream_urls), str(stream)[:60]))
                 a = time.time()
-                all_comments = get_all_comments(stream)
-                if not all_comments:
+                feed_comments = stream.get_comments()
+                #feed_comments = stream.get_comments(limit=None) # all
+                if not feed_comments:
                     continue
                 print(time.time()-a)
-                find_keywords(all_comments)
+                find_keywords(feed_comments, config)
                 print('finding username mentions: ', end='')
-                find_username_mentions()
-                start_time = check_downvotes(user, start_time)
+                find_username_mentions(config)
+                start_time = check_downvotes(user, start_time, comment_deleting_wait_time)
 
                 with open("already_done.p", "wb") as df:
                     pickle.dump(already_done, df)
@@ -488,19 +497,14 @@ if __name__ == "__main__" or True: # always do this, for now
             errmsg = "Requested BOT_WORKDIR '{0}' does not exist, aborting.".format(wd)
             sys.exit(errmsg)
     else:
-        print('No BOT_WORKDIR was specified in the config, running in current directory.')
-
-    # how the bot handles actions
-    ACTMODE_NONE    = 0 # no action
-    ACTMODE_LOG     = 1 # log action
-    ACTMODE_PM      = 2 # pm/message action
-    ACTMODE_COMMENT = 4 # (reddit-) comment action
-    ACTMODES = (ACTMODE_LOG | ACTMODE_PM | ACTMODE_COMMENT)
+        print('No BOT_WORKDIR in configuration, running in current directory.')
 
     # TODO: get a list from config
-    botmodes = [config['MODE'].lower()]
+    #botmodes = config['BOT_MODE']
+    botmodes = [config['MODE']]
     ACTMODE = ACTMODE_NONE
     for botmode in botmodes:
+        botmode = botmode.lower()
         if botmode == 'comment':
             ACTMODE |= ACTMODE_COMMENT
         if botmode == 'pm':
@@ -508,18 +512,10 @@ if __name__ == "__main__" or True: # always do this, for now
         if botmode == 'log':
             ACTMODE |= ACTMODE_LOG
 
-    time_limit_minutes = config['TIME_LIMIT_MINUTES'] #how long before a comment will be ignored for being too old
-    comment_deleting_wait_time = config["DELETE_WAIT_TIME"] #how many minutes to wait before deleting downvoted comments
-
-    already_done = []
-    if os.path.isfile("already_done.p"):
-        with open("already_done.p", "rb") as f:
-            already_done = pickle.load(f)
-
     #account1 = account2 = None
     #url = 'https://i.imgur.com/yZKXDPV.jpg'
     #url = 'http://i.imgur.com/mQ7Tuye.gifv'
-    #print(give_more_info(url, display_limit=5))
+    #print(give_more_info(url, display_limit=5, config))
     #sys.exit()
 
     (account1, account2, user, subreddit_list) = reddit_login(config)
@@ -533,4 +529,4 @@ if __name__ == "__main__" or True: # always do this, for now
         # lazy objects, nothing done yet
         comment_stream_urls += [comment_feed]
 
-    main()
+    main(config, account1, account2, user, subreddit_list, comment_stream_urls)
