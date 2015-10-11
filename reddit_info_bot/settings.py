@@ -1,13 +1,23 @@
+import six
+import copy
+from importlib import import_module
+
+from . import default_settings
+
+
 class Settings(object):
 
-    def __init__(self, values=None, defaults={}):
-        self.values = values.copy() if values else {}
-        self.global_defaults = defaults
+    def __init__(self, values=None):
+        self.attributes = {}
+        self.setmodule(default_settings)
+        if values is not None:
+            self.setdict(values)
 
-    def __getitem__(self, opt_name):
-        if opt_name in self.values:
-            return self.values[opt_name]
-        return getattr(self.global_defaults, opt_name, None)
+    def __getitem__(self, name):
+        value = None
+        if name in self.attributes:
+            value = self.attributes[name]
+        return value
 
     def get(self, name, default=None):
         return self[name] if self[name] is not None else default
@@ -22,10 +32,24 @@ class Settings(object):
         return float(self.get(name, default))
 
     def getlist(self, name, default=None):
-        value = self.get(name)
-        if value is None:
-            return default or []
-        elif hasattr(value, '__iter__'):
-            return value
-        else:
-            return str(value).split(',')
+        value = self.get(name, default or [])
+        if isinstance(value, six.string_types):
+            value = value.split(',')
+        return list(value)
+
+    def set(self, name, value):
+        self.attributes[name] = value
+
+    def setdict(self, values):
+        for name, value in six.iteritems(values):
+            self.set(name, value)
+
+    def setmodule(self, module):
+        if isinstance(module, six.string_types):
+            module = import_module(module)
+        for key in dir(module):
+            if key.isupper():
+                self.set(key, getattr(module, key))
+
+    def copy(self):
+        return copy.deepcopy(self)
