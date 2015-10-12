@@ -29,6 +29,7 @@ def get_filter(filter_type):
     filename = 'spamfilter_{0}.json'.format(filter_type)
     if not os.path.isfile(filename) or \
             (int(time.time() - os.path.getmtime(filename)) > 43200): # cache 24 hours
+        print('Downloading spambot.rarchives.com list: %s filters' % filter_type)
         cache_filters(filter_type)
         if not os.path.isfile(filename):
             errmsg = "Could not load spam filters. Cached files invalid or Network failure."
@@ -40,8 +41,6 @@ def get_filter(filter_type):
             filters = json.load(inf)['filters']
     except (ValueError, KeyError): # cached file contents invalid
         os.unlink(filename)
-        # retry? potential loop
-        #get_filter(filter_type)
         errmsg = "Could not load spam filters. Cached files invalid or Network failure."
         sys.exit(errmsg)
 
@@ -53,8 +52,8 @@ def spamfilter_lists():
     if os.path.isfile("blacklist.p"):
         with open("blacklist.p", "rb") as f:
             blacklist = pickle.load(f)
-    print('Adding Rarchives links to blacklist.')
     link_filter = get_filter('link') + get_filter('thumb')
+    #word_filter = get_filter('text')
     text_filter = get_filter('text') + get_filter('user')
     """for domain in link_filter:
         if 'http' not in domain and domain[0] != '.':
@@ -64,7 +63,6 @@ def spamfilter_lists():
                 if domain not in blacklist:
                     blacklist.append(domain)
     """
-    word_filter = get_filter('text')
     tld_blacklist = [''.join(letter for letter in tld if letter!=".") for tld in get_filter('tld')]
 
     hard_blacklist = []
@@ -73,7 +71,6 @@ def spamfilter_lists():
     return (
         link_filter,
         text_filter,
-        word_filter,
         hard_blacklist,
         whitelist,
         tld_blacklist,
@@ -85,7 +82,6 @@ def spamfilter_lists():
 (
     link_filter,
     text_filter,
-    word_filter,
     hard_blacklist,
     whitelist,
     tld_blacklist,
@@ -96,6 +92,9 @@ def spamfilter_lists():
 def isspam(result):
     """check search result for spammy content
     """
+    #(link_filter, text_filter, hard_blacklist,
+    # whitelist, tld_blacklist, blacklist) = spamfilter_lists()
+
     url, text = result[0].lower(), result[1].lower()
 
     if len(url) < 6: # shorter than '//a.bc' can't be a useable absolute HTTP URL
