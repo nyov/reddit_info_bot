@@ -26,87 +26,12 @@ from .search import (
     #get_karmadecay_results,
     get_tineye_results,
 )
-from .reddit import reddit_login, reddit_msg_linkfilter
-from .antispam import spamfilter_lists, isspam
-from .util import domain_suffix, remove_control_characters
+from .reddit import reddit_login, build_subreddit_feeds, _filter_results, _format_results
+from .antispam import spamfilter_lists
+from .util import domain_suffix, chwd
 
 logger = logging.getLogger(__name__)
 
-
-def _reddit_spamfilter(results, sending_account, receiving_account, submission_id):
-    urls = set([url for url, text in results])
-    verified_urls = reddit_msg_linkfilter(urls, sending_account, receiving_account, submission_id)
-    verified_results = []
-    for url, text in results:
-        if url in verified_urls:
-            verified_results += result
-    return verified_results
-
-def _filter_results(results, account1, account2, check_submission_id):
-    """Filter search results
-    """
-    def sanitize_string(string):
-        # strip possible control characters
-        string = remove_control_characters(string)
-
-        # also strip non-ascii characters
-        #string = ''.join(c for c in string if ord(c) in range(32, 127))
-
-        string = string.strip()
-        return string
-
-    results = [[sanitize_string(v) for v in result]
-               for result in results]
-
-    # filter results for spam
-    results = [result for result in results if not isspam(result)]
-    if account2: # do reddit msg spamcheck if second account is configured
-        results = _reddit_spamfilter(results, account2, account1, check_submission_id)
-
-    return results
-
-def _format_results(results):
-    """Format search results
-    Returns a markdown-formatted and spam-filtered list of the results.
-    """
-    def escape_markdown(string):
-        # escape markdown characters
-        # from https://daringfireball.net/projects/markdown/syntax#backslash
-        # \   backslash
-        # `   backtick
-        # *   asterisk
-        # _   underscore
-        # {}  curly braces
-        # []  square brackets
-        # ()  parentheses
-        # #   hash mark
-        # +   plus sign
-        # -   minus sign (hyphen)
-        # .   dot
-        # !   exclamation mark
-        markdown_chars = r'\`*_{}[]()#+-.!'
-        reddit_chars = r'^~<>'
-        escape_chars = markdown_chars + reddit_chars
-        string = ''.join(c if c not in escape_chars else '\%s' % c for c in string)
-        return string
-
-    results = [[escape_markdown(v) for v in result]
-               for result in results]
-
-    # format output
-    markdown_links = ['[%s](%s)' % (text, url) for url, text in results]
-    formatted = '\n\n'.join(markdown_links)
-    return formatted
-
-def comment_exists(comment):
-    return True
-    try:
-        if account1.get_info(thing_id = comment.id):
-            return True
-    except:
-        pass
-    print('Comment was deleted')
-    return False
 
 def give_more_info(submission_url, display_limit=None, config):
     """
@@ -261,8 +186,7 @@ def reply_to_potential_comment(comment, account, config):
         if ACTMODE & ACTMODE_LOG:
             print(reply)
         if ACTMODE & ACTMODE_COMMENT:
-            if comment_exists(comment):
-                comment.reply(reply)
+            comment.reply(reply)
         if ACTMODE & ACTMODE_PM:
             print(account.send_message(comment.author, 'Info Bot Information', reply))
         print("replied to potential comment: {0}".format(comment.body))
@@ -319,9 +243,8 @@ def find_username_mentions(config):
             if ACTMODE & ACTMODE_LOG:
                 print(reply)
             if ACTMODE & ACTMODE_COMMENT:
-                if comment_exists(comment):
-                    comment.reply(reply)
-                    print('replied to comment with more info', end='')
+                comment.reply(reply)
+                print(' (replied to comment with more info) ', end='')
             #if ACTMODE & ACTMODE_PM:
             #    print(account1.send_message(comment.author, 'Info Bot Information', reply))
             print('>', end='')
@@ -412,37 +335,6 @@ def check_downvotes(user, start_time, comment_deleting_wait_time):
         return current_time
     return start_time
 
-MAX_URL_LENGTH = 2010
-
-def build_subreddit_feeds(subreddits, max_url_length=MAX_URL_LENGTH):
-    """combine subreddits into 'feeds' for requests
-    """
-    base_length = 35 # length of 'https://reddit.com/r/%s/comments.json'
-    url_length = 0
-    subredditlist = []
-    feed_urls = []
-    for subreddit in subreddits:
-        url_length += len(subreddit) + 1 # +1 for '+' delimiter
-        #print('%4d' % url_length, subreddit)
-        subredditlist += [subreddit]
-        if url_length + base_length >= max_url_length:
-            feed_urls += ['+'.join(subredditlist)]
-            # reset
-            subredditlist = []
-            url_length = 0
-    feed_urls += ['+'.join(subredditlist)]
-    # reset
-    subredditlist = []
-    url_length = 0
-    return feed_urls
-
-def get_all_comments(stream):
-    # paginated
-    #feed_comments = stream.get_comments(limit=None)
-    # using default limit (old implementation)
-    feed_comments = stream.get_comments()
-    return feed_comments
-
 
 def main(config, account1, account2, user, subreddit_list, comment_stream_urls):
     start_time = time.time()
@@ -484,20 +376,12 @@ if __name__ == "__main__" or True: # always do this, for now
     with open('config.json') as json_data:
         config = json.load(json_data)
 
-    wd = None
     if 'BOT_WORKDIR' in config:
-        wd = config["BOT_WORKDIR"]
-    if wd:
-        if os.path.exists(wd):
-            os.chdir(wd)
-            if os.getcwd() != wd:
-                errmsg = 'Switching to workdir failed!'
-                sys.exit(errmsg)
-        else: # BOT_WORKDIR was requested, but does not exist. That's a failure.
-            errmsg = "Requested BOT_WORKDIR '{0}' does not exist, aborting.".format(wd)
+        ok, errmsg = chwd(config['BOT_WORKDIR'])
+        if not ok:
             sys.exit(errmsg)
     else:
-        print('No BOT_WORKDIR in configuration, running in current directory.')
+        print('No BOT_WORKDIR set, running in current directory.')
 
     # TODO: get a list from config
     #botmodes = config['BOT_MODE']

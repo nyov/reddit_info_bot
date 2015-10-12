@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import (absolute_import, unicode_literals, print_function)
-
+import os
 import codecs
 import unicodedata
 from six.moves.urllib.parse import urlsplit
@@ -47,6 +47,18 @@ def domain_suffix(link):
 
 def remove_control_characters(string):
     return ''.join(c for c in string if unicodedata.category(c)[0] != 'C')
+
+
+def chwd(dir):
+    """Change working directory."""
+    if not os.path.exists(dir):
+        errmsg = "Requested workdir '{0}' does not exist, aborting.".format(dir)
+        return False, errmsg
+    os.chdir(dir)
+    if os.getcwd() != dir:
+        errmsg = "Changing to workdir '{0}' failed!".format(dir)
+        return False, errmsg
+    return True, 'success'
 
 
 # mock objects to emulate praw interface
