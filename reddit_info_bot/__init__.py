@@ -390,7 +390,7 @@ def main(config, account1, account2, user, subreddit_list, comment_stream_urls):
             print('HTTP Error')
 
 
-if __name__ == "__main__" or True: # always do this, for now
+def run():
     with open('config.json') as json_data:
         config = json.load(json_data)
 

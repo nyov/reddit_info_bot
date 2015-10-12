@@ -1,4 +1,5 @@
 #!/usr/bin/python -u
 
 # run the bot
-import reddit_info_bot
+from reddit_info_bot import run
+run()
