@@ -64,6 +64,18 @@ def string_translate(text, intab, outtab):
     return text.translate(transtab)
 
 
+def chwd(dir):
+    """Change working directory."""
+    if not os.path.exists(dir):
+        errmsg = "Requested workdir '{0}' does not exist, aborting.".format(dir)
+        return False, errmsg
+    os.chdir(dir)
+    if os.getcwd() != dir:
+        errmsg = "Changing to workdir '{0}' failed!".format(dir)
+        return False, errmsg
+    return True, 'success'
+
+
 # mock objects to emulate praw interface
 class submission:
     def __init__(self,link):

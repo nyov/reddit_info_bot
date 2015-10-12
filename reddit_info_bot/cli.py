@@ -5,7 +5,7 @@ from docopt import docopt
 from .settings import Settings
 from .util import string_translate
 from .version import __version__
-#from . import run
+from . import run
 
 
 def _parse_docopt_args(args):
@@ -41,8 +41,7 @@ def usage(version):
 
 def run_command(**kwargs):
     # placeholder
-    #return run()
-    return
+    return run()
 
 def execute(argv=None, settings=None):
     if argv is None:
@@ -93,7 +92,7 @@ def execute(argv=None, settings=None):
     exitcode = cmd(**cmdargs)
     if not exitcode:
         exitcode = 0
-    #sys.exit(exitcode)
+    sys.exit(exitcode)
 
 if __name__ == '__main__':
     execute()
