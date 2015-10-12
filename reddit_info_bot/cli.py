@@ -96,11 +96,16 @@ def usage(instance):
     doc = """
     {botname}
 
-    Usage: reddit_info_bot [-c CONFIGFILE] [-l LOGFILE] [-v|-vv|-vvv]
+    Usage: reddit_info_bot [-d] [-c CONFIGFILE] [-l LOGFILE] [-p PIDFILE] [-v|-vv|-vvv]
 
       -c FILE --config=FILE    Load configuration from custom file
                                instead of default locations.
                                (To run multiple instances in parallel)
+      -d --daemonize           Detach from controlling terminal.
+                               (Use with -l unless you want silence.)
+                               (Preferrably run from a daemon supervisor
+                                like SysV-init, systemd, upstart instead.)
+      -p FILE --pid-file=FILE  Create a pidfile.
       -l FILE --log-file=FILE  Log to file instead of stdout.
       -v --verbose             Increase log-level verbosity.
                                (-vv for info, -vvv for debug level)
@@ -209,6 +214,8 @@ def execute(argv=None, settings=None):
     loglevel = loglevel[options.pop('VERBOSE')]
     if loglevel != 'ERROR':
         settings.set('LOG_LEVEL', loglevel)
+    settings.set('DETACH_PROCESS', options.pop('DAEMONIZE'))
+    settings.set('PID_FILE', options.pop('PID_FILE'))
     for option, value in options:
         settings.set(option, value)
 

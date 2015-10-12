@@ -6,6 +6,8 @@ import codecs
 import unicodedata
 import six
 import imp
+import daemon  # python-daemon on pypi + debian
+from lockfile.pidlockfile import PIDLockFile # lockfile on pypi, python-lockfile in debian
 from importlib import import_module
 from six.moves.urllib.parse import urlsplit
 
@@ -103,7 +105,7 @@ def import_string_from_file(filepath, module_name='configfile'):
     return module
 
 def setprocname(name):
-    """ Set the process name if possible.
+    """Set the process name if possible.
 
     Requires setproctitle (python-setproctitle)
     from https://github.com/dvarrazzo/py-setproctitle
@@ -123,3 +125,31 @@ def setprocname(name):
             prctl.set_proctitle(name)
         except ImportError:
             return
+
+def daemon_context(settings, files_preserve=[], uid=None, gid=None):
+    pidfile = settings.get('PID_FILE', None)
+    if pidfile:
+        pidfile = PIDLockFile(pidfile)
+    doublefork = settings.getbool('DETACH_PROCESS', False)
+    if doublefork:
+        stdin = stdout = stderr = None
+    else:
+        stdin, stdout, stderr = sys.stdin, sys.stdout, sys.stderr
+
+    context = daemon.DaemonContext(
+        chroot_directory = settings.get('BOT_CHROOTDIR', None),
+        working_directory = settings.get('BOT_WORKDIR', '/'),
+        umask = settings.get('BOT_UMASK', 0),
+        prevent_core = settings.getbool('COREDUMPS_DISABLED', False),
+        detach_process = doublefork,
+        pidfile = pidfile,
+        stdin  = stdin,
+        stdout = stdout,
+        stderr = stderr,
+        #
+        uid = uid,
+        gid = gid,
+        files_preserve = files_preserve,
+    )
+
+    return context

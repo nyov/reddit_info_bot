@@ -14,7 +14,7 @@ from . import praw
 from .reddit import reddit_login, build_subreddit_feeds, handle_bot_action, check_downvotes
 from .spamfilter import spamfilter_lists
 from .log import setup_logging
-from .util import chwd, cached_psl
+from .util import chwd, cached_psl, daemon_context
 from .exceptions import ConfigurationError
 
 logger = logging.getLogger(__name__)
@@ -57,7 +57,9 @@ def cmd_run(settings):
     if cachedir:
         cachedir = os.path.abspath(cachedir)
         if not os.path.isdir(cachedir):
-            raise ConfigurationError('Provided BOT_CACHEDIR does not exist: %s' % cachedir)
+            raise ConfigurationError('BOT_CACHEDIR was set, '
+                                     'but is not a directory (%s)'
+                                     % cachedir)
         cachedir = cachedir.rstrip('/') + '/'
     settings.set('_CACHEDIR_', cachedir) # (runtime setting)
 
@@ -71,7 +73,7 @@ def cmd_run(settings):
     # startup
     #
     # Environment is set up at this point,
-    # now open files.
+    # now open files and daemonize.
 
     sys.stdout.write('%s starting\n' % settings.get('_BOT_INSTANCE_', 'reddit_info_bot'))
 
@@ -83,7 +85,10 @@ def cmd_run(settings):
 
     log_fh = setup_logging(settings)
 
-    cmd_running(settings)
+    files_preserve = open_file_handles.values()
+    files_preserve.append(log_fh)
+    with daemon_context(settings, files_preserve=files_preserve):
+        cmd_running(settings)
 
 def cmd_running(settings):
 
