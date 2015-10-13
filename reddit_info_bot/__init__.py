@@ -166,6 +166,7 @@ def give_more_info(submission_url, display_limit=None):
         ('tineye', 'Tineye'),
         ('karmadecay', 'Karma Decay'),
     ])
+    search_results = OrderedDict()
 
     message = '**Best %s Guesses**\n\n%s\n\n'
     reply = ''
@@ -194,10 +195,13 @@ def give_more_info(submission_url, display_limit=None):
         except IndexError as e:
             print('Failed fetching %s results: %s' % (provider, e))
 
+        search_results[provider] = {}
+
         # sanity check on app's response:
-        _dropped = _ok = 0
+        _dropped = _ok = _all = 0
         _good = []
         for idx, item in enumerate(result):
+            _all += 1
             # result should always be '(url, text)', nothing else
             if len(item) != 2:
                 _dropped += 1
@@ -214,10 +218,13 @@ def give_more_info(submission_url, display_limit=None):
         if _dropped > 0:
             print('Dropped %d invalid result(s) from proxy for %s, %d result(s) remaining' % \
                     (_dropped, provider, _ok))
-        del _dropped, _ok, _good
+        del _dropped, _ok, _all, _good
+
+        search_results[provider].update({'all': len(result)})
 
         if not result:
             reply += message % (provider, 'No available links from this search engine found.')
+            search_results[provider].update({'succeeded': 0, 'failed': 0})
             del search_engines[engine]
             continue
 
@@ -226,8 +233,11 @@ def give_more_info(submission_url, display_limit=None):
 
         if not filtered:
             reply += message % (provider, 'No available links from this search engine found.')
+            search_results[provider].update({'succeeded': 0, 'failed': len(result)})
             del search_engines[engine]
             continue
+
+        search_results[provider].update({'succeeded': len(filtered), 'failed': len(result)-len(filtered)})
 
         # limit output to `display_limit` results
         if display_limit:
@@ -240,6 +250,11 @@ def give_more_info(submission_url, display_limit=None):
 
     if not search_engines:
         reply = no_results_message
+
+    # stats
+    for engine, stats in search_results.items():
+        print('%11s: all: %d / failed: %d / good: %d' % (engine,
+            stats.get('all'), stats.get('failed'), stats.get('succeeded')))
 
     reply += extra_message
     return reply
