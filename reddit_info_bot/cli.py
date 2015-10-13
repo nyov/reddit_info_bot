@@ -1,11 +1,10 @@
 from __future__ import (absolute_import, unicode_literals, print_function)
 import sys, os
 import six
-import imp
 from docopt import docopt
 
 from .settings import Settings
-from .util import string_translate
+from .util import string_translate, import_string_from_file, import_file
 from .version import __version__
 from . import run
 
@@ -20,25 +19,11 @@ def _parse_docopt_args(args):
         args[akey] = args.pop(arg)
     return args
 
-def _import_configfile(filepath, module_name='configfile'):
-    """Import anything as a python source file.
-
-    (And do not generate cache files where none belong.)
-    """
-    abspath = os.path.abspath(filepath)
-    try:
-        with open(abspath, 'r') as cf:
-            code = cf.read()
-    except (IOError, OSError) as e:
-        sys.exit(e)
-    module = imp.new_module(module_name)
-    six.exec_(code, module.__dict__)
-    return module
-
 def _load_config(file):
     if not isinstance(file, six.string_types):
         return
-    module = _import_configfile(file)
+    #module = import_file(file)
+    module = import_string_from_file(file)
     for name in dir(module):
         if name.isupper():
             yield name, getattr(module, name)
