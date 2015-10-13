@@ -36,9 +36,9 @@ def give_more_info(config, account1, account2, submission_url, display_limit=Non
     """
     """
     from base64 import b64decode
-    extra_message = config['EXTRA_MESSAGE']
-    no_results_message = config['NO_SEARCH_RESULTS_MESSAGE']
-    submission_id = config['SUBMISSION_ID']
+    extra_message = config.get('FOOTER_INFO_MESSAGE')
+    no_results_message = config.get('NO_SEARCH_RESULTS_MESSAGE')
+    submission_id = config.get('REDDIT_SPAMFILTER_SUBMISSION_ID')
 
     print('Image-searching for %s' % submission_url)
 
@@ -62,7 +62,7 @@ def give_more_info(config, account1, account2, submission_url, display_limit=Non
     while not results:
         i += 1
         try:
-            if 'DEBUG' in config and config['DEBUG']:
+            if config.getbool('DEBUG', False):
                 ### for debugging, cache response
                 _dumpfile = 'proxydebug'
                 if not os.path.exists(_dumpfile):
@@ -177,9 +177,9 @@ ACTMODES = (ACTMODE_LOG | ACTMODE_PM | ACTMODE_COMMENT)
 ACTMODE = ACTMODE_NONE
 
 def reply_to_potential_comment(comment, account, config, already_done):
-    keyword_list = config['KEYWORDS']
-    image_formats = config['IMAGE_FORMATS']
-    reply = config['INFORMATION_REPLY']
+    keyword_list = config.getlist('BOTCMD_INFORMATIONAL')
+    image_formats = config.getlist('IMAGE_FORMATS')
+    reply = config.get('INFOREPLY_MESSAGE')
 
     if not keyword_list:
         return True
@@ -220,24 +220,26 @@ def _applicable_comment(comment, subreddit_list, time_limit_minutes):
         return False
     return True # good
 
+def _any_from_list_in_string(list_, string_):
+    string_ = str(string_).lower()
+    return any(str(w).lower() in string_ for w in list_)
+    #return any(True for w in list_ if str(w).lower() in string_)
+
 def find_username_mentions(account, account2, config, user, subreddit_list, already_done):
-    search_string = config['SEARCH_STRING']
-    time_limit_minutes = config['TIME_LIMIT_MINUTES'] #how long before a comment will be ignored for being too old
-    image_formats = config['IMAGE_FORMATS']
-    extra_message = config['EXTRA_MESSAGE']
+    search_strings = config.getlist('BOTCMD_IMAGESEARCH')
+    time_limit_minutes = config.getint('COMMENT_REPLY_AGE_LIMIT') #how long before a comment will be ignored for being too old
+    image_formats = config.getlist('IMAGE_FORMATS')
+    extra_message = config.get('FOOTER_INFO_MESSAGE')
 
     count = 0
     for comment in account.get_unread(limit=100):
         count += 1
-        if search_string not in comment.body:
+        if not _any_from_list_in_string(search_strings, comment.body):
             print('.', end='')
             continue
         if not _applicable_comment(comment, subreddit_list, time_limit_minutes):
             continue
-        try:
-            isPicture = any(i in str(comment.submission.url) for i in image_formats)
-        except UnicodeEncodeError:
-            isPicture = False #non-ascii url
+        isPicture = _any_from_list_in_string(image_formats, comment.submission.url)
         if not isPicture:
             print('t', end='')
             continue
@@ -253,7 +255,6 @@ def find_username_mentions(account, account2, config, user, subreddit_list, alre
             print('r', end='')
             continue
         if comment.author == user:
-            # oops
             print('u', end='')
             continue
         reply = give_more_info(config, account, account2, comment.submission.url, display_limit=5)
@@ -279,26 +280,22 @@ def find_username_mentions(account, account2, config, user, subreddit_list, alre
 
 
 def find_keywords(all_comments, account, config, user, subreddit_list, already_done):
-    keyword_list = config['KEYWORDS']
-    time_limit_minutes = config['TIME_LIMIT_MINUTES'] #how long before a comment will be ignored for being too old
-    image_formats = config['IMAGE_FORMATS']
-    extra_message = config['EXTRA_MESSAGE']
-    information_reply = config['INFORMATION_REPLY']
+    keyword_list = config.getlist('BOTCMD_INFORMATIONAL')
+    time_limit_minutes = config.getint('COMMENT_REPLY_AGE_LIMIT') #how long before a comment will be ignored for being too old
+    image_formats = config.getlist('IMAGE_FORMATS')
+    extra_message = config.get('FOOTER_INFO_MESSAGE')
+    information_reply = config.get('INFOREPLY_MESSAGE')
 
     count = 0
     for comment in all_comments:
         count += 1
         if not _applicable_comment(comment, subreddit_list, time_limit_minutes):
             continue
-        try:
-            isPicture = any(i in str(comment.link_url) for i in image_formats)
-        except UnicodeEncodeError:
-            isPicture = False #non-ascii url
+        isPicture = _any_from_list_in_string(image_formats, comment.link_url)
         if not isPicture:
             print('t', end='')
             continue
-        body = comment.body.lower()
-        if not any(word.lower() in body.lower() for word in keyword_list):
+        if not _any_from_list_in_string(keyword_list, comment.body):
             print('p', end='')
             continue
         top_level = [i.replies for i in comment.submission.comments]
@@ -355,7 +352,7 @@ def check_downvotes(user, start_time, comment_deleting_wait_time):
 
 def main(config, account1, account2, user, subreddit_list, comment_stream_urls):
     start_time = time.time()
-    comment_deleting_wait_time = config["DELETE_WAIT_TIME"] #how many minutes to wait before deleting downvoted comments
+    comment_deleting_wait_time = config.getint('COMMENT_DELETIONCHECK_WAIT_LIMIT') #how many minutes to wait before deleting downvoted comments
 
     already_done = []
     if os.path.isfile("already_done.p"):
@@ -389,20 +386,18 @@ def main(config, account1, account2, user, subreddit_list, comment_stream_urls):
             print('HTTP Error')
 
 
-def run():
-    with open('config.json') as json_data:
-        config = json.load(json_data)
+def run(settings={}, **kwargs):
+    logger.setLevel(settings.get('LOG_LEVEL', 'DEBUG'))
 
-    if 'BOT_WORKDIR' in config:
-        ok, errmsg = chwd(config['BOT_WORKDIR'])
+    wd = settings.get('BOT_WORKDIR')
+    if wd:
+        ok, errmsg = chwd(wd)
         if not ok:
             sys.exit(errmsg)
     else:
         print('No BOT_WORKDIR set, running in current directory.')
 
-    # TODO: get a list from config
-    #botmodes = config['BOT_MODE']
-    botmodes = [config['MODE']]
+    botmodes = settings.getlist('BOT_MODE')
     ACTMODE = ACTMODE_NONE
     for botmode in botmodes:
         botmode = botmode.lower()
@@ -416,13 +411,16 @@ def run():
     # force early cache-refreshing spamlists
     spamfilter_lists()
 
-    (account1, account2, user, subreddit_list) = reddit_login(config)
+    (account1, account2, user) = reddit_login(settings)
 
     #account1 = account2 = None
     #url = 'https://i.imgur.com/yZKXDPV.jpg'
     #url = 'http://i.imgur.com/mQ7Tuye.gifv'
-    #print(give_more_info(config, account1, account2, url, display_limit=5))
+    #print(give_more_info(settings, account1, account2, url, display_limit=5))
     #sys.exit()
+
+    print('Fetching Subreddit list')
+    subreddit_list = set([account1.get_subreddit(i).display_name for i in settings.getlist('SUBREDDITS')])
 
     print('Fetching comment stream urls')
     #comment_stream_urls = [account1.get_subreddit(subredditlist) for subredditlist in build_subreddit_feeds(subreddit_list)]
@@ -433,4 +431,4 @@ def run():
         # lazy objects, nothing done yet
         comment_stream_urls += [comment_feed]
 
-    main(config, account1, account2, user, subreddit_list, comment_stream_urls)
+    main(settings, account1, account2, user, subreddit_list, comment_stream_urls)

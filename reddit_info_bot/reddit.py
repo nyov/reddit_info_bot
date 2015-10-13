@@ -30,10 +30,7 @@ def reddit_login(config):
 
     user = account1.get_redditor(config['USER_NAME'])
 
-    print('Fetching Subreddit list')
-    subreddit_list = [account1.get_subreddit(i).display_name for i in config['SUBREDDITS']]
-
-    return (account1, account2, user, set(subreddit_list))
+    return (account1, account2, user)
 
 
 MAX_URL_LENGTH = 2010

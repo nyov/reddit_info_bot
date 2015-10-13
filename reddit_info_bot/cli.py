@@ -94,7 +94,7 @@ def get_config_sources(name, ext='cfg', dir=None):
     return sources
 
 def run_command(**kwargs):
-    return run()
+    return run(**kwargs)
 
 def execute(argv=None, settings=None):
     if argv is None:
@@ -114,8 +114,9 @@ def execute(argv=None, settings=None):
     options = _parse_docopt_args(args)
 
     config = options.pop('config')
-    if not config: # check default places for configuration
-        sources = get_config_sources('infobot', 'conf', dir='reddit-infobot')
+    if not config:
+        # check hardcoded name and place of default configuration
+        sources = get_config_sources('config', 'py', dir='reddit-infobot')
         sources.reverse()
         for source in sources:
             if os.path.isfile(source):
@@ -139,7 +140,7 @@ def execute(argv=None, settings=None):
 
     instance = settings.get('BOT_NAME', None)
     if instance:
-        print('reddit_info_bot launched as: %s' % instance)
+        print('reddit_info_bot configured as: %s' % instance)
 
     # supported commands
     cmds = _get_commands()
@@ -157,6 +158,7 @@ def execute(argv=None, settings=None):
 
     cmdargs = {
         'instance':instance,
+        'settings':settings,
     }
 
     exitcode = cmd(**cmdargs)
