@@ -52,18 +52,16 @@ def spamfilter_lists():
     if os.path.isfile("blacklist.p"):
         with open("blacklist.p", "rb") as f:
             blacklist = pickle.load(f)
-    link_filter = get_filter('link') + get_filter('thumb')
-    #word_filter = get_filter('text')
-    text_filter = get_filter('text') + get_filter('user')
-    """for domain in link_filter:
-        if 'http' not in domain and domain[0] != '.':
-            domain = "http://"+domain
-        if not re.search('\.[^\.]+/.+$',domain): #if the link isn't to a specific page (has stuff after the final /) instead of an actual domain
-            if domain[0] != '.':
-                if domain not in blacklist:
-                    blacklist.append(domain)
-    """
-    tld_blacklist = [''.join(letter for letter in tld if letter!=".") for tld in get_filter('tld')]
+    # s.r.c filters
+    link_filter = get_filter('link')
+    thumb_filter = get_filter('thumb')
+    text_filter = get_filter('text')
+    user_filter = get_filter('user')
+    tld_filter = get_filter('tld')
+    #
+    link_filter = link_filter + thumb_filter
+    text_filter = text_filter + user_filter
+    tld_blacklist = [''.join(letter for letter in tld if letter!=".") for tld in tld_filter]
 
     hard_blacklist = []
     whitelist = ['reddit.com']
@@ -78,22 +76,11 @@ def spamfilter_lists():
     )
 
 
-# load spam lists
-(
-    link_filter,
-    text_filter,
-    hard_blacklist,
-    whitelist,
-    tld_blacklist,
-    blacklist,
-) = spamfilter_lists()
-
-
-def isspam(result):
+def isspam(result, lists):
     """check search result for spammy content
     """
-    #(link_filter, text_filter, hard_blacklist,
-    # whitelist, tld_blacklist, blacklist) = spamfilter_lists()
+    (link_filter, text_filter, hard_blacklist,
+     whitelist, tld_blacklist, blacklist) = lists
 
     url, text = result[0].lower(), result[1].lower()
 

@@ -33,7 +33,7 @@ from .util import domain_suffix, chwd
 logger = logging.getLogger(__name__)
 
 
-def give_more_info(config, account1, account2, submission_url, display_limit=None):
+def give_more_info(submission_url, config, account1, account2, display_limit=None):
     """
     """
     from base64 import b64decode
@@ -52,6 +52,7 @@ def give_more_info(config, account1, account2, submission_url, display_limit=Non
             for ff in fileformats:
                 submission_url = submission_url.replace(ff, '.gif')
             print('Found %s video - substituting with gif url: %s' % (domain, submission_url))
+        # on imgur, this could be a regular image, but luckily imgur provides a .gif url anyway :)
         elif urlsplit(submission_url).path.rstrip(string.ascii_lowercase+string.ascii_uppercase) == '/':
             submission_url += '.gif'
             print('Found potential %s video - using gif url: %s' % (domain, submission_url))
@@ -257,7 +258,7 @@ def find_username_mentions(account, account2, config, user, subreddit_list, alre
             # oops
             print('u', end='')
             continue
-        reply = give_more_info(config, account, account2, comment.submission.url, display_limit=5)
+        reply = give_more_info(comment.submission.url, config, account, account2, display_limit=5)
         try:
             if ACTMODE & ACTMODE_LOG:
                 print(reply)
@@ -419,10 +420,10 @@ def run():
 
     (account1, account2, user, subreddit_list) = reddit_login(config)
 
-    #account1 = account2 = None
+    #account1 = account2 = user = subreddit_list = None
     #url = 'https://i.imgur.com/yZKXDPV.jpg'
     #url = 'http://i.imgur.com/mQ7Tuye.gifv'
-    #print(give_more_info(config, account1, account2, url, display_limit=5))
+    #print(give_more_info(url, config, account1, account2, display_limit=5))
     #sys.exit()
 
     print('Fetching comment stream urls')

@@ -4,7 +4,7 @@ import praw
 import time
 import uuid
 
-from .antispam import isspam
+from .antispam import isspam, spamfilter_lists
 from .util import remove_control_characters
 
 
@@ -138,7 +138,8 @@ def _filter_results(results, account1, account2, check_submission_id):
                for result in results]
 
     # filter results for spam
-    results = [result for result in results if not isspam(result)]
+    spamlists = spamfilter_lists()
+    results = [result for result in results if not isspam(result, spamlists)]
     if account2: # do reddit msg spamcheck if second account is configured
         results = _reddit_spamfilter(results, account2, account1, check_submission_id)
 
