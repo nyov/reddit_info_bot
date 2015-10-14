@@ -280,23 +280,45 @@ def find_username_mentions(account, account2, config, user, subreddit_list, alre
         reply = image_search(message.submission.url, config, account, account2, display_limit=5)
         if not reply:
             print('image_search failed (bug)! skipping')
-        try:
-            if ACTMODE & ACTMODE_LOG:
-                print()
-                print(reply)
-                print()
-            if ACTMODE & ACTMODE_COMMENT:
-                message.reply(reply)
-            #if ACTMODE & ACTMODE_PM:
-            #    print(account.send_message(message.author, 'Info Bot Information', reply))
-            print(' (replied to message comment with more info) ', end='')
-            print('>')
-        except praw.errors.Forbidden as e:
-            print('\nCannot reply. Bot forbidden:', e)
-        except praw.errors.InvalidComment:
-            print('\nComment was deleted while trying to reply.')
-        except praw.errors.PRAWException as e:
-            print('\nSome unspecified PRAW issue occured while trying to reply:', e)
+        done = False
+        attempt = 0
+        while not done:
+            attempt += 1
+            if attempt > 2: # max retries: 2
+                done = True
+
+            try:
+                if ACTMODE & ACTMODE_LOG:
+                    print()
+                    print(reply)
+                    print()
+                if ACTMODE & ACTMODE_COMMENT:
+                    message.reply(reply)
+                #if ACTMODE & ACTMODE_PM:
+                #    print(account.send_message(message.author, 'Info Bot Information', reply))
+                print(' (replied to message comment with more info) ', end='')
+                print('>')
+                done = True
+            except praw.errors.RateLimitExceeded as e:
+                errmsg = str(e)
+                backoff, min_secs = re.search(r'try again in ([0-9]+) (minutes?|seconds?)', errmsg).groups()
+                if 'second' in min_secs:
+                    backoff = int(backoff)
+                elif 'minute' in min_secs:
+                    backoff = int(backoff) * 60
+                backoff += 3 # grace
+                print('\nRate limited. Backing off %d seconds!' % backoff)
+                time.sleep(backoff)
+            # the following are permanent errors, no retry
+            except praw.errors.InvalidComment:
+                print('\nComment was deleted while trying to reply.')
+                done = True
+            except praw.errors.Forbidden as e:
+                print('\nCannot reply. Bot forbidden:', e)
+                done = True
+            except praw.errors.PRAWException as e:
+                print('\nSome unspecified PRAW issue occured while trying to reply:', e)
+                done = True
 
         already_done.append(message.id)
         message.mark_as_read()
@@ -342,15 +364,35 @@ def find_keywords(all_comments, account, config, user, subreddit_list, already_d
             continue
         print('R', end='')
         done = False
-        attempt = 1
+        attempt = 0
         while not done:
+            attempt += 1
+            if attempt > 2: # max retries: 2
+                done = True
+
             try:
                 done = reply_to_potential_comment(comment, account, config, already_done)
                 print('>', end='')
             except praw.errors.RateLimitExceeded as e:
-                print('submission rate exceeded! attempt %i' % attempt)
-                print(e)
-                time.sleep(30)
+                errmsg = str(e)
+                backoff, min_secs = re.search(r'try again in ([0-9]+) (minutes?|seconds?)', errmsg).groups()
+                if 'second' in min_secs:
+                    backoff = int(backoff)
+                elif 'minute' in min_secs:
+                    backoff = int(backoff) * 60
+                backoff += 3 # grace
+                print('\nRate limited. Backing off %d seconds!' % backoff)
+                time.sleep(backoff)
+            # the following are permanent errors, no retry
+            except praw.errors.InvalidComment:
+                print('\nComment was deleted while trying to reply.')
+                done = True
+            except praw.errors.Forbidden as e:
+                print('\nCannot reply. Bot forbidden:', e)
+                done = True
+            except praw.errors.PRAWException as e:
+                print('\nSome unspecified PRAW issue occured while trying to reply:', e)
+                done = True
 
     #se = '/'.join(['%d %s' % (v, k) for k, v in stats])
     #print(' (%d comments - %s)' % (count, se))
