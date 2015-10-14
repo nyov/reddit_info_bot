@@ -70,7 +70,7 @@ def get_yandex_results(image_url, config, limit=15):
 def get_karmadecay_results(image_url, config, limit=15):
     headers = {}
     headers['User-Agent'] = config['SEARCH_USER_AGENT']
-    response_text = requests.get("http://www.karmadecay.com/search?kdtoolver=b1&q="+image_url, headers=headers).content
+    response_text = requests.get("http://karmadecay.com/search?kdtoolver=b1&q="+image_url, headers=headers).content
     if "No very similar images were found." in response_text:
         return []
     raw_results_text = response_text[response_text.find(":--|:--|:--|:--|:--")+20:response_text.find("*[Source: karmadecay]")-2]

@@ -15,7 +15,7 @@ import json
 import string
 import praw.errors
 from collections import OrderedDict
-from six.moves.urllib.parse import urlsplit
+from six.moves.urllib.parse import urlsplit, urlunsplit
 
 from .version import __version__, version_info
 from .search import (
@@ -31,28 +31,44 @@ from .util import domain_suffix, chwd
 
 logger = logging.getLogger(__name__)
 
+# how the bot handles actions
+ACTMODE_NONE    = 0 # no action
+ACTMODE_LOG     = 1 # log action
+ACTMODE_PM      = 2 # pm/message action
+ACTMODE_COMMENT = 4 # (reddit-) comment action
+ACTMODES = (ACTMODE_LOG | ACTMODE_PM | ACTMODE_COMMENT)
 
-def give_more_info(submission_url, config, account1, account2, display_limit=None):
+ACTMODE = ACTMODE_NONE
+
+
+def image_search(submission_url, config, account1, account2, display_limit=None):
     """
     """
     from base64 import b64decode
     extra_message = config.get('FOOTER_INFO_MESSAGE')
     no_results_message = config.get('NO_SEARCH_RESULTS_MESSAGE')
-    submission_id = config.get('REDDIT_SPAMFILTER_SUBMISSION_ID')
+    submission_id = config.get('REDDIT_SPAMFILTER_SUBMISSION_ID', None)
 
     print('Image-searching for %s' % submission_url)
 
     # substitute videos with gif versions where possible
     # (because search engines index those)
     domain = domain_suffix(submission_url)
+    fileformats = ('.gifv', '.mp4', '.webm', '.ogg')
     if domain in ('imgur.com', 'gfycat.com'):
-        fileformats = ('.gifv', '.mp4', '.webm', '.ogg')
+        domainparts = urlsplit(submission_url)
         if submission_url.endswith(fileformats):
             for ff in fileformats:
                 submission_url = submission_url.replace(ff, '.gif')
             print('Found %s video - substituting with gif url: %s' % (domain, submission_url))
-        # on imgur, this could be a regular image, but luckily imgur provides a .gif url anyway :)
-        elif urlsplit(submission_url).path.rstrip(string.ascii_lowercase+string.ascii_uppercase) == '/':
+        # no file extension?
+        elif domainparts.path.rstrip(string.ascii_lowercase+string.ascii_uppercase) == '/':
+            # on imgur, this could be a regular image, but luckily imgur provides a .gif url anyway :)
+            # on gfycat we must also change domain to 'giant.gfycat.com'
+            if str(domain) == 'gfycat.com':
+                (scheme, netloc, path, query, fragment) = domainparts
+                #maybe_handy_json_url = urlunsplit((scheme, netloc, '/cajax/get' + path, query, fragment))
+                submission_url = urlunsplit((scheme, 'giant.gfycat.com', path, query, fragment))
             submission_url += '.gif'
             print('Found potential %s video - using gif url: %s' % (domain, submission_url))
 
@@ -109,10 +125,19 @@ def give_more_info(submission_url, config, account1, account2, display_limit=Non
                     result = []
                 #print('karma:', result)
             if engine == 'tineye':
+                if config.getbool('DEBUG', False):
+                    continue
                 result = get_tineye_results(submission_url, config)
                 #print('tineye:', result)
         except IndexError as e:
             print('Failed fetching %s results: %s' % (provider, e))
+
+        # sanitizing strange remote conversions,
+        # unescape previously escaped backslash
+        result = [
+            [x.replace('\\', '').replace(r'[', '') for x in r]
+            for r in result
+        ]
 
         # sanity check on app's response:
         _dropped = _ok = 0
@@ -167,15 +192,6 @@ def give_more_info(submission_url, config, account1, account2, display_limit=Non
 #
 # Bot actions
 #
-
-# how the bot handles actions
-ACTMODE_NONE    = 0 # no action
-ACTMODE_LOG     = 1 # log action
-ACTMODE_PM      = 2 # pm/message action
-ACTMODE_COMMENT = 4 # (reddit-) comment action
-ACTMODES = (ACTMODE_LOG | ACTMODE_PM | ACTMODE_COMMENT)
-
-ACTMODE = ACTMODE_NONE
 
 def reply_to_potential_comment(comment, account, config, already_done):
     keyword_list = config.getlist('BOTCMD_INFORMATIONAL')
@@ -233,18 +249,20 @@ def find_username_mentions(account, account2, config, user, subreddit_list, alre
     extra_message = config.get('FOOTER_INFO_MESSAGE')
 
     count = 0
-    for comment in account.get_unread(limit=100):
+    for message in account.get_unread(limit=100):
         count += 1
-        if not _any_from_list_in_string(search_strings, comment.body):
+        if not _any_from_list_in_string(search_strings, message.body):
             print('.', end='')
             continue
-        if not _applicable_comment(comment, subreddit_list, time_limit_minutes):
+        if not _applicable_comment(message, subreddit_list, time_limit_minutes):
             continue
-        isPicture = _any_from_list_in_string(image_formats, comment.submission.url)
+        isPicture = _any_from_list_in_string(image_formats, message.submission.url)
         if not isPicture:
-            print('t', end='')
-            continue
-        top_level = [i.replies for i in comment.submission.comments]
+            domain = domain_suffix(message.submission.url)
+            if domain not in ('imgur.com', 'gfycat.com'):
+                print('t', end='')
+                continue
+        top_level = [i.replies for i in message.submission.comments]
         submission_comments = []
         for i in top_level:
             for j in i:
@@ -252,22 +270,27 @@ def find_username_mentions(account, account2, config, user, subreddit_list, alre
         if any(i for i in submission_comments if extra_message in i.body): #If there are link replies
             print('p', end='')
             continue
-        if comment.id in already_done:
+        if message.id in already_done:
             print('r', end='')
             continue
-        if comment.author == user:
+        if message.author == user:
             print('u', end='')
             continue
-        reply = give_more_info(comment.submission.url, config, account, account2, display_limit=5)
+        print('R')
+        reply = image_search(message.submission.url, config, account, account2, display_limit=5)
+        if not reply:
+            print('image_search failed (bug)! skipping')
         try:
             if ACTMODE & ACTMODE_LOG:
+                print()
                 print(reply)
+                print()
             if ACTMODE & ACTMODE_COMMENT:
-                comment.reply(reply)
-                print(' (replied to comment with more info) ', end='')
+                message.reply(reply)
             #if ACTMODE & ACTMODE_PM:
-            #    print(account.send_message(comment.author, 'Info Bot Information', reply))
-            print('>', end='')
+            #    print(account.send_message(message.author, 'Info Bot Information', reply))
+            print(' (replied to message comment with more info) ', end='')
+            print('>')
         except praw.errors.Forbidden as e:
             print('\nCannot reply. Bot forbidden:', e)
         except praw.errors.InvalidComment:
@@ -275,9 +298,9 @@ def find_username_mentions(account, account2, config, user, subreddit_list, alre
         except praw.errors.PRAWException as e:
             print('\nSome unspecified PRAW issue occured while trying to reply:', e)
 
-        already_done.append(comment.id)
-        comment.mark_as_read()
-    print(' (%d comments)' % (count,))
+        already_done.append(message.id)
+        message.mark_as_read()
+    print(' (%d messages handled)' % (count,))
 
 
 def find_keywords(all_comments, account, config, user, subreddit_list, already_done):
@@ -305,10 +328,10 @@ def find_keywords(all_comments, account, config, user, subreddit_list, already_d
             for j in i:
                 submission_comments.append(j)
         if any(i for i in submission_comments if extra_message in i.body): #If there are link replies
-            print('R', end='')
+            print('r', end='')
             continue
         if not any(i for i in submission_comments if i.body == information_reply): #If there are information replies
-            print('R', end='')
+            print('r', end='')
             continue
         print('\ndetected keyword: %s' % comment.body.lower())
         if comment.id in already_done:
@@ -317,6 +340,7 @@ def find_keywords(all_comments, account, config, user, subreddit_list, already_d
         if comment.author == user:
             print('u', end='')
             continue
+        print('R', end='')
         done = False
         attempt = 1
         while not done:
@@ -352,8 +376,17 @@ def check_downvotes(user, start_time, comment_deleting_wait_time):
 
 
 def main(config, account1, account2, user, subreddit_list, comment_stream_urls):
+    if ACTMODE & ACTMODE_LOG:
+        print('log mode enabled')
+    if ACTMODE & ACTMODE_PM:
+        print('pm mode enabled')
+    if ACTMODE & ACTMODE_COMMENT:
+        print('comment mode enabled')
+
     start_time = time.time()
     comment_deleting_wait_time = config.getint('COMMENT_DELETIONCHECK_WAIT_LIMIT') #how many minutes to wait before deleting downvoted comments
+    find_mentions_enabled = config.getbool('BOTCMD_IMAGESEARCH_ENABLED')
+    find_keywords_enabled = config.getbool('BOTCMD_INFORMATIONAL_ENABLED')
 
     already_done = []
     if os.path.isfile("already_done.p"):
@@ -366,14 +399,17 @@ def main(config, account1, account2, user, subreddit_list, comment_stream_urls):
             for count, stream in enumerate(comment_stream_urls): #uses separate comment streams for large subreddit list due to URL length limit
                 print('visiting comment stream %d/%d "%s..."' % (count+1, len(comment_stream_urls), str(stream)[:60]))
                 a = time.time()
-                feed_comments = stream.get_comments()
+                #feed_comments = stream.get_comments()
+                feed_comments = stream.get_comments(limit=100)
                 #feed_comments = stream.get_comments(limit=None) # all
                 if not feed_comments:
                     continue
                 print(time.time()-a)
-                find_keywords(feed_comments, account1, config, user, subreddit_list, already_done)
-                print('finding username mentions: ', end='')
-                find_username_mentions(account1, account2, config, user, subreddit_list, already_done)
+                if find_keywords_enabled:
+                    find_keywords(feed_comments, account1, config, user, subreddit_list, already_done)
+                if find_mentions_enabled:
+                    print('finding username mentions: ', end='')
+                    find_username_mentions(account1, account2, config, user, subreddit_list, already_done)
                 start_time = check_downvotes(user, start_time, comment_deleting_wait_time)
 
                 with open("already_done.p", "wb") as df:
@@ -399,7 +435,7 @@ def run(settings={}, **kwargs):
         print('No BOT_WORKDIR set, running in current directory.')
 
     botmodes = settings.getlist('BOT_MODE')
-    ACTMODE = ACTMODE_NONE
+    global ACTMODE # whoops
     for botmode in botmodes:
         botmode = botmode.lower()
         if botmode == 'comment':
@@ -417,7 +453,9 @@ def run(settings={}, **kwargs):
     #account1 = account2 = user = None
     #url = 'https://i.imgur.com/yZKXDPV.jpg'
     #url = 'http://i.imgur.com/mQ7Tuye.gifv'
-    #print(give_more_info(url, settings, account1, account2, display_limit=5))
+    #url = 'https://i.imgur.com/CL59cxR.gif'
+    #url = 'https://gfycat.com/PaleWelltodoHackee'
+    #print(image_search(url, settings, account1, account2, display_limit=5))
     #sys.exit()
 
     print('Fetching Subreddit list')

@@ -21,14 +21,14 @@ def reddit_login(config):
 
     user_agent = config['BOT_NAME']
 
-    account1 = r_login(user_agent, config['USER_NAME'], config['PASSWORD'])
+    account1 = r_login(user_agent, config['REDDIT_ACCOUNT_NAME'], config['REDDIT_ACCOUNT_PASS'])
     if config['SECOND_ACCOUNT_NAME'] and config['SECOND_ACCOUNT_PASS']:
         # load a second praw instance for the second account (the one used to check the spam links)
         account2 = r_login(user_agent, config['SECOND_ACCOUNT_NAME'], config['SECOND_ACCOUNT_PASS'])
     else:
         account2 = False
 
-    user = account1.get_redditor(config['USER_NAME'])
+    user = account1.get_redditor(config['REDDIT_ACCOUNT_NAME'])
 
     return (account1, account2, user)
 
@@ -137,7 +137,7 @@ def _filter_results(results, account1, account2, check_submission_id):
     # filter results for spam
     spamlists = spamfilter_lists()
     results = [result for result in results if not isspam(result, spamlists)]
-    if account2: # do reddit msg spamcheck if second account is configured
+    if account2 and check_submission_id: # do reddit msg spamcheck if second account is configured
         results = _reddit_spamfilter(results, account2, account1, check_submission_id)
 
     return results

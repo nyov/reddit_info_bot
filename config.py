@@ -38,7 +38,7 @@ BOTCMD_IMAGESEARCH = [ # (main) initiate image search
     'u/%s' % REDDIT_ACCOUNT_NAME,
 ]
 
-BOTCMD_INFORMATIONAL_ENABLED = False
+BOTCMD_INFORMATIONAL_ENABLED = True
 BOTCMD_INFORMATIONAL = [ # reply to potential queries with bot-info
     'source?',
     'sauce?',
@@ -83,7 +83,7 @@ SUBREDDITS = [
     'all',
 ]
 try: # custom external subreddits list
-    from settings_subreddits import SUBREDDITS
+    from config_subreddits import SUBREDDITS
     SUBREDDITS = SUBREDDITS
 except ImportError: pass
 
