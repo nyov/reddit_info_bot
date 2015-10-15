@@ -174,6 +174,7 @@ def image_search(submission_url, config, account1, account2, display_limit=None)
             continue
 
         # spam-filter results
+        print('...filtering results for %s' % provider)
         filtered  = _filter_results(result, account1, account2, submission_id)
 
         if not filtered:
@@ -477,10 +478,13 @@ def main(config, account1, account2, user, subreddit_list, comment_stream_urls):
 
                 print('Finished a round of comments. Waiting two seconds.\n')
                 time.sleep(2)
-        except requests.ConnectionError:
-            print('Connection Error')
-        except requests.HTTPError:
-            print('HTTP Error')
+        except praw.errors.PRAWException as e:
+            print('\nSome unspecified PRAW error occured in main loop:', e)
+        # hmmm, these probably get caught by PRAW?
+        except requests.ConnectionError as e:
+            print('Connection Error', e)
+        except requests.HTTPError as e:
+            print('HTTP Error', e)
 
 
 def run(settings={}, **kwargs):

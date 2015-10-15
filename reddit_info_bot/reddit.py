@@ -65,6 +65,7 @@ def reddit_msg_linkfilter(messages, sending_account, receiving_account, submissi
     submission = sending_account.get_submission(submission_id=submission_id)
     # post with first account
     print('reddit_msg_linkfilter posting messages: ', end='')
+    count = 0
     for message in messages:
         # use a unique id in the message so we'll always recognize it
         # (even if the text got mangled, e.g. unicode or other strangeness)
@@ -78,44 +79,49 @@ def reddit_msg_linkfilter(messages, sending_account, receiving_account, submissi
             # FIXME: check exception for http errors (retry?) or other (spam?)
             continue
         queue.update({id: message})
+        count += 1
         print('<', end='')
-    print()
+    print(' (%d message(s), waiting...)' % count)
 
     time.sleep(7) # wait a bit
 
     # fetch posts on second account
     print('reddit_msg_linkfilter verifying messages: ', end='')
     verified_messages = []
-    fetched_messages = receiving_account.get_unread(limit=40)
+    fetched_messages = list(receiving_account.get_unread(limit=40))
+    count = 0
     for msg in fetched_messages:
-        if not msg.body.startswith('['):
+        msg_body = str(msg.body)
+        if not msg_body.startswith('['):
             # skip unknown messages
-            #print('\nreddit_msg_linkfilter skipping unknown message "%s..."' % msg.body[:10])
+            #print('(skipping unknown message "%s...") ' % msg_body[:10], end='')
             continue
         for id in queue.keys():
-            if str(id) not in msg.body:
+            if str(id) not in msg_body:
                 continue
             message = queue.pop(id)
-            #if message != str(msg.body).replace('[%s] ' % id, ''):
+            #if message != msg_body.replace('[%s] ' % id, ''):
             #    print('(message got mangled?)')
             msg.mark_as_read()
             verified_messages += [message]
             print('>', end='')
-    print()
+            count += 1
+    print(' (%d unread message(s) fetched, %d verified, %d unknown(s))' % (len(fetched_messages)-1, count, len(fetched_messages)-1-count))
     if queue: # shouldnt have any messages left at this point
-        print('reddit_msg_linkfilter posted but did not find: %s' % str(queue.values()))
+        print('reddit_msg_linkfilter lost: %s' % ', '.join('"%s"' % x for x in queue.values()))
     failed_messages = [m for m in messages if (m not in verified_messages and m not in queue.values())]
     if failed_messages:
-        print('reddit_msg_linkfilter failed on: %s' % str(failed_messages))
+        print('reddit_msg_linkfilter completely failed on: %s' % str(failed_messages))
     return verified_messages
 
 def _reddit_spamfilter(results, sending_account, receiving_account, submission_id):
     urls = set([url for url, text in results])
     verified_urls = reddit_msg_linkfilter(urls, sending_account, receiving_account, submission_id)
     verified_results = []
-    for url, text in results:
+    for result in results:
+        url = result[0]
         if url in verified_urls:
-            verified_results += result
+            verified_results.append(result)
     return verified_results
 
 def _filter_results(results, account1, account2, check_submission_id):
