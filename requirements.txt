@@ -1,4 +1,5 @@
 praw
 six
+docopt>=0.6.1
 parsel>=1.0.0
 publicsuffix>=1.0.5

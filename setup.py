@@ -2,10 +2,24 @@
 # -*- coding: utf-8 -*-
 from __future__ import (absolute_import, unicode_literals, print_function)
 import sys
-from os.path import dirname, join
+from os.path import dirname, join, abspath, split, splitext
 from setuptools import find_packages, setup
+from importlib import import_module
 
-
+def _import_file(filepath):
+    abspath_ = abspath(filepath)
+    dirname, file = split(abspath_)
+    fname, fext = splitext(file)
+    if fext != '.py':
+        raise ValueError("Not a Python source file: %s" % abspath_)
+    if dirname:
+        sys.path = [dirname] + sys.path
+    try:
+        module = import_module(fname)
+    finally:
+        if dirname:
+            sys.path.pop(0)
+    return module
 
 def main(argv):
 
@@ -17,11 +31,8 @@ def main(argv):
             long_description = f.read().decode('utf-8').strip()
     except (IOError, OSError): pass
 
-    version = '0.0'
-    try:
-        with open(join(dirname(__file__), 'reddit_info_bot/VERSION'), 'rb') as f:
-            version = f.read().decode('ascii').strip()
-    except (IOError, OSError): pass
+    filename = join(dirname(__file__), 'reddit_info_bot/version.py')
+    version = _import_file(filename).__version__
 
     requirements = []
     try:
