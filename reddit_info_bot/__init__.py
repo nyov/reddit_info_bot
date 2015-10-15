@@ -266,7 +266,8 @@ def find_username_mentions(account, account2, config, user, subreddit_list, alre
     count = 0
     for message in account.get_unread(limit=100):
         count += 1
-        if not _any_from_list_in_string(search_strings, message.body):
+        message_body = message.body.encode('utf-8')
+        if not _any_from_list_in_string(search_strings, message_body):
             print('.', end='')
             continue
         if not _applicable_comment(message, subreddit_list, time_limit_minutes):
@@ -351,13 +352,14 @@ def find_keywords(all_comments, account, config, user, subreddit_list, already_d
     count = 0
     for comment in all_comments:
         count += 1
+        comment_body = comment.body.encode('utf-8')
         if not _applicable_comment(comment, subreddit_list, time_limit_minutes):
             continue
         isPicture = _any_from_list_in_string(image_formats, comment.link_url)
         if not isPicture:
             print('t', end='')
             continue
-        if not _any_from_list_in_string(keyword_list, comment.body):
+        if not _any_from_list_in_string(keyword_list, comment_body):
             print('p', end='')
             continue
         top_level = [i.replies for i in comment.submission.comments]
@@ -371,7 +373,7 @@ def find_keywords(all_comments, account, config, user, subreddit_list, already_d
         if not any(i for i in submission_comments if i.body == information_reply): #If there are information replies
             print('r', end='')
             continue
-        print('\ndetected keyword: %s' % comment.body.lower())
+        print('\ndetected keyword: %s' % comment_body.lower())
         if comment.id in already_done:
             print('r', end='')
             continue
