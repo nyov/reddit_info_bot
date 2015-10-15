@@ -118,7 +118,13 @@ def find_username_mentions(account, account2, config, subreddit_list, already_do
             print('u', end='')
             continue
         print('R')
-        reply = image_search(message.submission.url, config, account, account2, display_limit=5)
+        try:
+            reply = image_search(message.submission.url, config, account, account2, display_limit=5)
+        except Exception as e:
+            print('Error occured in search:', e)
+            reply = None
+            # lets cancel this answer to try again, instead of replying with no results
+            break
         if not reply:
             print('\nimage_search failed (bug)! skipping')
             continue
@@ -261,13 +267,6 @@ def check_downvotes(user, start_time, comment_deleting_wait_time):
 
 
 def main(config, account1, account2, subreddit_list, comment_stream_urls):
-    if ACTMODE & ACTMODE_LOG:
-        print('log mode enabled')
-    if ACTMODE & ACTMODE_PM:
-        print('pm mode enabled')
-    if ACTMODE & ACTMODE_COMMENT:
-        print('comment mode enabled')
-
     start_time = time.time()
     comment_deleting_wait_time = config.getint('COMMENT_DELETIONCHECK_WAIT_LIMIT') #how many minutes to wait before deleting downvoted comments
     find_mentions_enabled = config.getbool('BOTCMD_IMAGESEARCH_ENABLED')
@@ -281,27 +280,41 @@ def main(config, account1, account2, subreddit_list, comment_stream_urls):
     print('Starting run...')
     while True:
         try:
-            for count, stream in enumerate(comment_stream_urls): #uses separate comment streams for large subreddit list due to URL length limit
-                print('visiting comment stream %d/%d "%s..."' % (count+1, len(comment_stream_urls), str(stream)[:60]))
-                a = time.time()
-                #feed_comments = stream.get_comments()
-                feed_comments = stream.get_comments(limit=100)
-                #feed_comments = stream.get_comments(limit=None) # all
-                if not feed_comments:
-                    continue
-                print(time.time()-a)
-                if find_keywords_enabled:
+            # check inbox messages for username mentions and reply to bot requests
+            if find_mentions_enabled:
+                print('finding username mentions: ', end='')
+                find_username_mentions(account1, account2, config, subreddit_list, already_done)
+                print()
+
+            # scan for potential comments to reply to
+            if find_keywords_enabled:
+                for count, stream in enumerate(comment_stream_urls): #uses separate comment streams for large subreddit list due to URL length limit
+                    print('visiting comment stream %d/%d "%s..."' % (count+1, len(comment_stream_urls), str(stream)[:60]))
+                    feed_comments = stream.get_comments()
+                    #feed_comments = stream.get_comments(limit=100)
+                    #feed_comments = stream.get_comments(limit=None) # all
+                    if not feed_comments:
+                        continue
                     find_keywords(feed_comments, account1, config, subreddit_list, already_done)
-                if find_mentions_enabled:
-                    print('finding username mentions: ', end='')
-                    find_username_mentions(account1, account2, config, subreddit_list, already_done)
-                start_time = check_downvotes(account1.user, start_time, comment_deleting_wait_time)
 
-                with open("already_done.p", "wb") as df:
-                    pickle.dump(already_done, df)
+                    # back off a second
+                    time.sleep(1)
 
-                print('Finished a round of comments. Waiting two seconds.\n')
-                time.sleep(2)
+            # check downvoted comments (to delete where necessary)
+            if True:
+                    start_time = check_downvotes(account1.user, start_time, comment_deleting_wait_time)
+
+            with open("already_done.p", "wb") as df:
+                pickle.dump(already_done, df)
+
+            if find_mentions_enabled and not find_keywords_enabled:
+                # no need to hammer the API, once every minute should suffice in this case
+                print('Checking back in sixty seconds.')
+                time.sleep(60)
+            else:
+                print('Finished a round of comments. Waiting ten seconds.')
+                time.sleep(10)
+
         except (praw.errors.ClientException):
             raise
         except praw.errors.PRAWException as e:
@@ -330,16 +343,21 @@ def run(settings={}, **kwargs):
         if botmode == 'log':
             ACTMODE |= ACTMODE_LOG
 
+    # verify modes
+    if ACTMODE & ACTMODE_LOG:
+        print('log mode enabled')
+    if ACTMODE & ACTMODE_PM:
+        print('pm mode enabled')
+    if ACTMODE & ACTMODE_COMMENT:
+        print('comment mode enabled')
+
     # force early cache-refreshing spamlists
     spamfilter_lists()
 
     (account1, account2) = reddit_login(settings)
 
     #account1 = account2 = None
-    #url = 'https://i.imgur.com/yZKXDPV.jpg'
-    #url = 'http://i.imgur.com/mQ7Tuye.gifv'
-    #url = 'https://i.imgur.com/CL59cxR.gif'
-    #url = 'https://gfycat.com/PaleWelltodoHackee'
+    #url = ''
     #print(image_search(url, settings, account1, account2, display_limit=5))
     #sys.exit()
 
