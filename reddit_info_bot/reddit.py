@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
+from __future__ import print_function, unicode_literals
 import praw
 import time
 import uuid
@@ -91,7 +91,7 @@ def reddit_msg_linkfilter(messages, sending_account, receiving_account, submissi
     fetched_messages = list(receiving_account.get_unread(limit=40))
     count = 0
     for msg in fetched_messages:
-        msg_body = str(msg.body)
+        msg_body = msg.body # is unicode
         if not msg_body.startswith('['):
             # skip unknown messages
             #print('(skipping unknown message "%s...") ' % msg_body[:10], end='')
@@ -108,7 +108,7 @@ def reddit_msg_linkfilter(messages, sending_account, receiving_account, submissi
             count += 1
     print(' (%d unread message(s) fetched, %d verified, %d unknown(s))' % (len(fetched_messages)-1, count, len(fetched_messages)-1-count))
     if queue: # shouldnt have any messages left at this point
-        print('reddit_msg_linkfilter lost: %s' % ', '.join('"%s"' % x for x in queue.values()))
+        print('reddit_msg_linkfilter filtered out: %s' % ', '.join('"%s"' % x for x in queue.values()))
     failed_messages = [m for m in messages if (m not in verified_messages and m not in queue.values())]
     if failed_messages:
         print('reddit_msg_linkfilter completely failed on: %s' % str(failed_messages))
