@@ -9,6 +9,14 @@ import requests
 import re
 from parsel import Selector
 
+import string
+from base64 import b64decode
+from collections import OrderedDict
+from six.moves.urllib.parse import urlsplit, urlunsplit
+
+from .reddit import _filter_results, _format_results
+from .util import domain_suffix
+
 logger = logging.getLogger(__name__)
 
 
@@ -121,3 +129,167 @@ def get_tineye_results(image_url, config, limit=15):
             results += extract(response, limit)
 
     return results
+
+
+def image_search(submission_url, config, account1, account2, display_limit=None):
+    """
+    """
+    extra_message = config.get('FOOTER_INFO_MESSAGE')
+    no_results_message = config.get('NO_SEARCH_RESULTS_MESSAGE')
+    submission_id = config.get('REDDIT_SPAMFILTER_SUBMISSION_ID', None)
+
+    print('Image-searching for %s' % submission_url)
+
+    # substitute videos with gif versions where possible
+    # (because search engines index those)
+    domain = domain_suffix(submission_url)
+    fileformats = ('.gifv', '.mp4', '.webm', '.ogg')
+    if domain in ('imgur.com', 'gfycat.com'):
+        domainparts = urlsplit(submission_url)
+        if submission_url.endswith(fileformats):
+            for ff in fileformats:
+                submission_url = submission_url.replace(ff, '.gif')
+            print('Found %s video - substituting with gif url: %s' % (domain, submission_url))
+        # no file extension?
+        elif domainparts.path.rstrip(string.ascii_lowercase+string.ascii_uppercase) == '/':
+            # on imgur, this could be a regular image, but luckily imgur provides a .gif url anyway :)
+            # on gfycat we must also change domain to 'giant.gfycat.com'
+            if str(domain) == 'gfycat.com':
+                (scheme, netloc, path, query, fragment) = domainparts
+                #maybe_handy_json_url = urlunsplit((scheme, netloc, '/cajax/get' + path, query, fragment))
+                submission_url = urlunsplit((scheme, 'giant.gfycat.com', path, query, fragment))
+            submission_url += '.gif'
+            print('Found potential %s video - using gif url: %s' % (domain, submission_url))
+
+    link = re.sub("/","*", submission_url)
+    results = ''
+    i = 0
+    app = unicode(b64decode('aHR0cHM6Ly9zbGVlcHktdHVuZHJhLTU2NTkuaGVyb2t1YXBwLmNvbS9zZWFyY2gv'))
+    while not results:
+        i += 1
+        try:
+            if config.getbool('DEBUG', False):
+                ### for debugging, cache response
+                _dumpfile = 'proxydebug'
+                if not os.path.exists(_dumpfile):
+                    response = urllib2.urlopen(app+link).read()
+                    with open(_dumpfile, 'wb') as f:
+                        f.write(response)
+                with open(_dumpfile, 'rb') as f:
+                    response = f.read()
+            else:
+                response = urllib2.urlopen(app+link).read()
+            results = eval(response)
+        except urllib2.HTTPError as e:
+            print(e)
+            print("Retrying %d" % i)
+
+    search_engines = OrderedDict([
+        ('google', 'Google'),
+        ('bing', 'Bing'),
+        ('yandex', 'Yandex'),
+        ('tineye', 'Tineye'),
+        ('karmadecay', 'Karma Decay'),
+    ])
+    search_results = OrderedDict()
+
+    message = '**Best %s Guesses**\n\n%s\n\n'
+    reply = ''
+
+    for engine, provider in search_engines.items():
+        try:
+            # hardcoded results
+            if engine == 'google':
+                result = results[0]
+                #print('google:', result)
+            if engine == 'bing':
+                result = results[1]
+                #print('bing:', result)
+            if engine == 'yandex':
+                result = results[2]
+                #print('yandex:', result)
+            if engine == 'karmadecay':
+                result = results[3]
+                # sometimes we get nonempty empty results...
+                if result == [(u'', u'')]:
+                    result = []
+                #print('karma:', result)
+            if engine == 'tineye':
+                if config.getbool('DEBUG', False):
+                    continue
+                result = get_tineye_results(submission_url, config)
+                #print('tineye:', result)
+        except IndexError as e:
+            print('Failed fetching %s results: %s' % (provider, e))
+
+        # sanitizing strange remote conversions,
+        # unescape previously escaped backslash
+        result = [
+            [x.replace('\\', '').replace(r'[', '') for x in r]
+            for r in result
+        ]
+
+        search_results[provider] = {}
+
+        # sanity check on app's response:
+        _dropped = _ok = _all = 0
+        _good = []
+        for idx, item in enumerate(result):
+            _all += 1
+            # result should always be '(url, text)', nothing else
+            if len(item) != 2:
+                _dropped += 1
+                continue
+            (url, text) = item
+            # quick check for *impossible* urls
+            if not url.strip().startswith(('http', 'ftp', '//')): # http | ftp | //:
+                _dropped += 1
+                continue
+            _ok += 1
+            _good += [item]
+        result = _good
+
+        if _dropped > 0:
+            print('Dropped %d invalid result(s) from proxy for %s, %d result(s) remaining' % \
+                    (_dropped, provider, _ok))
+        del _dropped, _ok, _all, _good
+
+        search_results[provider].update({'all': len(result)})
+
+        if not result:
+            reply += message % (provider, 'No available links from this search engine found.')
+            search_results[provider].update({'succeeded': 0, 'failed': 0})
+            del search_engines[engine]
+            continue
+
+        # spam-filter results
+        print('...filtering results for %s' % provider)
+        filtered  = _filter_results(result, account1, account2, submission_id)
+
+        if not filtered:
+            reply += message % (provider, 'No available links from this search engine found.')
+            search_results[provider].update({'succeeded': 0, 'failed': len(result)})
+            del search_engines[engine]
+            continue
+
+        search_results[provider].update({'succeeded': len(filtered), 'failed': len(result)-len(filtered)})
+
+        # limit output to `display_limit` results
+        if display_limit:
+            filtered = filtered[:display_limit]
+
+        # format results
+        formatted = _format_results(filtered)
+
+        reply += message % (provider, formatted)
+
+    if not search_engines:
+        reply = no_results_message
+
+    # stats
+    for engine, stats in search_results.items():
+        print('%11s: all: %d / failed: %d / good: %d' % (engine,
+            stats.get('all'), stats.get('failed'), stats.get('succeeded')))
+
+    reply += extra_message
+    return reply
