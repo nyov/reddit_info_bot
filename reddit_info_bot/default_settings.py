@@ -3,7 +3,7 @@ Contains the default values for all settings of reddit_info_bot.
 
 """
 import platform
-from . import __version__ as BOT_VERSION
+from .version import __version__ as BOT_VERSION
 
 ##
 ## program settings

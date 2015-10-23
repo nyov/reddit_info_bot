@@ -18,7 +18,6 @@ from base64 import b64decode
 from collections import OrderedDict
 from six.moves.urllib.parse import urlsplit, urlunsplit
 
-from .reddit import _filter_results, _format_results
 from .util import domain_suffix
 
 logger = logging.getLogger(__name__)
@@ -138,6 +137,8 @@ def get_tineye_results(image_url, config, limit=15):
 def image_search(submission_url, config, account1, account2, display_limit=None):
     """
     """
+    from .reddit import _filter_results, _format_results
+
     extra_message = config.get('FOOTER_INFO_MESSAGE')
     no_results_message = config.get('BOTCMD_IMAGESEARCH_NO_RESULTS_MESSAGE')
     submission_id = config.get('REDDIT_SPAMFILTER_SUBMISSION_ID', None)
