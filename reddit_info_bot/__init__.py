@@ -266,11 +266,11 @@ def check_downvotes(user, start_time, comment_deleting_wait_time):
     return start_time
 
 
-def main(config, account1, account2, subreddit_list, comment_stream_urls):
+def main(settings, account1, account2, subreddit_list, comment_stream_urls):
     start_time = time.time()
-    comment_deleting_wait_time = config.getint('COMMENT_DELETIONCHECK_WAIT_LIMIT') #how many minutes to wait before deleting downvoted comments
-    find_mentions_enabled = config.getbool('BOTCMD_IMAGESEARCH_ENABLED')
-    find_keywords_enabled = config.getbool('BOTCMD_INFORMATIONAL_ENABLED')
+    comment_deleting_wait_time = settings.getint('COMMENT_DELETIONCHECK_WAIT_LIMIT') #how many minutes to wait before deleting downvoted comments
+    find_mentions_enabled = settings.getbool('BOTCMD_IMAGESEARCH_ENABLED')
+    find_keywords_enabled = settings.getbool('BOTCMD_INFORMATIONAL_ENABLED')
 
     already_done = []
     if os.path.isfile("already_done.p"):
@@ -283,7 +283,7 @@ def main(config, account1, account2, subreddit_list, comment_stream_urls):
             # check inbox messages for username mentions and reply to bot requests
             if find_mentions_enabled:
                 print('finding username mentions: ', end='')
-                find_username_mentions(account1, account2, config, subreddit_list, already_done)
+                find_username_mentions(account1, account2, settings, subreddit_list, already_done)
                 print()
 
             # scan for potential comments to reply to
@@ -295,7 +295,7 @@ def main(config, account1, account2, subreddit_list, comment_stream_urls):
                     #feed_comments = stream.get_comments(limit=None) # all
                     if not feed_comments:
                         continue
-                    find_keywords(feed_comments, account1, config, subreddit_list, already_done)
+                    find_keywords(feed_comments, account1, settings, subreddit_list, already_done)
 
                     # back off a second
                     time.sleep(1)
@@ -315,8 +315,12 @@ def main(config, account1, account2, subreddit_list, comment_stream_urls):
                 print('Finished a round of comments. Waiting ten seconds.')
                 time.sleep(10)
 
-        except (praw.errors.ClientException):
+        except praw.errors.ClientException:
             raise
+        except praw.errors.OAuthInvalidToken:
+            # full re-auth
+            print('Access token expired, re-logging.')
+            (account1, account2) = reddit_login(settings)
         except praw.errors.PRAWException as e:
             print('\nSome unspecified PRAW error occured in main loop:', e)
 
