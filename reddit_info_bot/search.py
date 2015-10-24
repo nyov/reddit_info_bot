@@ -2,12 +2,16 @@
 from __future__ import (absolute_import, unicode_literals, print_function)
 import os
 import logging
-import urllib2
-import cookielib
-import BeautifulSoup
+import six.moves.http_cookiejar as cookielib
+try:
+    import BeautifulSoup as bs
+except ImportError:
+    import bs4 as bs
 import requests
 import re
 from parsel import Selector
+from six.moves.urllib.request import build_opener, HTTPCookieProcessor, urlopen
+from six.moves.urllib.error import HTTPError
 
 import string
 from base64 import b64decode
@@ -26,7 +30,7 @@ def get_google_results(image_url, config, limit=15): #limit is the max number of
     response_text = requests.get('https://www.google.com/searchbyimage?image_url={0}'.format(image_url), headers=headers).content
     response_text += requests.get('https://www.google.com/searchbyimage?image_url={0}&start=10'.format(image_url), headers=headers).content
     #response_text = response_text[response_text.find('Pages that include'):]
-    tree = BeautifulSoup.BeautifulSoup(response_text)
+    tree = bs.BeautifulSoup(response_text)
     print(len(response_text))
     print(response_text)
     list_class_results = tree.findAll(attrs={'class':'r'})
@@ -40,10 +44,10 @@ def get_google_results(image_url, config, limit=15): #limit is the max number of
 def get_bing_results(image_url, config, limit=15):
     cj = cookielib.MozillaCookieJar('cookies.txt')
     cj.load()
-    opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
+    opener = build_opener(HTTPCookieProcessor(cj))
     opener.addheaders = [('User-Agent', config['SEARCH_USER_AGENT'])]
     response_text = opener.open("https://www.bing.com/images/searchbyimage?FORM=IRSBIQ&cbir=sbi&imgurl="+image_url).read()
-    tree = BeautifulSoup.BeautifulSoup(response_text)
+    tree = bs.BeautifulSoup(response_text)
     list_class_results = tree.findAll(attrs={'class':'sbi_sp'})
     if len(list_class_results) == 0:
         raise IndexError('No results')
@@ -57,7 +61,7 @@ def get_yandex_results(image_url, config, limit=15):
     headers['User-Agent'] = config['SEARCH_USER_AGENT']
     response_text = requests.get("https://www.yandex.com/images/search?img_url={0}&rpt=imageview&uinfo=sw-1440-sh-900-ww-1440-wh-775-pd-1-wp-16x10_1440x900".format(image_url), headers=headers).content
     response_text = response_text[response_text.find("Sites where the image is displayed"):]
-    tree = BeautifulSoup.BeautifulSoup(response_text)
+    tree = bs.BeautifulSoup(response_text)
     list_class_results = tree.findAll(attrs={'class':'link other-sites__title-link i-bem'})
     if len(list_class_results) == 0:
         raise IndexError('No results')
@@ -67,7 +71,7 @@ def get_yandex_results(image_url, config, limit=15):
         b = "https:"+a[a.find('href="')+6:a.find('" target="')]
         filtered_link = re.compile(r'\b(amp;)\b', flags=re.IGNORECASE).sub("",b)
         try:
-            redirect_url = urllib2.urlopen(filtered_link).geturl()
+            redirect_url = urlopen(filtered_link).geturl()
             text = a[a.find('"_blank">')+9:a.find('</a>')]
             results.append((redirect_url,text))
         except: pass #this site bands bots and cannot be accessed
@@ -172,15 +176,15 @@ def image_search(submission_url, config, account1, account2, display_limit=None)
                 ### for debugging, cache response
                 _dumpfile = 'proxydebug'
                 if not os.path.exists(_dumpfile):
-                    response = urllib2.urlopen(app+link).read()
+                    response = urlopen(app+link).read()
                     with open(_dumpfile, 'wb') as f:
                         f.write(response)
                 with open(_dumpfile, 'rb') as f:
                     response = f.read()
             else:
-                response = urllib2.urlopen(app+link).read()
+                response = urlopen(app+link).read()
             results = eval(response)
-        except urllib2.HTTPError as e:
+        except HTTPError as e:
             print(e)
             print("Retrying %d" % i)
 

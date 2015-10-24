@@ -5,9 +5,10 @@ import os
 import logging
 import time
 import pickle
-import urllib2
 import re
 import json
+from six.moves.urllib.request import urlopen
+from six.moves.urllib.error import HTTPError
 from .util import domain_suffix, tld_from_suffix
 
 logger = logging.getLogger(__name__)
@@ -16,10 +17,10 @@ logger = logging.getLogger(__name__)
 def get_filter(filter_type):
     def cache_filters(filter_type):
         try:
-            response = urllib2.urlopen('http://spambot.rarchives.com/api.cgi?method=get_filters&start=0&count=3000&type={0}'.format(filter_type)).read()
+            response = urlopen('http://spambot.rarchives.com/api.cgi?method=get_filters&start=0&count=3000&type={0}'.format(filter_type)).read()
             # test if the response is valid for us
             json.loads(response)['filters']
-        except (urllib2.HTTPError, KeyError, Exception) as e:
+        except (HTTPError, KeyError, Exception) as e:
             msg = 'Spamfilter update failed with error "{0}", using cached files (if available)'.format(str(e))
             print(msg)
         else:
