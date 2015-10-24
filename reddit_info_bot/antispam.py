@@ -38,7 +38,7 @@ def get_filter(filter_type):
 
     filters = None
     try:
-        with open(filename, 'rb') as inf:
+        with open(filename, 'r') as inf:
             filters = json.load(inf)['filters']
     except (ValueError, KeyError): # cached file contents invalid
         os.unlink(filename)

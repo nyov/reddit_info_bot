@@ -1,20 +1,37 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function, unicode_literals
-import praw
+from __future__ import (absolute_import, unicode_literals, print_function)
 import time
 import uuid
 
+from . import praw
 from .antispam import isspam, spamfilter_lists
 from .util import remove_control_characters
+from .exceptions import ConfigurationError
 
 
 def r_login(user_agent, username, password):
-    """login to reddit account"""
+    """authenticate to reddit api using user credentials
+    """
+    session = praw.Reddit(user_agent)
+    session.login(username, password)
+    return session
 
-    account = praw.Reddit(user_agent)
-    account.login(username, password, disable_warning=True) # drop the warning for now (working on it)
-    # 'Logged in as /u/%s' % username
-    return account
+def r_oauth_login(user_agent, client_id, client_secret,
+                  redirect_uri=None, refresh_token=None,
+                  username=None, password=None):
+    """authenticate to reddit api using oauth
+    """
+    session = praw.Reddit(user_agent)
+    session.set_oauth_app_info(client_id, client_secret, redirect_uri)
+    if not session.has_oauth_app_info:
+        raise ConfigurationError('Missing OAuth credentials')
+    if refresh_token:
+        session.refresh_access_information(refresh_token, update_session=True)
+    else:
+        access = session.get_bearer_access(username, password)
+        session.set_access_credentials(**access)
+    return session
+
 
 def check_shadowban(user, user_agent):
     """Simple check for a potential shadowban on `user`
@@ -35,19 +52,42 @@ def check_shadowban(user, user_agent):
 def reddit_login(config):
     print('Logging into accounts')
 
-    user_agent = config['BOT_NAME']
+    user_agent = config.get('BOT_AGENT')
 
-    shadowbanned = check_shadowban(config.get('REDDIT_ACCOUNT_NAME'), user_agent)
-    if shadowbanned:
-        print('%s is potentially shadowbanned.' % config.get('REDDIT_ACCOUNT_NAME'))
+    client_id = config.get('OAUTH_CLIENT_ID')
+    client_secret = config.get('OAUTH_SECRET_TOKEN')
+    account_name = config.get('REDDIT_ACCOUNT_NAME')
+    account_pass = config.get('REDDIT_ACCOUNT_PASS')
 
-    account1 = r_login(user_agent, config.get('REDDIT_ACCOUNT_NAME'), config.get('REDDIT_ACCOUNT_PASS'))
-    if config.get('SECOND_ACCOUNT_NAME', None) and config.get('SECOND_ACCOUNT_PASS', None):
-        # load a second praw instance for the second account (the one used to check the spam links)
-        shadowbanned = check_shadowban(config.get('SECOND_ACCOUNT_NAME'), user_agent)
+    use_oauth = client_id and client_secret
+    use_login = account_name and account_pass
+    if use_oauth and use_login:
+        account1 = r_oauth_login(user_agent, client_id, client_secret,
+                                 username=account_name, password=account_pass)
+    else:
+        if not account_name or not account_pass:
+            raise ConfigurationError('Missing login credentials')
+        shadowbanned = check_shadowban(account_name, user_agent)
         if shadowbanned:
-            print('%s is potentially shadowbanned.' % config.get('SECOND_ACCOUNT_NAME'))
-        account2 = r_login(user_agent, config['SECOND_ACCOUNT_NAME'], config['SECOND_ACCOUNT_PASS'])
+            print('%s may be shadowbanned.' % account_name)
+        account1 = r_login(user_agent, account_name, account_pass)
+
+    # load a second praw instance for the second account (the one used to check the spam links)
+    client2_id = config.get('SECOND_OAUTH_CLIENT_ID')
+    client2_secret = config.get('SECOND_OAUTH_SECRET_TOKEN')
+    account2_name = config.get('SECOND_ACCOUNT_NAME')
+    account2_pass = config.get('SECOND_ACCOUNT_PASS')
+
+    use_second_oauth = client2_id and client2_secret
+    use_second_login = account2_name and account2_pass
+    if use_second_oauth and use_second_login:
+        account2 = r_oauth_login(user_agent, client2_id, client2_secret,
+                                 username=account2_name, password=account2_pass)
+    elif use_second_login:
+        shadowbanned = check_shadowban(account2_name, user_agent)
+        if shadowbanned:
+            print('%s may be shadowbanned.' % account2_name)
+        account2 = r_login(user_agent, account2_name, account2_pass)
     else:
         account2 = False
 

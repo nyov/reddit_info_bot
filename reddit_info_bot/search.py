@@ -139,7 +139,7 @@ def image_search(submission_url, config, account1, account2, display_limit=None)
     """
     """
     extra_message = config.get('FOOTER_INFO_MESSAGE')
-    no_results_message = config.get('NO_SEARCH_RESULTS_MESSAGE')
+    no_results_message = config.get('BOTCMD_IMAGESEARCH_NO_RESULTS_MESSAGE')
     submission_id = config.get('REDDIT_SPAMFILTER_SUBMISSION_ID', None)
 
     print('Image-searching for %s' % submission_url)

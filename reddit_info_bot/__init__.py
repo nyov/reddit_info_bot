@@ -9,8 +9,8 @@ import logging
 import time
 import pickle
 import re
-import praw.errors
 
+from . import praw
 from .version import __version__, version_info
 from .search import image_search
 from .reddit import reddit_login, build_subreddit_feeds
