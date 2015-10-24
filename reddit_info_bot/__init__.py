@@ -36,7 +36,7 @@ ACTMODE = ACTMODE_NONE
 def reply_to_potential_comment(comment, account, config, already_done):
     keyword_list = config.getlist('BOTCMD_INFORMATIONAL')
     image_formats = config.getlist('IMAGE_FORMATS')
-    reply = config.get('INFOREPLY_MESSAGE')
+    reply = config.get('BOTCMD_INFORMATIONAL_REPLY')
 
     if not keyword_list:
         return True
@@ -172,7 +172,7 @@ def find_keywords(all_comments, account, config, user, subreddit_list, already_d
     time_limit_minutes = config.getint('COMMENT_REPLY_AGE_LIMIT') #how long before a comment will be ignored for being too old
     image_formats = config.getlist('IMAGE_FORMATS')
     extra_message = config.get('FOOTER_INFO_MESSAGE')
-    information_reply = config.get('INFOREPLY_MESSAGE')
+    information_reply = config.get('BOTCMD_INFORMATIONAL_REPLY')
 
     count = 0
     for comment in all_comments:

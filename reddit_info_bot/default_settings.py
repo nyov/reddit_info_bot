@@ -48,6 +48,10 @@ BOTCMD_INFORMATIONAL = [ # reply to potential queries with bot-info
     'source?',
     'sauce?',
 ]
+BOTCMD_INFORMATIONAL_REPLY = (
+"""It appears that you are looking for more information.\n\nObtain more information by making a comment in the thread which includes /u/%s""" \
+    % REDDIT_ACCOUNT_NAME
+)
 
 
 COMMENT_REPLY_AGE_LIMIT = 0 # ignore comments older than
@@ -69,11 +73,6 @@ FOOTER_INFO_MESSAGE = (
 
 NO_SEARCH_RESULTS_MESSAGE = (
 """No search results found."""
-)
-
-INFOREPLY_MESSAGE = (
-"""It appears that you are looking for more information.\n\nObtain more information by making a comment in the thread which includes /u/%s""" \
-    % REDDIT_ACCOUNT_NAME
 )
 
 

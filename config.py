@@ -46,6 +46,10 @@ BOTCMD_INFORMATIONAL = [ # reply to potential queries with bot-info
     'where is this',
     'who is this',
 ]
+BOTCMD_INFORMATIONAL_REPLY = (
+"""It appears that you are looking for more information.\n\nObtain more information by making a comment in the thread which includes /u/%s""" % BOT_NAME
+)
+
 
 
 COMMENT_REPLY_AGE_LIMIT = 2 # ignore comments older than minutes
@@ -70,11 +74,6 @@ FOOTER_INFO_MESSAGE = (
 
 NO_SEARCH_RESULTS_MESSAGE = (
 """Well that's embarrassing.  Not for me, but for the search engines. \n\n I was not able to automatically find results for this link.  \n\n ^^If ^^this ^^is ^^a ^^.gifv ^^I ^^am ^^working ^^on ^^adding ^^them ^^to ^^searches."""
-)
-
-INFOREPLY_MESSAGE = (
-"""It appears that you are looking for more information.\n\nObtain more information by making a comment in the thread which includes /u/%s""" \
-    % BOT_NAME
 )
 
 
@@ -118,7 +117,7 @@ try:
                 FOOTER_INFO_MESSAGE = value
                 continue
             if name == 'INFORMATION_REPLY':
-                INFOREPLY_MESSAGE = value
+                BOTCMD_INFORMATIONAL_REPLY = value
                 continue
             if name == 'USE_KEYWORDS':
                 BOTCMD_INFORMATIONAL_ENABLED = value
