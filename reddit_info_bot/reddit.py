@@ -16,14 +16,37 @@ def r_login(user_agent, username, password):
     # 'Logged in as /u/%s' % username
     return account
 
+def check_shadowban(user, user_agent):
+    """Simple check for a potential shadowban on `user`
+
+    using a non-authenticated connection.
+    """
+    session = praw.Reddit(user_agent)
+    shadowbanned = False
+    try:
+        user = session.get_redditor(user)
+    except praw.errors.HTTPException as e:
+        if e._raw.status_code == 404:
+            shadowbanned = True
+        else:
+            raise
+    return shadowbanned
+
 def reddit_login(config):
     print('Logging into accounts')
 
     user_agent = config['BOT_NAME']
 
+    shadowbanned = check_shadowban(config.get('REDDIT_ACCOUNT_NAME'), user_agent)
+    if shadowbanned:
+        print('%s is potentially shadowbanned.' % config.get('REDDIT_ACCOUNT_NAME'))
+
     account1 = r_login(user_agent, config.get('REDDIT_ACCOUNT_NAME'), config.get('REDDIT_ACCOUNT_PASS'))
     if config.get('SECOND_ACCOUNT_NAME', None) and config.get('SECOND_ACCOUNT_PASS', None):
         # load a second praw instance for the second account (the one used to check the spam links)
+        shadowbanned = check_shadowban(config.get('SECOND_ACCOUNT_NAME'), user_agent)
+        if shadowbanned:
+            print('%s is potentially shadowbanned.' % config.get('SECOND_ACCOUNT_NAME'))
         account2 = r_login(user_agent, config['SECOND_ACCOUNT_NAME'], config['SECOND_ACCOUNT_PASS'])
     else:
         account2 = False
