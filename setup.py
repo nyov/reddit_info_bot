@@ -28,7 +28,7 @@ def main(argv):
     long_description = description
     try:
         with open('README.md', 'r') as f:
-            long_description = f.read().decode('utf-8').strip()
+            long_description = f.read().strip()
     except (IOError, OSError): pass
 
     filename = join(dirname(__file__), 'reddit_info_bot/version.py')
@@ -36,9 +36,9 @@ def main(argv):
 
     requirements = []
     try:
-        with open(join(dirname(__file__), 'requirements.txt'), 'rb') as f:
+        with open(join(dirname(__file__), 'requirements.txt'), 'r') as f:
             for line in f:
-                requirements += [line.decode('ascii').strip()]
+                requirements += [line.strip()]
     except (IOError, OSError): pass
 
 
@@ -56,7 +56,7 @@ def main(argv):
         'zip_safe': False,  # for setuptools
         'entry_points': {
             'console_scripts': [
-                'reddit_info_bot = reddit_info_bot.cli:execute'
+                'reddit-infobot = reddit_info_bot.cli:execute'
             ],
         },
         'classifiers': [
