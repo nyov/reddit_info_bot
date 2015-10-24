@@ -28,9 +28,7 @@ def reddit_login(config):
     else:
         account2 = False
 
-    user = account1.get_redditor(config['REDDIT_ACCOUNT_NAME'])
-
-    return (account1, account2, user)
+    return (account1, account2)
 
 
 MAX_URL_LENGTH = 2010

@@ -82,7 +82,7 @@ def _any_from_list_in_string(list_, string_):
     return any(str(w).lower() in string_ for w in list_)
     #return any(True for w in list_ if str(w).lower() in string_)
 
-def find_username_mentions(account, account2, config, user, subreddit_list, already_done):
+def find_username_mentions(account, account2, config, subreddit_list, already_done):
     search_strings = config.getlist('BOTCMD_IMAGESEARCH')
     time_limit_minutes = config.getint('COMMENT_REPLY_AGE_LIMIT') #how long before a comment will be ignored for being too old
     image_formats = config.getlist('IMAGE_FORMATS')
@@ -114,7 +114,7 @@ def find_username_mentions(account, account2, config, user, subreddit_list, alre
         if message.id in already_done:
             print('r', end='')
             continue
-        if message.author == user:
+        if message.author == account.user:
             print('u', end='')
             continue
         print('R')
@@ -167,7 +167,7 @@ def find_username_mentions(account, account2, config, user, subreddit_list, alre
     print(' (%d messages handled)' % (count,))
 
 
-def find_keywords(all_comments, account, config, user, subreddit_list, already_done):
+def find_keywords(all_comments, account, config, subreddit_list, already_done):
     keyword_list = config.getlist('BOTCMD_INFORMATIONAL')
     time_limit_minutes = config.getint('COMMENT_REPLY_AGE_LIMIT') #how long before a comment will be ignored for being too old
     image_formats = config.getlist('IMAGE_FORMATS')
@@ -202,7 +202,7 @@ def find_keywords(all_comments, account, config, user, subreddit_list, already_d
         if comment.id in already_done:
             print('r', end='')
             continue
-        if comment.author == user:
+        if comment.author == account.user:
             print('u', end='')
             continue
         print('R', end='')
@@ -260,7 +260,7 @@ def check_downvotes(user, start_time, comment_deleting_wait_time):
     return start_time
 
 
-def main(config, account1, account2, user, subreddit_list, comment_stream_urls):
+def main(config, account1, account2, subreddit_list, comment_stream_urls):
     if ACTMODE & ACTMODE_LOG:
         print('log mode enabled')
     if ACTMODE & ACTMODE_PM:
@@ -291,17 +291,19 @@ def main(config, account1, account2, user, subreddit_list, comment_stream_urls):
                     continue
                 print(time.time()-a)
                 if find_keywords_enabled:
-                    find_keywords(feed_comments, account1, config, user, subreddit_list, already_done)
+                    find_keywords(feed_comments, account1, config, subreddit_list, already_done)
                 if find_mentions_enabled:
                     print('finding username mentions: ', end='')
-                    find_username_mentions(account1, account2, config, user, subreddit_list, already_done)
-                start_time = check_downvotes(user, start_time, comment_deleting_wait_time)
+                    find_username_mentions(account1, account2, config, subreddit_list, already_done)
+                start_time = check_downvotes(account1.user, start_time, comment_deleting_wait_time)
 
                 with open("already_done.p", "wb") as df:
                     pickle.dump(already_done, df)
 
                 print('Finished a round of comments. Waiting two seconds.\n')
                 time.sleep(2)
+        except (praw.errors.ClientException):
+            raise
         except praw.errors.PRAWException as e:
             print('\nSome unspecified PRAW error occured in main loop:', e)
 
@@ -331,9 +333,9 @@ def run(settings={}, **kwargs):
     # force early cache-refreshing spamlists
     spamfilter_lists()
 
-    (account1, account2, user) = reddit_login(settings)
+    (account1, account2) = reddit_login(settings)
 
-    #account1 = account2 = user = None
+    #account1 = account2 = None
     #url = 'https://i.imgur.com/yZKXDPV.jpg'
     #url = 'http://i.imgur.com/mQ7Tuye.gifv'
     #url = 'https://i.imgur.com/CL59cxR.gif'
@@ -353,4 +355,4 @@ def run(settings={}, **kwargs):
         # lazy objects, nothing done yet
         comment_stream_urls += [comment_feed]
 
-    main(settings, account1, account2, user, subreddit_list, comment_stream_urls)
+    main(settings, account1, account2, subreddit_list, comment_stream_urls)
