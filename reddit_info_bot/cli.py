@@ -130,8 +130,24 @@ def execute(argv=None, settings=None):
             )
             sys.exit(errmsg)
 
-    cfg = _load_config(config)
-    cfg = list(cfg)
+    try:
+        cfg = _load_config(config)
+        cfg = list(cfg)
+    except SyntaxError as e:
+        import traceback
+        print('Error parsing configuration file:')
+        t, e, tb = sys.exc_info()
+        args = []
+        for i, arg in enumerate(e.args):
+            if isinstance(arg, tuple):
+                (file, line, pos, string) = arg
+                args += [(config, line, pos, string)]
+                continue
+            args += [arg]
+        e.args = tuple(args)
+        traceback.print_exception(t, e, None, 0)
+        sys.exit(1)
+
     if not cfg:
         errmsg = 'Configuration file invalid, no settings found!'
         sys.exit(errmsg)
