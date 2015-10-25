@@ -14,14 +14,82 @@ from .util import domain_suffix, tld_from_suffix
 logger = logging.getLogger(__name__)
 
 
+def sync_rarchives_spamdb(filter_type, full_data=False):
+    """Pull data from the spambot.rarchives.com database
+
+    in a (hopefully) least-bothersome way (since it's just
+    a small, and apparently memory-limited, sqlite app).
+    """
+    # This means we pull smallish chunks, iteratively, so the
+    # remote db doesn't need to pull a big dataset into memory
+    # and lock up or die.
+
+    def fetch_data(url):
+        try:
+            # debug
+            #print('s>', url)
+            response = urlopen(url).read()
+            data = json.loads(response)
+            if 'error' in data:
+                return (False, data['error'])
+            return (True, data)
+        except (HTTPError, ValueError) as e:
+            return (False, str(e))
+
+    if full_data: # no deltas, fetch everything
+        url = 'http://spambot.rarchives.com/api.cgi?method=get_filters&start={start}&count={count}&type={type}'
+        count = 500 # number of db-results per request, pick a balanced value
+                    # (not too many request, not too much data per request)
+        start = failcount = 0
+        total = count
+        filters = []
+        while True:
+            ok, data = fetch_data(url.format(start=start, count=count, type=filter_type))
+            if not ok: # or ('filters' not in data):
+                # debug
+                #print('error:', data)
+                failcount += 1
+                if failcount > 3:
+                    break
+                if 'database is locked' in data:
+                    # back off and hope the remote will recover
+                    time.sleep(failcount*3)
+                # try again
+                print('retrying')
+                continue
+            if 'filters' not in data or 'total' not in data:
+                # unknown content
+                break
+
+            filters += list(data['filters'])
+
+            start += count
+            #start = data['start']
+            total = data['total']
+            if start > total: # all done
+                filters = json.dumps({
+                    'total': total,
+                    'type': filter_type,
+                    'filters': filters,
+                })
+                return filters
+                break
+            failcount = 0
+
+        if not filters:
+            return None
+        #return filters # partial content is okay?
+        return None
+
+    else: # compile deltas to patch our local dataset
+        # TODO
+        return None
+
 def get_filter(filter_type):
     def cache_filters(filter_type):
-        try:
-            response = urlopen('http://spambot.rarchives.com/api.cgi?method=get_filters&start=0&count=3000&type={0}'.format(filter_type)).read()
-            # test if the response is valid for us
-            json.loads(response)['filters']
-        except (HTTPError, KeyError, Exception) as e:
-            msg = 'Spamfilter update failed with error "{0}", using cached files (if available)'.format(str(e))
+        response = sync_rarchives_spamdb(filter_type, full_data=True)
+        if not response:
+            msg = 'Spamfilter update failed, using cached files (if available)'
             print(msg)
         else:
             with open(filename, 'wb') as outf:
