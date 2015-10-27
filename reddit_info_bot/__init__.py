@@ -15,7 +15,7 @@ from . import praw
 from .version import __version__, version_info
 from .search import image_search
 from .reddit import reddit_login, build_subreddit_feeds, find_username_mentions, find_keywords, check_downvotes
-from .antispam import spamfilter_lists
+from .spamfilter import spamfilter_lists
 from .util import chwd
 
 logger = logging.getLogger(__name__)

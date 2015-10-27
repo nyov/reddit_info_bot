@@ -6,7 +6,7 @@ import time
 import uuid
 
 from . import praw
-from .antispam import isspam, spamfilter_lists
+from .spamfilter import isspam, spamfilter_lists
 from .search import image_search
 from .util import domain_suffix, remove_control_characters
 from .exceptions import ConfigurationError

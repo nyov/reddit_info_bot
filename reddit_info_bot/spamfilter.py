@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import (absolute_import, unicode_literals, print_function)
+from __future__ import absolute_import, unicode_literals
 import sys
 import os
 import logging
@@ -8,6 +8,10 @@ import pickle
 import re
 import json
 import requests
+try:
+    from sys import intern
+except ImportError:
+    intern = lambda x: x # dont use on py2 unicode strings # FIXME (do we need unicode here?)
 from requests.exceptions import HTTPError, ConnectionError, Timeout
 from .util import domain_suffix, tld_from_suffix
 
@@ -110,7 +114,8 @@ def get_filter(filter_type):
         errmsg = "Could not load spam filters. Cached files invalid or Network failure."
         sys.exit(errmsg)
 
-    return [i['spamtext'] for i in filters]
+    filters = set(intern(i['spamtext']) for i in filters)
+    return filters
 
 
 def spamfilter_lists():
@@ -125,12 +130,13 @@ def spamfilter_lists():
     user_filter = get_filter('user')
     tld_filter = get_filter('tld')
     #
-    link_filter = link_filter + thumb_filter
-    text_filter = text_filter + user_filter
-    tld_blacklist = [''.join(letter for letter in tld if letter!=".") for tld in tld_filter]
+    link_filter = link_filter | thumb_filter
+    text_filter = text_filter | user_filter
+    tld_blacklist = set(''.join(letter for letter in tld if letter != '.')
+                        for tld in tld_filter)
 
-    hard_blacklist = []
-    whitelist = ['reddit.com']
+    hard_blacklist = set()
+    whitelist = set('reddit.com')
 
     return (
         link_filter,
@@ -171,10 +177,10 @@ def isspam(result, lists):
     if tld in tld_blacklist:
         logger.info('Skipping blacklisted TLD "{0}": {1}'.format(tld, url))
         return True
-    if url in link_filter:
+    if intern(url) in link_filter:
         logger.info('Skipping spammy link match "{0}": {1}'.format(link_filter[url], url))
         return True
-    if text in text_filter:
+    if intern(text) in text_filter:
         logger.info('Skipping spammy text match "{0}": "{1}"'.format(text_filter[text], text))
         return True
     # no spam, result is good
