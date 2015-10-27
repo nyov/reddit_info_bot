@@ -59,7 +59,7 @@ def main(settings, account1, account2, subreddit_list, comment_stream_urls):
                     start_time = check_downvotes(account1.user, start_time, comment_deleting_wait_time)
 
             with open("already_done.p", "wb") as df:
-                pickle.dump(already_done, df)
+                pickle.dump(already_done, df, protocol=2)
 
             if not find_keywords_enabled:
                 # no need to hammer the API, once every minute should suffice in this case

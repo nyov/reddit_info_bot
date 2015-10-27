@@ -4,6 +4,7 @@ import logging
 import warnings
 import time
 import uuid
+import requests
 
 from . import praw
 from .spamfilter import isspam, spamfilter_lists
@@ -50,16 +51,12 @@ def check_shadowban(user, user_agent):
 
     using a non-authenticated connection.
     """
-    session = praw.Reddit(user_agent)
-    shadowbanned = False
-    try:
-        user = session.get_redditor(user)
-    except praw.errors.HTTPException as e:
-        if e._raw.status_code == 404:
-            shadowbanned = True
-        else:
-            raise
-    return shadowbanned
+    headers={'User-Agent': user_agent}
+    status = requests.get('https://www.reddit.com/user/%s' % user,
+                          headers=headers).status_code
+    if status == 404:
+        return True
+    return False
 
 def reddit_login(config):
     logger.info('Logging into Reddit API')
@@ -73,16 +70,16 @@ def reddit_login(config):
 
     use_oauth = client_id and client_secret
     use_login = account_name and account_pass
+    if not use_login:
+        raise ConfigurationError('Missing REDDIT_ACCOUNT_NAME setting')
+    shadowbanned = check_shadowban(account_name, config.get('SEARCH_USER_AGENT'))
+    if shadowbanned:
+        logger.warning('%s may be shadowbanned.' % account_name)
     if use_oauth and use_login:
         account1 = r_oauth_login(user_agent, client_id, client_secret,
                                  username=account_name, password=account_pass)
         logger.debug('Logged in using OAuth2 (useragent: %s)' % user_agent)
     else:
-        if not account_name or not account_pass:
-            raise ConfigurationError('Missing login credentials')
-        shadowbanned = check_shadowban(account_name, user_agent)
-        if shadowbanned:
-            logger.warning('%s may be shadowbanned.' % account_name)
         account1 = r_login(user_agent, account_name, account_pass)
         logger.debug('Logged in using password (useragent: %s)' % user_agent)
 
@@ -94,16 +91,17 @@ def reddit_login(config):
 
     use_second_oauth = client2_id and client2_secret
     use_second_login = account2_name and account2_pass
-    if use_second_oauth and use_second_login:
-        account2 = r_oauth_login(user_agent, client2_id, client2_secret,
-                                 username=account2_name, password=account2_pass)
-        logger.debug('Logged in second account using OAuth2')
-    elif use_second_login:
-        shadowbanned = check_shadowban(account2_name, user_agent)
+    if use_second_login:
+        shadowbanned = check_shadowban(account2_name, config.get('SEARCH_USER_AGENT'))
         if shadowbanned:
             logger.warning('%s may be shadowbanned.' % account2_name)
-        account2 = r_login(user_agent, account2_name, account2_pass)
-        logger.debug('Logged in second account using password')
+        if use_second_oauth:
+            account2 = r_oauth_login(user_agent, client2_id, client2_secret,
+                                    username=account2_name, password=account2_pass)
+            logger.debug('Logged in second account using OAuth2')
+        else:
+            account2 = r_login(user_agent, account2_name, account2_pass)
+            logger.debug('Logged in second account using password')
     else:
         account2 = False
 

@@ -116,7 +116,14 @@ def get_tineye_results(image_url, config, limit=15):
                 results += [(source_link, text)]
         return results # [(link,text)]
 
-    headers = {}
+    headers = {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate',
+        'DNT': '1',
+        'Host': 'www.tineye.com',
+        'Referer': 'https://www.tineye.com/',
+    }
     headers['User-Agent'] = config['SEARCH_USER_AGENT']
     response = requests.post("https://www.tineye.com/search", data={'url': image_url})
 
