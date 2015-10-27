@@ -8,7 +8,7 @@ For a list of all configuration options, see default_settings.py
 ## program settings
 ##
 
-BOT_NAME = 'info_bot'
+BOT_NAME = 'reddit_info_bot'
 BOT_WORKDIR = '/usr/redditbot'
 
 LOG_LEVEL = 'DEBUG'
@@ -61,7 +61,6 @@ BOTCMD_INFORMATIONAL_REPLY = (
 
 Obtain more information by making a comment in the thread which includes /u/%s""" % BOT_NAME
 )
-
 
 
 COMMENT_REPLY_AGE_LIMIT = 2 # ignore comments older than minutes
