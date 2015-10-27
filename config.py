@@ -17,14 +17,18 @@ LOG_LEVEL = 'DEBUG'
 ## reddit settings
 ##
 
-REDDIT_ACCOUNT_NAME = 'urlfixerbot'
-REDDIT_ACCOUNT_PASS = '*****'
+REDDIT_ACCOUNT_NAME = ''
+REDDIT_ACCOUNT_PASS = ''
+OAUTH_CLIENT_ID = ''
+OAUTH_SECRET_TOKEN = ''
 
-SECOND_ACCOUNT_NAME = 'bottester1234'
-SECOND_ACCOUNT_PASS = '*****'
+SECOND_ACCOUNT_NAME = ''
+SECOND_ACCOUNT_PASS = ''
+SECOND_OAUTH_CLIENT_ID = ''
+SECOND_OAUTH_SECRET_TOKEN = ''
 
 
-BOT_OWNER = REDDIT_ACCOUNT_NAME or BOT_NAME
+BOT_OWNER = REDDIT_ACCOUNT_NAME or None
 
 
 BOT_MODE = ['comment']
@@ -34,6 +38,12 @@ BOTCMD_IMAGESEARCH_ENABLED = True
 BOTCMD_IMAGESEARCH = [ # (main) initiate image search
     'u/%s' % REDDIT_ACCOUNT_NAME,
 ]
+BOTCMD_IMAGESEARCH_NO_RESULTS_MESSAGE = (
+"""Well that's embarrassing.  Not for me, but for the search engines.
+
+I was not able to automatically find results for this link."""
+)
+
 
 BOTCMD_INFORMATIONAL_ENABLED = True
 BOTCMD_INFORMATIONAL = [ # reply to potential queries with bot-info
@@ -46,6 +56,12 @@ BOTCMD_INFORMATIONAL = [ # reply to potential queries with bot-info
     'where is this',
     'who is this',
 ]
+BOTCMD_INFORMATIONAL_REPLY = (
+"""It appears that you are looking for more information.
+
+Obtain more information by making a comment in the thread which includes /u/%s""" % BOT_NAME
+)
+
 
 
 COMMENT_REPLY_AGE_LIMIT = 2 # ignore comments older than minutes
@@ -66,15 +82,6 @@ FOOTER_INFO_MESSAGE = (
  ^^[Suggestions](http://www.reddit.com/message/compose/?to=info_bot&subject=Suggestion) ^^| ^^[FAQs](http://www.reddit.com/r/info_bot/comments/2cc45a/info_bot_info/) ^^| ^^[Issues](http://www.reddit.com/message/compose/?to=info_bot&subject=Issue)
 
  ^^Downvoted ^^comments ^^from ^^info_bot ^^are ^^automagically ^^removed."""
-)
-
-NO_SEARCH_RESULTS_MESSAGE = (
-"""Well that's embarrassing.  Not for me, but for the search engines. \n\n I was not able to automatically find results for this link.  \n\n ^^If ^^this ^^is ^^a ^^.gifv ^^I ^^am ^^working ^^on ^^adding ^^them ^^to ^^searches."""
-)
-
-INFOREPLY_MESSAGE = (
-"""It appears that you are looking for more information.\n\nObtain more information by making a comment in the thread which includes /u/%s""" \
-    % BOT_NAME
 )
 
 
@@ -118,7 +125,7 @@ try:
                 FOOTER_INFO_MESSAGE = value
                 continue
             if name == 'INFORMATION_REPLY':
-                INFOREPLY_MESSAGE = value
+                BOTCMD_INFORMATIONAL_REPLY = value
                 continue
             if name == 'USE_KEYWORDS':
                 BOTCMD_INFORMATIONAL_ENABLED = value

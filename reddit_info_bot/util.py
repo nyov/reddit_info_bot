@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import (absolute_import, unicode_literals, print_function)
-import os
+import sys, os
 import codecs
 import unicodedata
 import six
+import imp
+from importlib import import_module
 from six.moves.urllib.parse import urlsplit
 from six.moves.urllib.request import urlopen, Request
 from publicsuffix import PublicSuffixList
@@ -74,6 +76,36 @@ def chwd(dir):
         errmsg = "Changing to workdir '{0}' failed!".format(dir)
         return False, errmsg
     return True, 'success'
+
+def import_file(filepath):
+    abspath = os.path.abspath(filepath)
+    dirname, file = os.path.split(abspath)
+    fname, fext = os.path.splitext(file)
+    if fext != '.py':
+        raise ValueError("Not a Python source file: %s" % abspath)
+    if dirname:
+        sys.path = [dirname] + sys.path
+    try:
+        module = import_module(fname)
+    finally:
+        if dirname:
+            sys.path.pop(0)
+    return module
+
+def import_string_from_file(filepath, module_name='configfile'):
+    """Import anything as a python source file.
+
+    (And do not generate cache files where none belong.)
+    """
+    abspath = os.path.abspath(filepath)
+    try:
+        with open(abspath, 'r') as cf:
+            code = cf.read()
+    except (IOError, OSError) as e:
+        sys.exit(e)
+    module = imp.new_module(module_name)
+    six.exec_(code, module.__dict__)
+    return module
 
 
 # mock objects to emulate praw interface

@@ -1,11 +1,10 @@
 from __future__ import (absolute_import, unicode_literals, print_function)
 import sys, os
 import six
-import imp
 from docopt import docopt
 
 from .settings import Settings
-from .util import string_translate
+from .util import string_translate, import_string_from_file, import_file
 from .version import __version__
 from . import run
 
@@ -20,29 +19,67 @@ def _parse_docopt_args(args):
         args[akey] = args.pop(arg)
     return args
 
-def _import_configfile(filepath, module_name='configfile'):
-    """Import anything as a python source file.
-
-    (And do not generate cache files where none belong.)
+def _get_option_value(argv, args, pop=False):
+    """Return an option's value from argv.
+    With `pop`=`True`, pop it from the passed argv.
     """
-    abspath = os.path.abspath(filepath)
-    try:
-        with open(abspath, 'r') as cf:
-            code = cf.read()
-    except (IOError, OSError) as e:
-        sys.exit(e)
-    module = imp.new_module(module_name)
-    six.exec_(code, module.__dict__)
-    return module
+    i = 0
+    optvalue = None
+    for arg in argv:
+        # sort by length, longest first
+        args = list(args)
+        args.sort(key=len, reverse=True)
+        if arg.startswith(tuple(args)):
+            for key in args:
+                arg = arg.replace(key, '')
+            arg = arg.lstrip('=')
+            # was passed as '--option=file'
+            if len(arg) > 0:
+                optvalue=arg
+                if pop:
+                    del argv[i]
+                break
+            # missing value
+            if len(argv) < i+2:
+                return None
+            # was passed as '-o file'
+            optvalue = argv[i+1]
+            if pop:
+                del argv[i], argv[i+1]
+            break
+        i += 1
+    del i
+    return optvalue
 
 def _load_config(file):
-    if not isinstance(file, six.string_types):
-        return
-    module = _import_configfile(file)
-    for name in dir(module):
-        if name.isupper():
-            yield name, getattr(module, name)
-    del module
+    def import_config():
+        if not isinstance(file, six.string_types):
+            return
+        #module = import_file(file)
+        module = import_string_from_file(file)
+        for name in dir(module):
+            if name.isupper():
+                yield name, getattr(module, name)
+        del module
+
+    try:
+        cfg = list(import_config())
+    except SyntaxError as e:
+        import traceback
+        print('Error parsing configuration file:')
+        t, e, tb = sys.exc_info()
+        args = []
+        for i, arg in enumerate(e.args):
+            if isinstance(arg, tuple):
+                (file, line, pos, string) = arg
+                args += [(config, line, pos, string)]
+                continue
+            args += [arg]
+        e.args = tuple(args)
+        traceback.print_exception(t, e, None, 0)
+        sys.exit(1)
+
+    return cfg
 
 def _get_commands():
     cmds = {
@@ -50,14 +87,18 @@ def _get_commands():
     }
     return cmds
 
-def usage(version):
+def usage(version, instance=None):
     """Format program description output"""
     import textwrap
 
     version = ' %s' % version
+    if instance and instance != 'reddit_info_bot':
+        instance = ' (as %s)' % instance
+    else:
+        instance = ''
 
     doc = """
-    reddit_info_bot{version}
+    reddit_info_bot{version_instance}
 
     Usage: reddit_info_bot [-c CONFIGFILE]
 
@@ -65,8 +106,9 @@ def usage(version):
                               instead of default locations.
                               (To run multiple instances in parallel)
       -h --help               Show this screen.
+                              (Use with -c to show CONFIG's instance)
       --version               Show version.
-    """.format(version=version)
+    """.format(version_instance=version + instance)
     return textwrap.dedent(doc)
 
 def get_config_sources(name, ext='cfg', dir=None):
@@ -94,18 +136,35 @@ def get_config_sources(name, ext='cfg', dir=None):
     return sources
 
 def run_command(**kwargs):
+    """main routine"""
+    settings = kwargs.get('settings')
+    instance = settings.get('BOT_NAME', None)
+    if instance:
+        version = ' (%s)' % settings.get('BOT_VERSION', None) or ''
+        print('Starting reddit-infobot as %s%s' % (instance, version))
     return run(**kwargs)
 
 def execute(argv=None, settings=None):
     if argv is None:
         argv = sys.argv
+    if isinstance(settings, dict):
+        settings = Settings(settings)
     if settings is None:
         # load default settings
         settings = Settings()
-    if isinstance(settings, dict):
-        settings = Settings(settings)
 
-    _usage = usage(__version__)
+        # pre-parse config option for docopt output
+        config = _get_option_value(argv, ('-c', '--config'))
+        if config:
+            # import settings from passed configfile
+            cfg = _load_config(config)
+            if cfg:
+                for option, value in cfg:
+                    settings.set(option, value)
+
+    instance = settings.get('BOT_NAME', None)
+
+    _usage = usage(__version__, instance)
     args = docopt(_usage,
                   argv=argv[1:],
                   help=True,
@@ -130,17 +189,12 @@ def execute(argv=None, settings=None):
             )
             sys.exit(errmsg)
 
-    cfg = _load_config(config)
-    cfg = list(cfg)
-    if not cfg:
-        errmsg = 'Configuration file invalid, no settings found!'
-        sys.exit(errmsg)
-    for option, value in cfg:
-        settings.set(option, value)
-
-    instance = settings.get('BOT_NAME', None)
-    if instance:
-        print('reddit_info_bot configured as: %s' % instance)
+        cfg = _load_config(config)
+        if not cfg:
+            errmsg = 'Configuration file invalid, no settings found!'
+            sys.exit(errmsg)
+        for option, value in cfg:
+            settings.set(option, value)
 
     # supported commands
     cmds = _get_commands()
@@ -157,7 +211,6 @@ def execute(argv=None, settings=None):
     cmd = cmds[cmdname]
 
     cmdargs = {
-        'instance':instance,
         'settings':settings,
     }
 
