@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import (absolute_import, unicode_literals, print_function)
+from __future__ import absolute_import, unicode_literals
 import sys, os
 import codecs
 import unicodedata
@@ -109,16 +109,3 @@ def import_string_from_file(filepath, module_name='configfile'):
     module = imp.new_module(module_name)
     six.exec_(code, module.__dict__)
     return module
-
-
-# mock objects to emulate praw interface
-class submission:
-    def __init__(self,link):
-        self.url = link
-
-class comment:
-    def __init__(self,link):
-        self.submission = submission(link)
-        self.id = "dummy comment"
-    def reply(self,text):
-        print(text)

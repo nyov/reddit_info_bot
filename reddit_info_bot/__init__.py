@@ -2,7 +2,7 @@
 """
 reddit_info_bot
 """
-from __future__ import (absolute_import, unicode_literals, print_function)
+from __future__ import absolute_import, unicode_literals
 import sys
 import os
 import warnings
@@ -124,11 +124,6 @@ def run(settings={}, **kwargs):
     spamfilter_lists()
 
     (account1, account2) = reddit_login(settings)
-
-    #account1 = account2 = None
-    #url = ''
-    #print(image_search(url, settings, account1, account2, display_limit=5))
-    #sys.exit()
 
     logger.info('Fetching Subreddit list')
     subreddit_list = set([account1.get_subreddit(i).display_name for i in settings.getlist('SUBREDDITS')])

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import (absolute_import, unicode_literals, print_function)
+from __future__ import absolute_import, unicode_literals
 import os
 import logging
 import six.moves.http_cookiejar as cookielib
