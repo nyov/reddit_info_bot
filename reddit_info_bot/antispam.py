@@ -7,8 +7,8 @@ import time
 import pickle
 import re
 import json
-from six.moves.urllib.request import urlopen
-from six.moves.urllib.error import HTTPError
+import requests
+from requests.exceptions import HTTPError, ConnectionError, Timeout
 from .util import domain_suffix, tld_from_suffix
 
 logger = logging.getLogger(__name__)
@@ -24,27 +24,30 @@ def sync_rarchives_spamdb(filter_type, last_update=None):
     # remote db doesn't need to pull a big dataset into memory
     # and lock up or die.
     self = sync_rarchives_spamdb
+    api_url = 'http://spambot.rarchives.com/api.cgi'
+    filters_url = '%s?method=get_filters&start={start}&count={count}&type={type}' % api_url
+    filter_changes_url = '%s?method=get_filter_changes&start={start}&count={count}&type={type}' % api_url
+    last_update_url = '%s?method=get_last_update' % api_url
 
     def fetch_data(url):
         try:
             logger.debug('%s: downloading %s' % (self.__name__, url))
-            response = urlopen(url).read()
+            response = requests.get(url).content
             data = json.loads(response)
             if 'error' in data:
                 return (False, data['error'])
             return (True, data)
-        except (HTTPError, ValueError) as e:
+        except (HTTPError, ConnectionError, Timeout, ValueError) as e:
             return (False, str(e))
 
     if not last_update: # no deltas, fetch everything
-        url = 'http://spambot.rarchives.com/api.cgi?method=get_filters&start={start}&count={count}&type={type}'
         count = 500 # number of db-results per request, pick a balanced value
                     # (not too many request, not too much data per request)
         start = failcount = 0
         total = count
         filters = []
         while True:
-            ok, data = fetch_data(url.format(start=start, count=count, type=filter_type))
+            ok, data = fetch_data(filters_url.format(start=start, count=count, type=filter_type))
             if not ok: # or ('filters' not in data):
                 logger.debug('%s: errored: %s' % (self.__name__, data))
                 failcount += 1
@@ -54,7 +57,7 @@ def sync_rarchives_spamdb(filter_type, last_update=None):
                     # back off and hope the remote will recover
                     time.sleep(failcount*3)
                 # try again
-                logger.debug('%s: retrying (%s).' % (self.__name__, failcount))
+                logger.debug('%s: retrying (%s)' % (self.__name__, failcount))
                 continue
             if 'filters' not in data or 'total' not in data:
                 # unknown content
@@ -73,14 +76,8 @@ def sync_rarchives_spamdb(filter_type, last_update=None):
                     'filters': filters,
                 })
                 return filters
-                break
             failcount = 0
-
-        if not filters:
-            return None
-        #return filters # partial content is okay?
         return None
-
     else: # compile deltas to patch our local dataset
         # TODO
         return None

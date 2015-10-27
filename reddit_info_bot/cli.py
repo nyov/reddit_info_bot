@@ -145,7 +145,8 @@ def run_command(**kwargs):
     setup_logging(settings)
     instance = settings.get('BOT_NAME', None)
     if instance:
-        version = ' %s' % settings.get('BOT_VERSION', None) or ''
+        version = settings.get('BOT_VERSION', None)
+        version = ' %s' % version if version != __version__ else ''
         logger.info('Starting reddit-infobot %s (as: %s%s)' % (__version__, instance, version))
     else:
         logger.info('Starting reddit-infobot %s' % __version__)

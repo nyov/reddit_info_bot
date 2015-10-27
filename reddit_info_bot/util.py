@@ -27,24 +27,27 @@ def download_psl(url=PUBLIC_SUFFIX_LIST_URL):
 	f = codecs.getreader(encoding)(res)
 	return f
 
-def cache_psl(from_file='public_suffix_list.dat'):
-    try:
-        with open(from_file, 'rb') as f:
-            psl = PublicSuffixList(f)
-    except (IOError, OSError):
-        with download_psl() as inf, open(from_file, 'wb') as outf:
-            outf.write(inf.read().encode('utf-8'))
-        with open(from_file, 'rb') as f:
-            psl = PublicSuffixList(f)
-    return psl
+psl_cached = None
 
-psl = cache_psl(PSL_CACHE_FILE)
+def cached_psl(from_file='public_suffix_list.dat'):
+    global psl_cached
+    if not psl_cached:
+        try:
+            with open(from_file, 'rb') as f:
+                psl_cached = PublicSuffixList(f)
+        except (IOError, OSError):
+            with download_psl() as inf, open(from_file, 'wb') as outf:
+                outf.write(inf.read().encode('utf-8'))
+            with open(from_file, 'rb') as f:
+                psl_cached = PublicSuffixList(f)
+    return psl_cached
 
 def tld_from_suffix(suffix):
     return '.'.join(suffix.split('.')[1:])
 
 def domain_suffix(link):
     parse = urlsplit(link)
+    psl = cached_psl(PSL_CACHE_FILE)
     return psl.get_public_suffix(parse.netloc)
 
 

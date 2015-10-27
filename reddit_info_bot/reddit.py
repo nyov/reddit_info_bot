@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import (absolute_import, unicode_literals, print_function)
 import logging
+import warnings
 import time
 import uuid
 
@@ -13,10 +14,17 @@ from .exceptions import ConfigurationError
 logger = logging.getLogger(__name__)
 
 
+def _praw_session(user_agent):
+    with warnings.catch_warnings():
+        # discard ugly "`bot` in your user_agent may be problematic"-message
+        warnings.simplefilter('ignore', UserWarning)
+        session = praw.Reddit(user_agent)
+    return session
+
 def r_login(user_agent, username, password):
     """authenticate to reddit api using user credentials
     """
-    session = praw.Reddit(user_agent)
+    session = _praw_session(user_agent)
     session.login(username, password)
     return session
 
@@ -25,7 +33,7 @@ def r_oauth_login(user_agent, client_id, client_secret,
                   username=None, password=None):
     """authenticate to reddit api using oauth
     """
-    session = praw.Reddit(user_agent)
+    session = _praw_session(user_agent)
     session.set_oauth_app_info(client_id, client_secret, redirect_uri)
     if not session.has_oauth_app_info:
         raise ConfigurationError('Missing OAuth credentials')
@@ -54,7 +62,7 @@ def check_shadowban(user, user_agent):
     return shadowbanned
 
 def reddit_login(config):
-    logger.info('Logging into accounts')
+    logger.info('Logging into Reddit API')
 
     user_agent = config.get('BOT_AGENT')
 
@@ -68,6 +76,7 @@ def reddit_login(config):
     if use_oauth and use_login:
         account1 = r_oauth_login(user_agent, client_id, client_secret,
                                  username=account_name, password=account_pass)
+        logger.debug('Logged in using OAuth2 (useragent: %s)' % user_agent)
     else:
         if not account_name or not account_pass:
             raise ConfigurationError('Missing login credentials')
@@ -75,6 +84,7 @@ def reddit_login(config):
         if shadowbanned:
             logger.warning('%s may be shadowbanned.' % account_name)
         account1 = r_login(user_agent, account_name, account_pass)
+        logger.debug('Logged in using password (useragent: %s)' % user_agent)
 
     # load a second praw instance for the second account (the one used to check the spam links)
     client2_id = config.get('SECOND_OAUTH_CLIENT_ID')
@@ -87,11 +97,13 @@ def reddit_login(config):
     if use_second_oauth and use_second_login:
         account2 = r_oauth_login(user_agent, client2_id, client2_secret,
                                  username=account2_name, password=account2_pass)
+        logger.debug('Logged in second account using OAuth2')
     elif use_second_login:
         shadowbanned = check_shadowban(account2_name, user_agent)
         if shadowbanned:
             logger.warning('%s may be shadowbanned.' % account2_name)
         account2 = r_login(user_agent, account2_name, account2_pass)
+        logger.debug('Logged in second account using password')
     else:
         account2 = False
 
