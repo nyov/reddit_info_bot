@@ -5,6 +5,7 @@ reddit_info_bot
 from __future__ import (absolute_import, unicode_literals, print_function)
 import sys
 import os
+import warnings
 import logging
 import time
 import pickle
@@ -31,19 +32,18 @@ def main(settings, account1, account2, subreddit_list, comment_stream_urls):
         with open("already_done.p", "rb") as f:
             already_done = pickle.load(f)
 
-    print('Starting run...')
+    logger.info('Starting run...')
     while True:
         try:
             # check inbox messages for username mentions and reply to bot requests
             if find_mentions_enabled:
-                print('finding username mentions: ', end='')
+                logger.info('finding username mentions')
                 find_username_mentions(account1, account2, settings, subreddit_list, already_done)
-                print()
 
             # scan for potential comments to reply to
             if find_keywords_enabled:
                 for count, stream in enumerate(comment_stream_urls): #uses separate comment streams for large subreddit list due to URL length limit
-                    print('visiting comment stream %d/%d "%s..."' % (count+1, len(comment_stream_urls), str(stream)[:60]))
+                    logger.info('visiting comment stream %d/%d "%s..."' % (count+1, len(comment_stream_urls), str(stream)[:60]))
                     feed_comments = stream.get_comments()
                     #feed_comments = stream.get_comments(limit=100)
                     #feed_comments = stream.get_comments(limit=None) # all
@@ -61,34 +61,36 @@ def main(settings, account1, account2, subreddit_list, comment_stream_urls):
             with open("already_done.p", "wb") as df:
                 pickle.dump(already_done, df)
 
-            if find_mentions_enabled and not find_keywords_enabled:
+            if not find_keywords_enabled:
                 # no need to hammer the API, once every minute should suffice in this case
-                print('Checking back in sixty seconds.')
-                time.sleep(60)
+                sleep = 60
+                logger.info('Sleeping %d seconds.' % sleep)
+                time.sleep(sleep)
             else:
-                print('Finished a round of comments. Waiting ten seconds.')
-                time.sleep(10)
+                sleep = 10
+                logger.info('Finished visiting all streams. Sleeping %d seconds.' % sleep)
+                time.sleep(sleep)
 
         except praw.errors.ClientException:
             raise
         except praw.errors.OAuthInvalidToken:
             # full re-auth
-            print('Access token expired, re-logging.')
+            logger.info('Access token expired, re-logging.')
             (account1, account2) = reddit_login(settings)
         except praw.errors.PRAWException as e:
-            print('\nSome unspecified PRAW error occured in main loop:', e)
+            logger.error('Some unspecified PRAW error caught in main loop: %s' % e)
 
 
 def run(settings={}, **kwargs):
-    logger.setLevel(settings.get('LOG_LEVEL', 'DEBUG'))
-
     wd = settings.get('BOT_WORKDIR')
     if wd:
         ok, errmsg = chwd(wd)
         if not ok:
             sys.exit(errmsg)
     else:
-        print('No BOT_WORKDIR set, running in current directory.')
+        msg = 'No BOT_WORKDIR set, running in current directory.'
+        warnings.warn(msg, RuntimeWarning)
+        #logger.warning(msg)
 
     # how the bot handles actions
     ACTMODE_NONE    = 0 # no action
@@ -112,11 +114,11 @@ def run(settings={}, **kwargs):
 
     # verify modes
     if ACTMODE & ACTMODE_LOG:
-        print('log mode enabled')
+        logger.info('log mode enabled')
     if ACTMODE & ACTMODE_PM:
-        print('pm mode enabled')
+        logger.info('pm mode enabled')
     if ACTMODE & ACTMODE_COMMENT:
-        print('comment mode enabled')
+        logger.info('comment mode enabled')
 
     # force early cache-refreshing spamlists
     spamfilter_lists()
@@ -128,14 +130,14 @@ def run(settings={}, **kwargs):
     #print(image_search(url, settings, account1, account2, display_limit=5))
     #sys.exit()
 
-    print('Fetching Subreddit list')
+    logger.info('Fetching Subreddit list')
     subreddit_list = set([account1.get_subreddit(i).display_name for i in settings.getlist('SUBREDDITS')])
 
-    print('Fetching comment stream urls')
+    logger.info('Fetching comment stream urls')
     #comment_stream_urls = [account1.get_subreddit(subredditlist) for subredditlist in build_subreddit_feeds(subreddit_list)]
     comment_stream_urls = []
     for count, subredditlist in enumerate(build_subreddit_feeds(subreddit_list)):
-        print('loading comment stream %2d "%s..."' % (count+1, subredditlist[:60]))
+        logger.info('loading comment stream %2d "%s..."' % (count+1, subredditlist[:60]))
         comment_feed = account1.get_subreddit(subredditlist)
         # lazy objects, nothing done yet
         comment_stream_urls += [comment_feed]

@@ -12,6 +12,12 @@ from .version import __version__ as BOT_VERSION
 BOT_NAME = 'reddit_info_bot'
 BOT_WORKDIR = '/'
 
+LOG_ENABLED = True
+LOG_FILE = None
+LOG_FILE_ENCODING = 'utf-8'
+LOG_FORMAT = '%(asctime)s [%(name)s] %(levelname)s: %(message)s'
+LOG_DATEFORMAT = '%Y-%m-%d %H:%M:%S'
+LOG_CAPTURE_STDOUT = False
 LOG_LEVEL = 'DEBUG'
 
 ##

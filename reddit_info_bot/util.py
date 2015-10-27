@@ -70,12 +70,12 @@ def chwd(dir):
     """Change working directory."""
     if not os.path.exists(dir):
         errmsg = "Requested workdir '{0}' does not exist, aborting.".format(dir)
-        return False, errmsg
+        return (False, errmsg)
     os.chdir(dir)
     if os.getcwd() != dir:
         errmsg = "Changing to workdir '{0}' failed!".format(dir)
-        return False, errmsg
-    return True, 'success'
+        return (False, errmsg)
+    return (True, 'success')
 
 def import_file(filepath):
     abspath = os.path.abspath(filepath)

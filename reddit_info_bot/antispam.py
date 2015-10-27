@@ -14,7 +14,7 @@ from .util import domain_suffix, tld_from_suffix
 logger = logging.getLogger(__name__)
 
 
-def sync_rarchives_spamdb(filter_type, full_data=False):
+def sync_rarchives_spamdb(filter_type, last_update=None):
     """Pull data from the spambot.rarchives.com database
 
     in a (hopefully) least-bothersome way (since it's just
@@ -23,11 +23,11 @@ def sync_rarchives_spamdb(filter_type, full_data=False):
     # This means we pull smallish chunks, iteratively, so the
     # remote db doesn't need to pull a big dataset into memory
     # and lock up or die.
+    self = sync_rarchives_spamdb
 
     def fetch_data(url):
         try:
-            # debug
-            #print('s>', url)
+            logger.debug('%s: downloading %s' % (self.__name__, url))
             response = urlopen(url).read()
             data = json.loads(response)
             if 'error' in data:
@@ -36,7 +36,7 @@ def sync_rarchives_spamdb(filter_type, full_data=False):
         except (HTTPError, ValueError) as e:
             return (False, str(e))
 
-    if full_data: # no deltas, fetch everything
+    if not last_update: # no deltas, fetch everything
         url = 'http://spambot.rarchives.com/api.cgi?method=get_filters&start={start}&count={count}&type={type}'
         count = 500 # number of db-results per request, pick a balanced value
                     # (not too many request, not too much data per request)
@@ -46,8 +46,7 @@ def sync_rarchives_spamdb(filter_type, full_data=False):
         while True:
             ok, data = fetch_data(url.format(start=start, count=count, type=filter_type))
             if not ok: # or ('filters' not in data):
-                # debug
-                #print('error:', data)
+                logger.debug('%s: errored: %s' % (self.__name__, data))
                 failcount += 1
                 if failcount > 3:
                     break
@@ -55,7 +54,7 @@ def sync_rarchives_spamdb(filter_type, full_data=False):
                     # back off and hope the remote will recover
                     time.sleep(failcount*3)
                 # try again
-                print('retrying')
+                logger.debug('%s: retrying (%s).' % (self.__name__, failcount))
                 continue
             if 'filters' not in data or 'total' not in data:
                 # unknown content
@@ -65,8 +64,9 @@ def sync_rarchives_spamdb(filter_type, full_data=False):
 
             start += count
             #start = data['start']
-            total = data['total']
+            total = int(data['total'])
             if start > total: # all done
+                logger.debug('%s: fetched %d %s filters.' % (self.__name__, total, filter_type))
                 filters = json.dumps({
                     'total': total,
                     'type': filter_type,
@@ -87,10 +87,10 @@ def sync_rarchives_spamdb(filter_type, full_data=False):
 
 def get_filter(filter_type):
     def cache_filters(filter_type):
-        response = sync_rarchives_spamdb(filter_type, full_data=True)
+        response = sync_rarchives_spamdb(filter_type)
         if not response:
             msg = 'Spamfilter update failed, using cached files (if available)'
-            print(msg)
+            logger.warning(msg)
         else:
             with open(filename, 'wb') as outf:
                 outf.write(response)
@@ -98,7 +98,7 @@ def get_filter(filter_type):
     filename = 'spamfilter_{0}.json'.format(filter_type)
     if not os.path.isfile(filename) or \
             (int(time.time() - os.path.getmtime(filename)) > 43200): # cache 24 hours
-        print('Downloading spambot.rarchives.com list: %s filters' % filter_type)
+        logger.info('Downloading spambot.rarchives.com list: %s filters' % filter_type)
         cache_filters(filter_type)
         if not os.path.isfile(filename):
             errmsg = "Could not load spam filters. Cached files invalid or Network failure."
@@ -154,31 +154,31 @@ def isspam(result, lists):
     url, text = result[0].lower(), result[1].lower()
 
     if len(url) < 6: # shorter than '//a.bc' can't be a useable absolute HTTP URL
-        print('Skipping invalid URL: "{0}"'.format(url))
+        logger.info('Skipping invalid URL: "{0}"'.format(url))
         return True
     # domain from URL using publicsuffix (not a validator)
     domain = domain_suffix(url)
     if not domain:
-        print('Failed to lookup PSL/Domain for: "{0}"'.format(url))
+        logger.info('Failed to lookup PSL/Domain for: "{0}"'.format(url))
         return True
     tld = tld_from_suffix(domain)
     if not tld or tld == '':
-        print('Failed to lookup TLD from publicsuffix for: "{0}"'.format(url))
+        logger.info('Failed to lookup TLD from publicsuffix for: "{0}"'.format(url))
         return True
     if domain in whitelist:
         # higher prio than the blacklist
         return False
     if domain in hard_blacklist:
-        print('Skipping blacklisted Domain "{0}": {1}'.format(domain, url))
+        logger.info('Skipping blacklisted Domain "{0}": {1}'.format(domain, url))
         return True
     if tld in tld_blacklist:
-        print('Skipping blacklisted TLD "{0}": {1}'.format(tld, url))
+        logger.info('Skipping blacklisted TLD "{0}": {1}'.format(tld, url))
         return True
     if url in link_filter:
-        print('Skipping spammy link match "{0}": {1}'.format(link_filter[url], url))
+        logger.info('Skipping spammy link match "{0}": {1}'.format(link_filter[url], url))
         return True
     if text in text_filter:
-        print('Skipping spammy text match "{0}": "{1}"'.format(text_filter[text], text))
+        logger.info('Skipping spammy text match "{0}": "{1}"'.format(text_filter[text], text))
         return True
     # no spam, result is good
     return False
