@@ -5,10 +5,9 @@ import logging
 from docopt import docopt
 
 from .settings import Settings
+from .commands import bot_commands
 from .util import string_translate, import_string_from_file, import_file
 from .version import __version__
-from .log import setup_logging
-from . import run
 
 logger = logging.getLogger(__name__)
 
@@ -85,12 +84,6 @@ def _load_config(file):
 
     return cfg
 
-def _get_commands():
-    cmds = {
-        'run': run_command,
-    }
-    return cmds
-
 def usage(version, instance=None):
     """Format program description output"""
     import textwrap
@@ -138,19 +131,6 @@ def get_config_sources(name, ext='cfg', dir=None):
         '%s%s' % (name, _ext),
     ]
     return sources
-
-def run_command(**kwargs):
-    """main routine"""
-    settings = kwargs.get('settings')
-    setup_logging(settings)
-    instance = settings.get('BOT_NAME', None)
-    if instance:
-        version = settings.get('BOT_VERSION', None)
-        version = ' %s' % version if version != __version__ else ''
-        logger.info('Starting reddit-infobot %s (as: %s%s)' % (__version__, instance, version))
-    else:
-        logger.info('Starting reddit-infobot %s' % __version__)
-    return run(**kwargs)
 
 def execute(argv=None, settings=None):
     if argv is None:
@@ -205,7 +185,7 @@ def execute(argv=None, settings=None):
             settings.set(option, value)
 
     # supported commands
-    cmds = _get_commands()
+    cmds = bot_commands()
 
     # command to execute
     cmdname = None
@@ -214,10 +194,10 @@ def execute(argv=None, settings=None):
             cmdname = opt
 
     if not cmdname:
-        # default action
-        cmdname = 'run'
+        cmdname = 'run' # default action
     cmd = cmds[cmdname]
 
+    # arguments to pass to command
     cmdargs = {
         'settings':settings,
     }

@@ -356,7 +356,6 @@ def _comment_reply(comment, reply_func, reply_content):
 
 def handle_bot_action(comments, config, account, account2, subreddit_list, already_done, action):
     botmodes = config.getlist('BOT_MODE', ['log'])
-    botmodes = [m.lower() for m in botmodes]
 
     # find_username_mentions
     def find_username_mentions(comment, reply_content): # reply_func
@@ -430,7 +429,6 @@ def handle_bot_action(comments, config, account, account2, subreddit_list, alrea
 
 def check_downvotes(user, start_time, deletion_wait_time, config):
     botmodes = config.getlist('BOT_MODE', ['log'])
-    botmodes = [m.lower() for m in botmodes]
     # FIXME: should check for comment's creation time
     current_time = int(time.time()/60)
     if (current_time - start_time) >= deletion_wait_time:
