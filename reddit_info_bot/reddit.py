@@ -318,7 +318,7 @@ def _applicable_comment(comment, config, account, already_done, subreddit_list, 
 
     return keywords # good
 
-def _comment_reply(comment, reply_func):
+def _comment_reply(comment, reply_func, reply_content):
     if not callable(reply_func):
         return # error
 
@@ -329,7 +329,7 @@ def _comment_reply(comment, reply_func):
             #return ('error', 'max retries reached')
         attempt += 1
         try:
-            return reply_func(comment)
+            return reply_func(comment, reply_content)
         except praw.errors.RateLimitExceeded as e:
             errmsg = str(e)
             backoff, min_secs = re.search(r'try again in ([0-9]+) (minutes?|seconds?)', errmsg).groups()
@@ -338,7 +338,7 @@ def _comment_reply(comment, reply_func):
             elif 'minute' in min_secs:
                 backoff = int(backoff) * 60
             backoff += 3 # grace
-            logger.warning('Ratelimit hit. Backing off %d seconds!' % backoff) # TODO: get ratelimit reset time here
+            logger.warning('Ratelimit hit. Backing off %d seconds! [%s]' % (backoff, e))
             time.sleep(backoff)
         # the following are permanent errors, no retry
         except praw.errors.InvalidComment:
@@ -359,33 +359,22 @@ def handle_bot_action(comments, config, account, account2, subreddit_list, alrea
     botmodes = [m.lower() for m in botmodes]
 
     # find_username_mentions
-    def find_username_mentions(comment): # reply_func
-        try:
-            reply_content = image_search(comment.submission.url, config, account, account2, display_limit=5)
-            if not reply_content:
-                logger.error('image_search failed (bug)! skipping')
-                # try that again, instead of replying with no results
-                return
-        except Exception as e:
-            logger.error('Error occured in image_search: %s' % e)
-            return
-
+    def find_username_mentions(comment, reply_content): # reply_func
         if 'log' in botmodes:
             logger.warning(reply_content)
         if 'comment' in botmodes:
             comment.reply(reply_content)
+            comment.mark_as_read()
         elif 'pm' in botmodes:
             comment.reply(reply_content)
+            comment.mark_as_read()
         #if 'pm' in botmodes:
         #    whatever = account.send_message(comment.author, 'Info Bot Information', reply_content)
         #    logger.info(whatever)
-
-        comment.mark_as_read()
         return
 
     # find_keywords
-    def find_keywords(comment): # reply_func
-        reply_content = information_reply
+    def find_keywords(comment, reply_content): # reply_func
         if 'log' in botmodes:
             logger.warning(reply_content)
         if 'comment' in botmodes:
@@ -416,7 +405,21 @@ def handle_bot_action(comments, config, account, account2, subreddit_list, alrea
         if not keywords:
             continue
         logger.info('[R] Detected keyword/s %s in %s' % (', '.join(keywords), comment.id))
-        _comment_reply(comment, reply_func)
+
+        if action == 'find_username_mentions':
+            try:
+                reply_content = image_search(comment.submission.url, config, account, account2, display_limit=5)
+                if not reply_content:
+                    logger.error('image_search failed (bug)! skipping')
+                    # try that again, instead of replying with no results
+                    continue
+            except Exception as e:
+                logger.error('Error occured in image_search: %s' % e)
+                continue
+        if action == 'find_keywords':
+            reply_content = information_reply
+
+        _comment_reply(comment, reply_func, reply_content)
         already_done.append(comment.id)
         logger.info('replied to comment: {0}'.format(comment.body))
 
