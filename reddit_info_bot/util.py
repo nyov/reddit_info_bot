@@ -8,7 +8,8 @@ import imp
 from importlib import import_module
 from six.moves.urllib.parse import urlsplit
 from six.moves.urllib.request import urlopen, Request
-from publicsuffix import PublicSuffixList
+
+from .publicsuffix import PublicSuffixList
 
 
 PUBLIC_SUFFIX_LIST_URL = 'https://publicsuffix.org/list/public_suffix_list.dat'

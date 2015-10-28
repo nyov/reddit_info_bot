@@ -1,4 +1,13 @@
+# -*- coding: utf-8 -*-
 """Public Suffix List module for Python.
+
+This module was packaged to remove a `pkg_resources` dependency
+and make it Python 3 compatible.
+
+Copyright (c) 2015 "nyov"
+Copyright (c) 2015 Tomaž Šolc <tomaz.solc@tablix.org>
+Copyright (c) 2009 David Wilson
+License: MIT
 """
 
 import codecs
