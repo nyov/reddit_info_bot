@@ -4,12 +4,14 @@ reddit_info_bot settings
 
 For a list of all configuration options, see default_settings.py
 """
+from reddit_info_bot import __version__ as BOT_VERSION
+
 ##
 ## program settings
 ##
 
 BOT_NAME = 'reddit_info_bot'
-BOT_WORKDIR = '/usr/redditbot'
+BOT_WORKDIR = '/tmp/redditbot'
 
 LOG_LEVEL = 'DEBUG'
 
@@ -49,12 +51,6 @@ BOTCMD_INFORMATIONAL_ENABLED = True
 BOTCMD_INFORMATIONAL = [ # reply to potential queries with bot-info
     'source?',
     'sauce?',
-    'what is this',
-    'I want more info',
-    'what is that',
-    'more info please',
-    'where is this',
-    'who is this',
 ]
 BOTCMD_INFORMATIONAL_REPLY = (
 """It appears that you are looking for more information.
@@ -83,7 +79,10 @@ FOOTER_INFO_MESSAGE = (
  ***** 
  ^^[Suggestions](http://www.reddit.com/message/compose/?to=info_bot&subject=Suggestion) ^^| ^^[FAQs](http://www.reddit.com/r/info_bot/comments/2cc45a/info_bot_info/) ^^| ^^[Issues](http://www.reddit.com/message/compose/?to=info_bot&subject=Issue)
 
- ^^Downvoted ^^comments ^^from ^^info_bot ^^are ^^automagically ^^removed."""
+ ^^Downvoted ^^comments ^^from ^^info_bot ^^are ^^automagically ^^removed.
+
+ ^(%s %s)
+""" % (BOT_NAME, BOT_VERSION)
 )
 
 
@@ -100,50 +99,3 @@ except ImportError: pass
 ##
 
 SEARCH_USER_AGENT = 'Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17'
-
-##
-## legacy settings
-## - import deprecated config.json
-## - remove this after porting old config.json
-try:
-    import json
-    with open('config.json', 'rb') as json_data:
-        config = json.load(json_data)
-        for name, value in config.items():
-            # translate varnames
-            if name == 'USER_NAME':
-                REDDIT_ACCOUNT_NAME = value
-                continue
-            if name == 'PASSWORD':
-                REDDIT_ACCOUNT_PASS = value
-                continue
-            if name == 'MODE':
-                BOT_MODE = [value]
-                continue
-            if name == 'SEARCH_STRING':
-                BOTCMD_IMAGESEARCH = value
-                continue
-            if name == 'EXTRA_MESSAGE':
-                FOOTER_INFO_MESSAGE = value
-                continue
-            if name == 'INFORMATION_REPLY':
-                BOTCMD_INFORMATIONAL_REPLY = value
-                continue
-            if name == 'USE_KEYWORDS':
-                BOTCMD_INFORMATIONAL_ENABLED = value
-                continue
-            if name == 'KEYWORDS':
-                BOTCMD_INFORMATIONAL = value
-                continue
-            if name == 'SUBMISSION_ID':
-                REDDIT_SPAMFILTER_SUBMISSION_ID = value
-                continue
-            if name == 'TIME_LIMIT_MINUTES':
-                COMMENT_REPLY_AGE_LIMIT = value
-                continue
-            if name == 'DELETE_WAIT_TIME':
-                COMMENT_DELETIONCHECK_WAIT_LIMIT = value
-                continue
-            vars()[name] = value
-except Exception:
-    pass
