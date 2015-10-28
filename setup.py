@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from __future__ import (absolute_import, unicode_literals, print_function)
+from __future__ import absolute_import, unicode_literals
 import sys
 from os.path import dirname, join, abspath, split, splitext
 from setuptools import find_packages, setup

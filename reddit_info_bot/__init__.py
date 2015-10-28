@@ -11,10 +11,9 @@ import time
 import pickle
 import re
 
-from . import praw
 from .version import __version__, version_info
-from .search import image_search
-from .reddit import reddit_login, build_subreddit_feeds, find_username_mentions, find_keywords, check_downvotes
+from . import praw
+from .reddit import reddit_login, build_subreddit_feeds, handle_bot_action, check_downvotes
 from .spamfilter import spamfilter_lists
 from .util import chwd
 
@@ -39,7 +38,9 @@ def main(settings, account1, account2, subreddit_list, comment_stream_urls):
             # check inbox messages for username mentions and reply to bot requests
             if find_mentions_enabled:
                 logger.info('finding username mentions')
-                find_username_mentions(account1, account2, settings, subreddit_list, already_done)
+                messages = account1.get_unread(limit=100)
+                if messages:
+                    handle_bot_action(messages, settings, account1, account2, subreddit_list, already_done, 'find_username_mentions')
 
             # scan for potential comments to reply to
             if find_keywords_enabled:
@@ -48,12 +49,11 @@ def main(settings, account1, account2, subreddit_list, comment_stream_urls):
                     feed_comments = stream.get_comments()
                     #feed_comments = stream.get_comments(limit=100)
                     #feed_comments = stream.get_comments(limit=None) # all
-                    if not feed_comments:
-                        continue
-                    find_keywords(feed_comments, account1, settings, subreddit_list, already_done)
+                    if feed_comments:
+                        handle_bot_action(feed_comments, settings, account1, None, subreddit_list, already_done, 'find_keywords')
 
-                    # back off a second
-                    time.sleep(1)
+                        # back off a second
+                        time.sleep(1)
 
             # check downvoted comments (to delete where necessary)
             if delete_downvotes_enabled:
