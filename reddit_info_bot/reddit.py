@@ -481,15 +481,18 @@ def find_keywords(all_comments, account, config, subreddit_list, already_done):
     #logger.info('(%d comments - %s)' % (count, se))
     logger.info('(%d comments)' % (count,))
 
-def check_downvotes(user, start_time, comment_deleting_wait_time):
+def check_downvotes(user, start_time, deletion_wait_time):
     # FIXME: should check for comment's creation time
     current_time = int(time.time()/60)
-    if (current_time - start_time) >= comment_deleting_wait_time:
+    if (current_time - start_time) >= deletion_wait_time:
         my_comments = user.get_comments(limit=None)
         for comment in my_comments:
             if comment.score < 1:
                 comment_id = comment.id
                 if ACTMODE & ACTMODE_COMMENT:
+                    comment.delete()
+                    logger.info('deleted comment: %s' % comment_id)
+                elif ACTMODE & ACTMODE_PM:
                     comment.delete()
                     logger.info('deleted comment: %s' % comment_id)
                 #if ACTMODE & ACTMODE_PM:

@@ -23,9 +23,10 @@ logger = logging.getLogger(__name__)
 
 def main(settings, account1, account2, subreddit_list, comment_stream_urls):
     start_time = time.time()
-    comment_deleting_wait_time = settings.getint('COMMENT_DELETIONCHECK_WAIT_LIMIT') #how many minutes to wait before deleting downvoted comments
     find_mentions_enabled = settings.getbool('BOTCMD_IMAGESEARCH_ENABLED')
     find_keywords_enabled = settings.getbool('BOTCMD_INFORMATIONAL_ENABLED')
+    delete_downvotes_enabled = settings.getbool('BOTCMD_DELETE_DOWNVOTES_ENABLED')
+    delete_downvotes_after = settings.getint('BOTCMD_DELETE_DOWNVOTES_AFTER')
 
     already_done = []
     if os.path.isfile("already_done.p"):
@@ -55,8 +56,8 @@ def main(settings, account1, account2, subreddit_list, comment_stream_urls):
                     time.sleep(1)
 
             # check downvoted comments (to delete where necessary)
-            if True:
-                    start_time = check_downvotes(account1.user, start_time, comment_deleting_wait_time)
+            if delete_downvotes_enabled:
+                    start_time = check_downvotes(account1.user, start_time, delete_downvotes_after)
 
             with open("already_done.p", "wb") as df:
                 pickle.dump(already_done, df, protocol=2)
