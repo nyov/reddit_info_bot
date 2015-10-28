@@ -5,7 +5,6 @@ import os
 import logging
 import time
 import pickle
-import re
 import json
 import requests
 try:

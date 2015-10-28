@@ -5,6 +5,7 @@ import warnings
 import time
 import uuid
 import requests
+import re
 
 from . import praw
 from .spamfilter import isspam, spamfilter_lists

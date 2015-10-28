@@ -9,7 +9,6 @@ import warnings
 import logging
 import time
 import pickle
-import re
 
 from .version import __version__, version_info
 from . import praw
