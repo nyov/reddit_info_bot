@@ -63,13 +63,13 @@ class PublicSuffixList(object):
 		return self._find_node(child_node, parts)
 
 	def _add_rule(self, root, rule):
-		if rule.startswith('!'):
+		if rule.startswith(b'!'):
 			negate = 1
 			rule = rule[1:]
 		else:
 			negate = 0
 
-		parts = rule.split('.')
+		parts = rule.split(b'.')
 		self._find_node(root, parts)[0] = negate
 
 	def _simplify(self, node):
@@ -83,10 +83,10 @@ class PublicSuffixList(object):
 
 		for line in fp:
 			line = line.strip()
-			if line.startswith('//') or not line:
+			if line.startswith(b'//') or not line:
 				continue
 
-			self._add_rule(root, line.split()[0].lstrip('.'))
+			self._add_rule(root, line.split()[0].lstrip(b'.'))
 
 		return root
 
