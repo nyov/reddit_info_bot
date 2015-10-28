@@ -3,7 +3,6 @@
 
 import codecs
 import os.path
-from pkg_resources import resource_stream, get_distribution
 import warnings
 
 try:
@@ -11,7 +10,7 @@ try:
 except ImportError:
 	from urllib2 import urlopen, Request
 
-PUBLIC_SUFFIX_LIST_URL = 'http://publicsuffix.org/list/public_suffix_list.dat'
+PUBLIC_SUFFIX_LIST_URL = 'https://publicsuffix.org/list/public_suffix_list.dat'
 
 def fetch():
 	"""Downloads the latest public suffix list from publicsuffix.org.
@@ -19,7 +18,7 @@ def fetch():
 	Returns a file object containing the public suffix list.
 	"""
 
-	ua = 'Python-publicsuffix/%s' % (get_distribution(__name__).version)
+	ua = 'Python-publicsuffix/1.1.1'
 	req = Request(PUBLIC_SUFFIX_LIST_URL, headers={'User-Agent': ua})
 	res = urlopen(req)
 
@@ -33,29 +32,16 @@ def fetch():
 	return f
 
 class PublicSuffixList(object):
-	def __init__(self, input_file=None):
+	def __init__(self, input_file):
 		"""Reads and parses public suffix list.
-		
+
 		input_file is a file object or another iterable that returns
 		lines of a public suffix list file.
-		
+
 		The file format is described at http://publicsuffix.org/list/
 		"""
-
-		if input_file is None:
-			warnings.warn("Using the built-in public suffix list is deprecated. Please use input_file.",
-					DeprecationWarning, 2)
-			input_stream = resource_stream(__name__, 'public_suffix_list.dat')
-			input_file = codecs.getreader('utf8')(input_stream)
-			do_close = True
-		else:
-			do_close = False
-
 		root = self._build_structure(input_file)
 		self.root = self._simplify(root)
-
-		if do_close:
-			input_file.close()
 
 	def _find_node(self, parent, parts):
 		if not parts:
