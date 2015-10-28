@@ -57,7 +57,7 @@ def main(settings, account1, account2, subreddit_list, comment_stream_urls):
 
             # check downvoted comments (to delete where necessary)
             if delete_downvotes_enabled:
-                    start_time = check_downvotes(account1.user, start_time, delete_downvotes_after)
+                    start_time = check_downvotes(account1.user, start_time, delete_downvotes_after, settings)
 
             with open("already_done.p", "wb") as df:
                 pickle.dump(already_done, df, protocol=2)
@@ -93,33 +93,15 @@ def run(settings={}, **kwargs):
         warnings.warn(msg, RuntimeWarning)
         #logger.warning(msg)
 
-    # how the bot handles actions
-    ACTMODE_NONE    = 0 # no action
-    ACTMODE_LOG     = 1 # log action
-    ACTMODE_PM      = 2 # pm/message action
-    ACTMODE_COMMENT = 4 # (reddit-) comment action
-    ACTMODES = (ACTMODE_LOG | ACTMODE_PM | ACTMODE_COMMENT)
-
-    global ACTMODE # whoops
-    ACTMODE = ACTMODE_NONE
-
-    botmodes = settings.getlist('BOT_MODE')
-    for botmode in botmodes:
-        botmode = botmode.lower()
-        if botmode == 'comment':
-            ACTMODE |= ACTMODE_COMMENT
-        if botmode == 'pm':
-            ACTMODE |= ACTMODE_PM
-        if botmode == 'log':
-            ACTMODE |= ACTMODE_LOG
-
     # verify modes
-    if ACTMODE & ACTMODE_LOG:
-        logger.info('log mode enabled')
-    if ACTMODE & ACTMODE_PM:
-        logger.info('pm mode enabled')
-    if ACTMODE & ACTMODE_COMMENT:
+    botmodes = settings.getlist('BOT_MODE', ['log'])
+    botmodes = [m.lower() for m in botmodes]
+    if 'comment' in botmodes: # (reddit-) comment action
         logger.info('comment mode enabled')
+    if 'pm' in botmodes: # pm/message action
+        logger.info('pm mode enabled')
+    if 'log' in botmodes: # log action
+        logger.info('log mode enabled')
 
     # force early cache-refreshing spamlists
     spamfilter_lists()
@@ -127,7 +109,7 @@ def run(settings={}, **kwargs):
     (account1, account2) = reddit_login(settings)
 
     logger.info('Fetching Subreddit list')
-    subreddit_list = set([account1.get_subreddit(i).display_name for i in settings.getlist('SUBREDDITS')])
+    subreddit_list = set(account1.get_subreddit(i).display_name for i in settings.getlist('SUBREDDITS'))
 
     logger.info('Fetching comment stream urls')
     #comment_stream_urls = [account1.get_subreddit(subredditlist) for subredditlist in build_subreddit_feeds(subreddit_list)]
