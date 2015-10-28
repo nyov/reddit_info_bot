@@ -1,19 +1,31 @@
 # -*- coding: utf-8 -*-
-from __future__ import (absolute_import, unicode_literals, print_function)
+from __future__ import absolute_import, unicode_literals
+import logging
+import warnings
 import time
 import uuid
+import requests
 
 from . import praw
-from .antispam import isspam, spamfilter_lists
+from .spamfilter import isspam, spamfilter_lists
 from .search import image_search
 from .util import domain_suffix, remove_control_characters
 from .exceptions import ConfigurationError
 
+logger = logging.getLogger(__name__)
+
+
+def _praw_session(user_agent):
+    with warnings.catch_warnings():
+        # discard ugly "`bot` in your user_agent may be problematic"-message
+        warnings.simplefilter('ignore', UserWarning)
+        session = praw.Reddit(user_agent)
+    return session
 
 def r_login(user_agent, username, password):
     """authenticate to reddit api using user credentials
     """
-    session = praw.Reddit(user_agent)
+    session = _praw_session(user_agent)
     session.login(username, password)
     return session
 
@@ -22,7 +34,7 @@ def r_oauth_login(user_agent, client_id, client_secret,
                   username=None, password=None):
     """authenticate to reddit api using oauth
     """
-    session = praw.Reddit(user_agent)
+    session = _praw_session(user_agent)
     session.set_oauth_app_info(client_id, client_secret, redirect_uri)
     if not session.has_oauth_app_info:
         raise ConfigurationError('Missing OAuth credentials')
@@ -39,19 +51,15 @@ def check_shadowban(user, user_agent):
 
     using a non-authenticated connection.
     """
-    session = praw.Reddit(user_agent)
-    shadowbanned = False
-    try:
-        user = session.get_redditor(user)
-    except praw.errors.HTTPException as e:
-        if e._raw.status_code == 404:
-            shadowbanned = True
-        else:
-            raise
-    return shadowbanned
+    headers={'User-Agent': user_agent}
+    status = requests.get('https://www.reddit.com/user/%s' % user,
+                          headers=headers).status_code
+    if status == 404:
+        return True
+    return False
 
 def reddit_login(config):
-    print('Logging into accounts')
+    logger.info('Logging into Reddit API')
 
     user_agent = config.get('BOT_AGENT')
 
@@ -62,16 +70,18 @@ def reddit_login(config):
 
     use_oauth = client_id and client_secret
     use_login = account_name and account_pass
+    if not use_login:
+        raise ConfigurationError('Missing REDDIT_ACCOUNT_NAME setting')
+    shadowbanned = check_shadowban(account_name, config.get('SEARCH_USER_AGENT'))
+    if shadowbanned:
+        logger.warning('%s may be shadowbanned.' % account_name)
     if use_oauth and use_login:
         account1 = r_oauth_login(user_agent, client_id, client_secret,
                                  username=account_name, password=account_pass)
+        logger.debug('Logged in using OAuth2 (useragent: %s)' % user_agent)
     else:
-        if not account_name or not account_pass:
-            raise ConfigurationError('Missing login credentials')
-        shadowbanned = check_shadowban(account_name, user_agent)
-        if shadowbanned:
-            print('%s may be shadowbanned.' % account_name)
         account1 = r_login(user_agent, account_name, account_pass)
+        logger.debug('Logged in using password (useragent: %s)' % user_agent)
 
     # load a second praw instance for the second account (the one used to check the spam links)
     client2_id = config.get('SECOND_OAUTH_CLIENT_ID')
@@ -81,14 +91,17 @@ def reddit_login(config):
 
     use_second_oauth = client2_id and client2_secret
     use_second_login = account2_name and account2_pass
-    if use_second_oauth and use_second_login:
-        account2 = r_oauth_login(user_agent, client2_id, client2_secret,
-                                 username=account2_name, password=account2_pass)
-    elif use_second_login:
-        shadowbanned = check_shadowban(account2_name, user_agent)
+    if use_second_login:
+        shadowbanned = check_shadowban(account2_name, config.get('SEARCH_USER_AGENT'))
         if shadowbanned:
-            print('%s may be shadowbanned.' % account2_name)
-        account2 = r_login(user_agent, account2_name, account2_pass)
+            logger.warning('%s may be shadowbanned.' % account2_name)
+        if use_second_oauth:
+            account2 = r_oauth_login(user_agent, client2_id, client2_secret,
+                                    username=account2_name, password=account2_pass)
+            logger.debug('Logged in second account using OAuth2')
+        else:
+            account2 = r_login(user_agent, account2_name, account2_pass)
+            logger.debug('Logged in second account using password')
     else:
         account2 = False
 
@@ -106,7 +119,7 @@ def build_subreddit_feeds(subreddits, max_url_length=MAX_URL_LENGTH):
     feed_urls = []
     for subreddit in subreddits:
         url_length += len(subreddit) + 1 # +1 for '+' delimiter
-        #print('%4d' % url_length, subreddit)
+        #logger.debug('%4d %s' % (url_length, subreddit))
         subredditlist += [subreddit]
         if url_length + base_length >= max_url_length:
             feed_urls += ['+'.join(subredditlist)]
@@ -126,7 +139,7 @@ def reddit_msg_linkfilter(messages, sending_account, receiving_account, submissi
     queue = {}
     submission = sending_account.get_submission(submission_id=submission_id)
     # post with first account
-    print('reddit_msg_linkfilter posting messages: ', end='')
+    logger.info('reddit_msg_linkfilter posting messages')
     count = 0
     for message in messages:
         # use a unique id in the message so we'll always recognize it
@@ -136,19 +149,17 @@ def reddit_msg_linkfilter(messages, sending_account, receiving_account, submissi
             _message = '[%s] %s' % (id, message)
             submission.add_comment(_message)
         except Exception as e:
-            print('\nreddit_msg_linkfilter failed to post "%s"' % (message,))
-            print(e)
+            logger.error('reddit_msg_linkfilter failed to post "%s"\n%s' % (message, e))
             # FIXME: check exception for http errors (retry?) or other (spam?)
             continue
         queue.update({id: message})
         count += 1
-        print('<', end='')
-    print(' (%d message(s), waiting...)' % count)
+    logger.info('%d message(s) posted' % count)
 
     time.sleep(7) # wait a bit
 
     # fetch posts on second account
-    print('reddit_msg_linkfilter verifying messages: ', end='')
+    logger.info('reddit_msg_linkfilter verifying messages')
     verified_messages = []
     fetched_messages = list(receiving_account.get_unread(limit=40))
     count = 0
@@ -156,24 +167,23 @@ def reddit_msg_linkfilter(messages, sending_account, receiving_account, submissi
         msg_body = msg.body # is unicode
         if not msg_body.startswith('['):
             # skip unknown messages
-            #print('(skipping unknown message "%s...") ' % msg_body[:10], end='')
+            #logger.debug('(skipping unknown message "%s...") ' % msg_body[:10], end='')
             continue
         for id in queue.keys():
             if str(id) not in msg_body:
                 continue
             message = queue.pop(id)
             #if message != msg_body.replace('[%s] ' % id, ''):
-            #    print('(message got mangled?)')
+            #    logger.debug('(message got mangled?)')
             msg.mark_as_read()
             verified_messages += [message]
-            print('>', end='')
             count += 1
-    print(' (%d unread message(s) fetched, %d verified, %d unknown(s))' % (len(fetched_messages)-1, count, len(fetched_messages)-1-count))
+    logger.info('%d unread message(s) fetched, %d verified, %d unknown(s)' % (len(fetched_messages)-1, count, len(fetched_messages)-1-count))
     if queue: # shouldnt have any messages left at this point
-        print('reddit_msg_linkfilter filtered out: %s' % ', '.join('"%s"' % x for x in queue.values()))
+        logger.info('reddit_msg_linkfilter filtered out: %s' % ', '.join('"%s"' % x for x in queue.values()))
     failed_messages = [m for m in messages if (m not in verified_messages and m not in queue.values())]
     if failed_messages:
-        print('reddit_msg_linkfilter completely failed on: %s' % str(failed_messages))
+        logger.error('reddit_msg_linkfilter completely failed on: %s' % str(failed_messages))
     return verified_messages
 
 def _reddit_spamfilter(results, sending_account, receiving_account, submission_id):
@@ -248,243 +258,191 @@ def _format_results(results):
 # Bot actions
 #
 
-# how the bot handles actions
-ACTMODE_NONE    = 0 # no action
-ACTMODE_LOG     = 1 # log action
-ACTMODE_PM      = 2 # pm/message action
-ACTMODE_COMMENT = 4 # (reddit-) comment action
-ACTMODES = (ACTMODE_LOG | ACTMODE_PM | ACTMODE_COMMENT)
-
-#ACTMODE = ACTMODE_NONE
-
-def reply_to_potential_comment(comment, account, config, already_done):
-    keyword_list = config.getlist('BOTCMD_INFORMATIONAL')
-    image_formats = config.getlist('IMAGE_FORMATS')
-    reply = config.get('BOTCMD_INFORMATIONAL_REPLY')
-
-    if not keyword_list:
-        return True
-    if not any(i in str(comment.submission.url) for i in image_formats):
-        return True
-    done = False
-    try:
-        if ACTMODE & ACTMODE_LOG:
-            print(reply)
-        if ACTMODE & ACTMODE_COMMENT:
-            comment.reply(reply)
-        if ACTMODE & ACTMODE_PM:
-            print(account.send_message(comment.author, 'Info Bot Information', reply))
-        print("replied to potential comment: {0}".format(comment.body))
-        done = True
-        already_done.append(comment.id)
-    except praw.errors.Forbidden as e:
-        done = True
-        print('\nCannot reply. Bot forbidden from this sub:', e)
-        already_done.append(comment.id)
-    except praw.errors.InvalidComment:
-        done = True
-        print('\nComment was deleted while trying to reply.')
-    except praw.errors.PRAWException as e:
-        done = True # at least for now? but don't store state
-        print('\nSome unspecified PRAW issue occured while trying to reply:', e)
-    return done
-
-def _applicable_comment(comment, subreddit_list, time_limit_minutes):
-    if not comment.author: #check if the comment exists
-        print('x', end='')
-        return False
-    if str(comment.subreddit) not in subreddit_list: #check if it's in one of the right subs
-        print('!', end='')
-        return False
-    if (time.time()-comment.created_utc)/60 > time_limit_minutes: #if the age of the comment is more than the time limit
-        print('o', end='')
-        return False
-    return True # good
-
 def _any_from_list_in_string(list_, string_):
     string_ = str(string_).lower()
-    return any(str(w).lower() in string_ for w in list_)
-    #return any(True for w in list_ if str(w).lower() in string_)
+    #return any(str(w).lower() in string_ for w in list_)
+    return [str(w).lower() for w in list_ if str(w).lower() in string_]
 
-def find_username_mentions(account, account2, config, subreddit_list, already_done):
-    search_strings = config.getlist('BOTCMD_IMAGESEARCH')
-    time_limit_minutes = config.getint('COMMENT_REPLY_AGE_LIMIT') #how long before a comment will be ignored for being too old
+def _applicable_comment(comment, config, account, already_done, subreddit_list, search_list, information_reply):
+    time_limit_minutes = config.getint('COMMENT_REPLY_AGE_LIMIT')
     image_formats = config.getlist('IMAGE_FORMATS')
-    extra_message = config.get('FOOTER_INFO_MESSAGE')
+    footer_message = config.get('FOOTER_INFO_MESSAGE')
 
-    count = 0
-    for message in account.get_unread(limit=100):
-        count += 1
-        message_body = message.body.encode('utf-8')
-        if not _any_from_list_in_string(search_strings, message_body):
-            print('.', end='')
-            continue
-        if not _applicable_comment(message, subreddit_list, time_limit_minutes):
-            continue
-        isPicture = _any_from_list_in_string(image_formats, message.submission.url)
-        if not isPicture:
-            domain = domain_suffix(message.submission.url)
-            if domain not in ('imgur.com', 'gfycat.com'):
-                print('t', end='')
-                continue
-        top_level = [i.replies for i in message.submission.comments]
-        submission_comments = []
-        for i in top_level:
-            for j in i:
-                submission_comments.append(j)
-        if any(i for i in submission_comments if extra_message in i.body): #If there are link replies
-            print('p', end='')
-            continue
-        if message.id in already_done:
-            print('r', end='')
-            continue
-        if message.author == account.user:
-            print('u', end='')
-            continue
-        print('R')
+    def done(): # put in database and abort processing
+        already_done.append(comment.id)
+        return False
+
+    if comment.id in already_done:
+        #logger.debug('[D] comment %s already logged as done' % comment.id)
+        return False
+    if str(comment.subreddit) not in subreddit_list: #check if it's in one of the right subs
+        logger.debug('[!] %s - comment\'s subreddit is not in our list' % comment.id)
+        return done()
+    comment_time_diff = (time.time() - comment.created_utc)
+    if comment_time_diff / 60 > time_limit_minutes:
+        logger.debug('[O] %s - comment has been created %d minutes ago, our reply-limit is %d' \
+                     % (comment.id, comment_time_diff / 60, time_limit_minutes))
+        return done()
+    is_image = _any_from_list_in_string(image_formats, comment.submission.url)
+    if not is_image:
+        # not relevant; unless we see an imgur/gfycat domain (those are always images)
+        domain = domain_suffix(comment.submission.url)
+        if domain not in ('imgur.com', 'gfycat.com'):
+            logger.debug('[T] %s - comment has no picture' % comment.id)
+            return done()
+    comment_body = comment.body.encode('utf-8')
+    keywords = _any_from_list_in_string(search_list, comment_body)
+    if not keywords:
+        logger.debug('[P] %s - comment has no keyword' % comment.id)
+        return done()
+    # found a keyword
+    if not comment.author:
+        logger.debug('[X] %s - comment has no author / does not exist' % comment.id)
+        return done()
+    top_level = [c.replies for c in comment.submission.comments] # FIXME: do we need this?
+    submission_comments = []
+    for i in top_level:
+        for j in i:
+            submission_comments.append(j)
+
+    if any(i for i in submission_comments if footer_message in i.body): # already replied? FIXME: wont match if our FOOTER_MESSAGE changed!
+        logger.debug('[R] %s - comment has our footer message (ours)' % comment.id)
+        return done()
+    if any(i for i in submission_comments if information_reply in i.body): # already replied? (this applies only to `find_keywords` method)
+        logger.debug('[R] %s - comment has our info message (ours)' % comment.id)
+        return done()
+    if comment.author == account.user: # ooh, that's us!? we lost our memory?
+        logger.debug('[U] %s - comment author is us (ours)' % comment.id)
+        return done()
+
+    return keywords # good
+
+def _comment_reply(comment, reply_func):
+    if not callable(reply_func):
+        return # error
+
+    attempt = 0
+    while True:
+        if attempt >= 2: # max retries: 2
+            return
+            #return ('error', 'max retries reached')
+        attempt += 1
         try:
-            reply = image_search(message.submission.url, config, account, account2, display_limit=5)
+            return reply_func(comment)
+        except praw.errors.RateLimitExceeded as e:
+            errmsg = str(e)
+            backoff, min_secs = re.search(r'try again in ([0-9]+) (minutes?|seconds?)', errmsg).groups()
+            if 'second' in min_secs:
+                backoff = int(backoff)
+            elif 'minute' in min_secs:
+                backoff = int(backoff) * 60
+            backoff += 3 # grace
+            logger.warning('Ratelimit hit. Backing off %d seconds!' % backoff) # TODO: get ratelimit reset time here
+            time.sleep(backoff)
+        # the following are permanent errors, no retry
+        except praw.errors.InvalidComment:
+            logger.warning('[F] %s - comment invalid (was deleted while trying to reply?)', comment.id)
+            # dont need to store this, since it's gone(?)
+            #already_done.append(comment.id)
+            return
+        except praw.errors.Forbidden as e:
+            logger.warning('[F] %s - cannot reply to comment. Bot forbidden from this sub: %s' % (comment.id, e)) # FIXME: add SUB
+            already_done.append(comment.id)
+            return
+        except praw.errors.PRAWException as e:
+            logger.error('Some unspecified PRAW issue occured while trying to reply: %s' % e)
+            return # done for now but don't save state and retry later
+
+def handle_bot_action(comments, config, account, account2, subreddit_list, already_done, action):
+    botmodes = config.getlist('BOT_MODE', ['log'])
+    botmodes = [m.lower() for m in botmodes]
+
+    # find_username_mentions
+    def find_username_mentions(comment): # reply_func
+        try:
+            reply_content = image_search(comment.submission.url, config, account, account2, display_limit=5)
+            if not reply_content:
+                logger.error('image_search failed (bug)! skipping')
+                # try that again, instead of replying with no results
+                return
         except Exception as e:
-            print('Error occured in search:', e)
-            reply = None
-            # lets cancel this answer to try again, instead of replying with no results
-            break
-        if not reply:
-            print('\nimage_search failed (bug)! skipping')
-            continue
-        done = False
-        attempt = 0
-        while not done:
-            attempt += 1
-            if attempt > 2: # max retries: 2
-                done = True
+            logger.error('Error occured in image_search: %s' % e)
+            return
 
-            try:
-                if ACTMODE & ACTMODE_LOG:
-                    print()
-                    print(reply)
-                    print()
-                if ACTMODE & ACTMODE_COMMENT or ACTMODE & ACTMODE_PM:
-                    message.reply(reply)
-                #if ACTMODE & ACTMODE_PM:
-                #    print(account.send_message(message.author, 'Info Bot Information', reply))
-                print(' (replied to message comment with more info) ', end='')
-                print('>')
-                done = True
-            except praw.errors.RateLimitExceeded as e:
-                errmsg = str(e)
-                backoff, min_secs = re.search(r'try again in ([0-9]+) (minutes?|seconds?)', errmsg).groups()
-                if 'second' in min_secs:
-                    backoff = int(backoff)
-                elif 'minute' in min_secs:
-                    backoff = int(backoff) * 60
-                backoff += 3 # grace
-                print('\nRate limited. Backing off %d seconds!' % backoff)
-                time.sleep(backoff)
-            # the following are permanent errors, no retry
-            except praw.errors.InvalidComment:
-                print('\nComment was deleted while trying to reply.')
-                done = True
-            except praw.errors.Forbidden as e:
-                print('\nCannot reply. Bot forbidden:', e)
-                done = True
-            except praw.errors.PRAWException as e:
-                print('\nSome unspecified PRAW issue occured while trying to reply:', e)
-                done = True
+        if 'log' in botmodes:
+            logger.warning(reply_content)
+        if 'comment' in botmodes:
+            comment.reply(reply_content)
+        elif 'pm' in botmodes:
+            comment.reply(reply_content)
+        #if 'pm' in botmodes:
+        #    whatever = account.send_message(comment.author, 'Info Bot Information', reply_content)
+        #    logger.info(whatever)
 
-        already_done.append(message.id)
-        message.mark_as_read()
-    print(' (%d messages handled)' % (count,))
+        comment.mark_as_read()
+        return
 
+    # find_keywords
+    def find_keywords(comment): # reply_func
+        reply_content = information_reply
+        if 'log' in botmodes:
+            logger.warning(reply_content)
+        if 'comment' in botmodes:
+            comment.reply(reply_content)
+        if 'pm' in botmodes:
+            whatever = account.send_message(comment.author, 'Info Bot Information', reply_content)
+            logger.info(whatever)
+        return
 
-def find_keywords(all_comments, account, config, subreddit_list, already_done):
-    keyword_list = config.getlist('BOTCMD_INFORMATIONAL')
-    time_limit_minutes = config.getint('COMMENT_REPLY_AGE_LIMIT') #how long before a comment will be ignored for being too old
-    image_formats = config.getlist('IMAGE_FORMATS')
-    extra_message = config.get('FOOTER_INFO_MESSAGE')
+    if action == 'find_username_mentions':
+        search_list = config.getlist('BOTCMD_IMAGESEARCH')
+        reply_func = find_username_mentions
+    elif action == 'find_keywords':
+        search_list = config.getlist('BOTCMD_INFORMATIONAL')
+        reply_func = find_keywords
+    else:
+        return
     information_reply = config.get('BOTCMD_INFORMATIONAL_REPLY')
 
+    if not search_list:
+        return
+
     count = 0
-    for comment in all_comments:
+    for comment in comments:
         count += 1
         comment_body = comment.body.encode('utf-8')
-        if not _applicable_comment(comment, subreddit_list, time_limit_minutes):
+        keywords = _applicable_comment(comment, config, account, already_done, subreddit_list, search_list, information_reply)
+        if not keywords:
             continue
-        isPicture = _any_from_list_in_string(image_formats, comment.link_url)
-        if not isPicture:
-            print('t', end='')
-            continue
-        if not _any_from_list_in_string(keyword_list, comment_body):
-            print('p', end='')
-            continue
-        top_level = [i.replies for i in comment.submission.comments]
-        submission_comments = []
-        for i in top_level:
-            for j in i:
-                submission_comments.append(j)
-        if any(i for i in submission_comments if extra_message in i.body): #If there are link replies
-            print('r', end='')
-            continue
-        if not any(i for i in submission_comments if i.body == information_reply): #If there are information replies
-            print('r', end='')
-            continue
-        print('\ndetected keyword: %s' % comment_body.lower())
-        if comment.id in already_done:
-            print('r', end='')
-            continue
-        if comment.author == account.user:
-            print('u', end='')
-            continue
-        print('R', end='')
-        done = False
-        attempt = 0
-        while not done:
-            attempt += 1
-            if attempt > 2: # max retries: 2
-                done = True
-
-            try:
-                done = reply_to_potential_comment(comment, account, config, already_done)
-                print('>', end='')
-            except praw.errors.RateLimitExceeded as e:
-                errmsg = str(e)
-                backoff, min_secs = re.search(r'try again in ([0-9]+) (minutes?|seconds?)', errmsg).groups()
-                if 'second' in min_secs:
-                    backoff = int(backoff)
-                elif 'minute' in min_secs:
-                    backoff = int(backoff) * 60
-                backoff += 3 # grace
-                print('\nRate limited. Backing off %d seconds!' % backoff)
-                time.sleep(backoff)
-            # the following are permanent errors, no retry
-            except praw.errors.InvalidComment:
-                print('\nComment was deleted while trying to reply.')
-                done = True
-            except praw.errors.Forbidden as e:
-                print('\nCannot reply. Bot forbidden:', e)
-                done = True
-            except praw.errors.PRAWException as e:
-                print('\nSome unspecified PRAW issue occured while trying to reply:', e)
-                done = True
+        logger.info('[R] Detected keyword/s %s in %s' % (', '.join(keywords), comment.id))
+        _comment_reply(comment, reply_func)
+        already_done.append(comment.id)
+        logger.info('replied to comment: {0}'.format(comment.body))
 
     #se = '/'.join(['%d %s' % (v, k) for k, v in stats])
-    #print(' (%d comments - %s)' % (count, se))
-    print(' (%d comments)' % (count,))
+    #logger.info('(%d comments - %s)' % (count, se))
+    logger.info('(%d comments scanned)' % (count,))
 
-def check_downvotes(user, start_time, comment_deleting_wait_time):
+
+def check_downvotes(user, start_time, deletion_wait_time, config):
+    botmodes = config.getlist('BOT_MODE', ['log'])
+    botmodes = [m.lower() for m in botmodes]
     # FIXME: should check for comment's creation time
     current_time = int(time.time()/60)
-    if (current_time - start_time) >= comment_deleting_wait_time:
+    if (current_time - start_time) >= deletion_wait_time:
         my_comments = user.get_comments(limit=None)
         for comment in my_comments:
             if comment.score < 1:
                 comment_id = comment.id
-                if ACTMODE & ACTMODE_COMMENT:
+                if 'comment' in botmodes:
                     comment.delete()
-                    print('deleted comment: %s' % comment_id)
-                #if ACTMODE & ACTMODE_PM:
-                #    print('should delete comment: %s' % comment_id)
-                if ACTMODE & ACTMODE_LOG:
-                    print('would have deleted comment: %s' % comment_id)
+                    logger.info('deleted comment: %s' % comment_id)
+                elif 'pm' in botmodes:
+                    comment.delete()
+                    logger.info('deleted comment: %s' % comment_id)
+                #if 'pm' in botmodes:
+                #    logger.info('should delete comment: %s' % comment_id)
+                if 'log' in botmodes:
+                    logger.warning('would have deleted comment: %s' % comment_id)
         return current_time
     return start_time

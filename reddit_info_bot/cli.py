@@ -1,12 +1,16 @@
-from __future__ import (absolute_import, unicode_literals, print_function)
+from __future__ import absolute_import, unicode_literals
 import sys, os
 import six
+import logging
 from docopt import docopt
 
 from .settings import Settings
 from .util import string_translate, import_string_from_file, import_file
 from .version import __version__
+from .log import setup_logging
 from . import run
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_docopt_args(args):
@@ -66,18 +70,18 @@ def _load_config(file):
         cfg = list(import_config())
     except SyntaxError as e:
         import traceback
-        print('Error parsing configuration file:')
+        msg = 'Error parsing configuration file:\n\n'
         t, e, tb = sys.exc_info()
         args = []
         for i, arg in enumerate(e.args):
             if isinstance(arg, tuple):
-                (file, line, pos, string) = arg
-                args += [(config, line, pos, string)]
+                (_, line, pos, string) = arg
+                args += [(file, line, pos, string)]
                 continue
             args += [arg]
         e.args = tuple(args)
-        traceback.print_exception(t, e, None, 0)
-        sys.exit(1)
+        msg += ''.join(traceback.format_exception(t, e, None, 0))
+        sys.exit(msg)
 
     return cfg
 
@@ -138,10 +142,14 @@ def get_config_sources(name, ext='cfg', dir=None):
 def run_command(**kwargs):
     """main routine"""
     settings = kwargs.get('settings')
+    setup_logging(settings)
     instance = settings.get('BOT_NAME', None)
     if instance:
-        version = ' (%s)' % settings.get('BOT_VERSION', None) or ''
-        print('Starting reddit-infobot as %s%s' % (instance, version))
+        version = settings.get('BOT_VERSION', None)
+        version = ' %s' % version if version != __version__ else ''
+        logger.info('Starting reddit-infobot %s (as: %s%s)' % (__version__, instance, version))
+    else:
+        logger.info('Starting reddit-infobot %s' % __version__)
     return run(**kwargs)
 
 def execute(argv=None, settings=None):

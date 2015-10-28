@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import (absolute_import, unicode_literals, print_function)
+from __future__ import absolute_import, unicode_literals
 import os
 import logging
 import six.moves.http_cookiejar as cookielib
@@ -30,8 +30,6 @@ def get_google_results(image_url, config, limit=15): #limit is the max number of
     response_text += requests.get('https://www.google.com/searchbyimage?image_url={0}&start=10'.format(image_url), headers=headers).content
     #response_text = response_text[response_text.find('Pages that include'):]
     tree = bs.BeautifulSoup(response_text)
-    print(len(response_text))
-    print(response_text)
     list_class_results = tree.findAll(attrs={'class':'r'})
     if len(list_class_results) == 0:
         raise IndexError('No results')
@@ -96,7 +94,7 @@ def get_tineye_results(image_url, config, limit=15):
         if not page:
             raise IndexError('No search results')
         if 'Your IP has been blocked' in page:
-            print('IP banned')
+            logger.error('Tineye IP ban detected')
             raise IndexError('No search results')
         if '403 Forbidden' in page: # hmm, something else?
             raise IndexError('No search results')
@@ -118,7 +116,14 @@ def get_tineye_results(image_url, config, limit=15):
                 results += [(source_link, text)]
         return results # [(link,text)]
 
-    headers = {}
+    headers = {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate',
+        'DNT': '1',
+        'Host': 'www.tineye.com',
+        'Referer': 'https://www.tineye.com/',
+    }
     headers['User-Agent'] = config['SEARCH_USER_AGENT']
     response = requests.post("https://www.tineye.com/search", data={'url': image_url})
 
@@ -143,7 +148,7 @@ def image_search(submission_url, config, account1, account2, display_limit=None)
     no_results_message = config.get('BOTCMD_IMAGESEARCH_NO_RESULTS_MESSAGE')
     submission_id = config.get('REDDIT_SPAMFILTER_SUBMISSION_ID', None)
 
-    print('Image-searching for %s' % submission_url)
+    logger.info('Image-searching for %s' % submission_url)
 
     # substitute videos with gif versions where possible
     # (because search engines index those)
@@ -154,7 +159,7 @@ def image_search(submission_url, config, account1, account2, display_limit=None)
         if submission_url.endswith(fileformats):
             for ff in fileformats:
                 submission_url = submission_url.replace(ff, '.gif')
-            print('Found %s video - substituting with gif url: %s' % (domain, submission_url))
+            logger.debug('Found %s video - substituting with gif url: %s' % (domain, submission_url))
         # no file extension?
         elif domainparts.path.rstrip(string.ascii_lowercase+string.ascii_uppercase) == '/':
             # on imgur, this could be a regular image, but luckily imgur provides a .gif url anyway :)
@@ -164,7 +169,7 @@ def image_search(submission_url, config, account1, account2, display_limit=None)
                 #maybe_handy_json_url = urlunsplit((scheme, netloc, '/cajax/get' + path, query, fragment))
                 submission_url = urlunsplit((scheme, 'giant.gfycat.com', path, query, fragment))
             submission_url += '.gif'
-            print('Found potential %s video - using gif url: %s' % (domain, submission_url))
+            logger.debug('Found potential %s video - using gif url: %s' % (domain, submission_url))
 
     link = re.sub("/","*", submission_url)
     results = ''
@@ -186,8 +191,8 @@ def image_search(submission_url, config, account1, account2, display_limit=None)
                 response = urlopen(app+link).read()
             results = eval(response)
         except HTTPError as e:
-            print(e)
-            print("Retrying %d" % i)
+            logger.error(e)
+            logger.info("Retrying %d" % i)
 
     search_engines = OrderedDict([
         ('google', 'Google'),
@@ -206,26 +211,21 @@ def image_search(submission_url, config, account1, account2, display_limit=None)
             # hardcoded results
             if engine == 'google':
                 result = results[0]
-                #print('google:', result)
             if engine == 'bing':
                 result = results[1]
-                #print('bing:', result)
             if engine == 'yandex':
                 result = results[2]
-                #print('yandex:', result)
             if engine == 'karmadecay':
                 result = results[3]
                 # sometimes we get nonempty empty results...
                 if result == [(u'', u'')]:
                     result = []
-                #print('karma:', result)
             if engine == 'tineye':
                 if config.getbool('DEBUG', False):
                     continue
                 result = get_tineye_results(submission_url, config)
-                #print('tineye:', result)
         except IndexError as e:
-            print('Failed fetching %s results: %s' % (provider, e))
+            logger.error('Failed fetching %s results: %s' % (provider, e))
 
         # sanitizing strange remote conversions,
         # unescape previously escaped backslash
@@ -255,7 +255,7 @@ def image_search(submission_url, config, account1, account2, display_limit=None)
         result = _good
 
         if _dropped > 0:
-            print('Dropped %d invalid result(s) from proxy for %s, %d result(s) remaining' % \
+            logger.info('Dropped %d invalid result(s) from proxy for %s, %d result(s) remaining' % \
                     (_dropped, provider, _ok))
         del _dropped, _ok, _all, _good
 
@@ -268,7 +268,7 @@ def image_search(submission_url, config, account1, account2, display_limit=None)
             continue
 
         # spam-filter results
-        print('...filtering results for %s' % provider)
+        logger.debug('...filtering results for %s' % provider)
         filtered  = _filter_results(result, account1, account2, submission_id)
 
         if not filtered:
@@ -293,7 +293,7 @@ def image_search(submission_url, config, account1, account2, display_limit=None)
 
     # stats
     for engine, stats in search_results.items():
-        print('%11s: all: %d / failed: %d / good: %d' % (engine,
+        logger.info('%11s: all: %d / failed: %d / good: %d' % (engine,
             stats.get('all'), stats.get('failed'), stats.get('succeeded')))
 
     reply += extra_message
