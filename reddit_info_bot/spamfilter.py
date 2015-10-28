@@ -85,7 +85,9 @@ def sync_rarchives_spamdb(filter_type, last_update=None):
         # TODO
         return None
 
-def get_filter(filter_type):
+def get_filter(filter_type, cachedir):
+    filename = '{1}spamfilter_{0}.json'.format(filter_type, cachedir)
+
     def cache_filters(filter_type):
         response = sync_rarchives_spamdb(filter_type)
         if not response:
@@ -95,7 +97,6 @@ def get_filter(filter_type):
             with open(filename, 'wb') as outf:
                 outf.write(response)
 
-    filename = 'spamfilter_{0}.json'.format(filter_type)
     if not os.path.isfile(filename) or \
             (int(time.time() - os.path.getmtime(filename)) > 43200): # cache 24 hours
         logger.info('Downloading spambot.rarchives.com list: %s filters' % filter_type)
@@ -117,17 +118,18 @@ def get_filter(filter_type):
     return filters
 
 
-def spamfilter_lists():
+def spamfilter_lists(cachedir):
     blacklist = []
-    if os.path.isfile("blacklist.p"):
-        with open("blacklist.p", "rb") as f:
+    blfile = '%sblacklist.p' % (cachedir,)
+    if os.path.isfile(blfile):
+        with open(blfile, 'rb') as f:
             blacklist = pickle.load(f)
     # s.r.c filters
-    link_filter = get_filter('link')
-    thumb_filter = get_filter('thumb')
-    text_filter = get_filter('text')
-    user_filter = get_filter('user')
-    tld_filter = get_filter('tld')
+    link_filter = get_filter('link', cachedir)
+    thumb_filter = get_filter('thumb', cachedir)
+    text_filter = get_filter('text', cachedir)
+    user_filter = get_filter('user', cachedir)
+    tld_filter = get_filter('tld', cachedir)
     #
     link_filter = link_filter | thumb_filter
     text_filter = text_filter | user_filter

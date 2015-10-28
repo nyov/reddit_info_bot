@@ -15,6 +15,7 @@ from .reddit import reddit_login, build_subreddit_feeds, handle_bot_action, chec
 from .spamfilter import spamfilter_lists
 from .log import setup_logging
 from .util import chwd
+from .exceptions import ConfigurationError
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,28 @@ def bot_commands():
 def cmd_run(settings, **ka):
     """Main routine
     """
+    # setup
+
+    workdir = settings.get('BOT_WORKDIR')
+    if workdir:
+        ok, errmsg = chwd(workdir)
+        if not ok:
+            sys.exit(errmsg)
+    else:
+        msg = 'No BOT_WORKDIR set, running in current directory.'
+        warnings.warn(msg, RuntimeWarning)
+    del workdir
+
+    global cachedir # global for publicsuffix
+    cachedir = settings.get('BOT_CACHEDIR', '')
+    # relative to workdir, or absolute path
+    # will be workdir if not provided
+    if cachedir:
+        cachedir = os.path.abspath(cachedir)
+        if not os.path.isdir(cachedir):
+            raise ConfigurationError('Provided BOT_CACHEDIR does not exist: %s' % cachedir)
+        cachedir = cachedir.rstrip('/') + '/'
+
     setup_logging(settings)
     instance = settings.get('BOT_NAME', None)
     if instance:
@@ -37,17 +60,6 @@ def cmd_run(settings, **ka):
         logger.info('Starting reddit-infobot %s (as: %s%s)' % (__version__, instance, version))
     else:
         logger.info('Starting reddit-infobot %s' % __version__)
-    return run(settings, **ka)
-
-def run(settings={}, **kwargs):
-    wd = settings.get('BOT_WORKDIR')
-    if wd:
-        ok, errmsg = chwd(wd)
-        if not ok:
-            sys.exit(errmsg)
-    else:
-        msg = 'No BOT_WORKDIR set, running in current directory.'
-        warnings.warn(msg, RuntimeWarning)
 
     # verify modes
     botmodes = settings.getlist('BOT_MODE', ['log'])
@@ -62,7 +74,13 @@ def run(settings={}, **kwargs):
         logger.info('log mode enabled')
 
     # force early cache-refreshing spamlists
-    spamfilter_lists()
+    spamfilter_lists(cachedir)
+
+    already_done = []
+    cachefile = '%salready_done.p' % (cachedir,)
+    if os.path.isfile(cachefile):
+        with open(cachefile, 'rb') as f:
+            already_done = pickle.load(f)
 
     (account1, account2) = reddit_login(settings)
 
@@ -78,19 +96,15 @@ def run(settings={}, **kwargs):
         # lazy objects, nothing done yet
         comment_stream_urls += [comment_feed]
 
-    main(settings, account1, account2, subreddit_list, comment_stream_urls)
+    #
+    # main loop
+    #
 
-def main(settings, account1, account2, subreddit_list, comment_stream_urls):
     start_time = time.time()
     find_mentions_enabled = settings.getbool('BOTCMD_IMAGESEARCH_ENABLED')
     find_keywords_enabled = settings.getbool('BOTCMD_INFORMATIONAL_ENABLED')
     delete_downvotes_enabled = settings.getbool('BOTCMD_DELETE_DOWNVOTES_ENABLED')
     delete_downvotes_after = settings.getint('BOTCMD_DELETE_DOWNVOTES_AFTER')
-
-    already_done = []
-    if os.path.isfile("already_done.p"):
-        with open("already_done.p", "rb") as f:
-            already_done = pickle.load(f)
 
     logger.info('Starting run...')
     while True:
@@ -119,7 +133,7 @@ def main(settings, account1, account2, subreddit_list, comment_stream_urls):
             if delete_downvotes_enabled:
                     start_time = check_downvotes(account1.user, start_time, delete_downvotes_after, settings)
 
-            with open("already_done.p", "wb") as df:
+            with open(cachefile, 'wb') as df:
                 pickle.dump(already_done, df, protocol=2)
 
             if not find_keywords_enabled:

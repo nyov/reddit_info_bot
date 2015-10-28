@@ -12,6 +12,7 @@ from reddit_info_bot import __version__ as BOT_VERSION
 
 BOT_NAME = 'reddit_info_bot'
 BOT_WORKDIR = '/tmp/redditbot'
+BOT_CACHEDIR = 'cache'
 
 LOG_LEVEL = 'DEBUG'
 

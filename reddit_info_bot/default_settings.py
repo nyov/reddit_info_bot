@@ -11,6 +11,7 @@ from .version import __version__ as BOT_VERSION
 
 BOT_NAME = 'reddit_info_bot'
 BOT_WORKDIR = '/'
+BOT_CACHEDIR = ''
 
 LOG_ENABLED = True
 LOG_FILE = None
