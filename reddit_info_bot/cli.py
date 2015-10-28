@@ -14,11 +14,14 @@ logger = logging.getLogger(__name__)
 
 def _parse_docopt_args(args):
     """Format docopt arguments to options.
-    Strips leading slashes, turns other slashes into underscores.
+
+    Strips leading slashes, turns other slashes into underscores,
+    uppercases all text.
     """
     for arg, argv in args.items():
         akey = arg.lstrip('-')
         akey = string_translate(akey, '-', '_')
+        akey = akey.upper()
         args[akey] = args.pop(arg)
     return args
 
@@ -97,14 +100,17 @@ def usage(version, instance=None):
     doc = """
     reddit_info_bot{version_instance}
 
-    Usage: reddit_info_bot [-c CONFIGFILE]
+    Usage: reddit_info_bot [-c CONFIGFILE] [-l LOGFILE] [-v|-vv|-vvv]
 
-      -c FILE --config=FILE   Load configuration from custom file
-                              instead of default locations.
-                              (To run multiple instances in parallel)
-      -h --help               Show this screen.
-                              (Use with -c to show CONFIG's instance)
-      --version               Show version.
+      -c FILE --config=FILE    Load configuration from custom file
+                               instead of default locations.
+                               (To run multiple instances in parallel)
+      -l FILE --log-file=FILE  Log to file instead of stdout.
+      -v --verbose             Increase log-level verbosity.
+                               (-vv for info, -vvv for debug level)
+      -h --help                Show this screen.
+                               (Use with -c to show CONFIG's instance)
+      --version                Show version.
     """.format(version_instance=version + instance)
     return textwrap.dedent(doc)
 
@@ -160,7 +166,7 @@ def execute(argv=None, settings=None):
                   options_first=False)
     options = _parse_docopt_args(args)
 
-    config = options.pop('config')
+    config = options.pop('CONFIG')
     if not config:
         # check hardcoded name and place of default configuration
         sources = get_config_sources('config', 'py', dir='reddit-infobot')
@@ -183,6 +189,14 @@ def execute(argv=None, settings=None):
             sys.exit(errmsg)
         for option, value in cfg:
             settings.set(option, value)
+
+    log_file = options.pop('LOG_FILE')
+    if log_file:
+        settings.set('LOG_FILE', log_file)
+    loglevel = {0:'ERROR',1:'WARNING',2:'INFO',3:'DEBUG'}
+    loglevel = loglevel[options.pop('VERBOSE')]
+    if loglevel != 'ERROR':
+        settings.set('LOG_LEVEL', loglevel)
 
     # supported commands
     cmds = bot_commands()

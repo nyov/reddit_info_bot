@@ -18,7 +18,7 @@ LOG_FILE_ENCODING = 'utf-8'
 LOG_FORMAT = '%(asctime)s [%(name)s] %(levelname)s: %(message)s'
 LOG_DATEFORMAT = '%Y-%m-%d %H:%M:%S'
 LOG_CAPTURE_STDOUT = False
-LOG_LEVEL = 'DEBUG'
+LOG_LEVEL = 'ERROR'
 LOG_CONFIG = {
     # ignore logs from libraries (such as requests/urllib3)
     'disable_existing_loggers': True,
@@ -70,7 +70,7 @@ BOTCMD_INFORMATIONAL = [ # reply to potential queries with bot-info
 BOTCMD_INFORMATIONAL_REPLY = (
 """It appears that you are looking for more information.
 
-Obtain more information by making a comment in the thread which includes /u/%s""" % BOT_NAME
+Obtain more information by making a comment in the thread which includes /u/%s""" % REDDIT_ACCOUNT_NAME or BOT_NAME
 )
 
 
