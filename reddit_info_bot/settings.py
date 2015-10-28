@@ -1,5 +1,6 @@
 import six
 import copy
+import json
 from importlib import import_module
 
 from . import default_settings
@@ -36,6 +37,12 @@ class Settings(object):
         if isinstance(value, six.string_types):
             value = value.split(',')
         return list(value)
+
+    def getdict(self, name, default=None):
+        value = self.get(name, default or {})
+        if isinstance(value, six.string_types):
+            value = json.loads(value)
+        return dict(value)
 
     def set(self, name, value):
         self.attributes[name] = value
