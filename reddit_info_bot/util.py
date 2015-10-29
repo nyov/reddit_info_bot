@@ -7,30 +7,15 @@ import six
 import imp
 from importlib import import_module
 from six.moves.urllib.parse import urlsplit
-from six.moves.urllib.request import urlopen, Request
 
-from .publicsuffix import PublicSuffixList
+from .publicsuffix import PublicSuffixList, fetch as download_psl
 
 
-PUBLIC_SUFFIX_LIST_URL = 'https://publicsuffix.org/list/public_suffix_list.dat'
 PSL_CACHE_FILE = 'public_suffix_list.dat'
-
-def download_psl(url=PUBLIC_SUFFIX_LIST_URL):
-	"""Downloads the latest public suffix list from publicsuffix.org.
-
-	Returns a file object containing the public suffix list.
-	"""
-	res = urlopen(Request(url))
-	try:
-		encoding = res.headers.get_content_charset()
-	except AttributeError:
-		encoding = res.headers.getparam('charset')
-	f = codecs.getreader(encoding)(res)
-	return f
 
 psl_cached = None
 
-def cached_psl(from_file='public_suffix_list.dat'):
+def cached_psl(from_file=PSL_CACHE_FILE):
     global psl_cached
     if not psl_cached:
         file = cachedir + from_file
@@ -49,7 +34,7 @@ def tld_from_suffix(suffix):
 
 def domain_suffix(link):
     parse = urlsplit(link)
-    psl = cached_psl(PSL_CACHE_FILE)
+    psl = cached_psl()
     return psl.get_public_suffix(parse.netloc)
 
 

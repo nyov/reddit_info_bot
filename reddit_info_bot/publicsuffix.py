@@ -21,14 +21,12 @@ except ImportError:
 
 PUBLIC_SUFFIX_LIST_URL = 'https://publicsuffix.org/list/public_suffix_list.dat'
 
-def fetch():
+def fetch(url=PUBLIC_SUFFIX_LIST_URL, user_agent='Python-publicsuffix/1.1.1'):
 	"""Downloads the latest public suffix list from publicsuffix.org.
 
 	Returns a file object containing the public suffix list.
 	"""
-
-	ua = 'Python-publicsuffix/1.1.1'
-	req = Request(PUBLIC_SUFFIX_LIST_URL, headers={'User-Agent': ua})
+	req = Request(url, headers={'User-Agent': user_agent})
 	res = urlopen(req)
 
 	try:
