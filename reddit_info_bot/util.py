@@ -11,21 +11,18 @@ from six.moves.urllib.parse import urlsplit
 from .publicsuffix import PublicSuffixList, fetch as download_psl
 
 
-PSL_CACHE_FILE = 'public_suffix_list.dat'
-
 psl_cached = None
 
-def cached_psl(from_file=PSL_CACHE_FILE):
+def cached_psl(from_file='public_suffix_list.dat'):
     global psl_cached
     if not psl_cached:
-        file = cachedir + from_file
         try:
-            with open(file, 'rb') as f:
+            with open(from_file, 'rb') as f:
                 psl_cached = PublicSuffixList(f)
         except (IOError, OSError):
-            with download_psl() as inf, open(file, 'wb') as outf:
+            with download_psl() as inf, open(from_file, 'wb') as outf:
                 outf.write(inf.read().encode('utf-8'))
-            with open(file, 'rb') as f:
+            with open(from_file, 'rb') as f:
                 psl_cached = PublicSuffixList(f)
     return psl_cached
 

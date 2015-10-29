@@ -119,11 +119,6 @@ def get_filter(filter_type, cachedir):
 
 
 def spamfilter_lists(cachedir):
-    blacklist = []
-    blfile = '%sblacklist.p' % (cachedir,)
-    if os.path.isfile(blfile):
-        with open(blfile, 'rb') as f:
-            blacklist = pickle.load(f)
     # s.r.c filters
     link_filter = get_filter('link', cachedir)
     thumb_filter = get_filter('thumb', cachedir)
@@ -145,7 +140,6 @@ def spamfilter_lists(cachedir):
         hard_blacklist,
         whitelist,
         tld_blacklist,
-        blacklist,
     )
 
 
@@ -153,7 +147,7 @@ def isspam(result, lists):
     """check search result for spammy content
     """
     (link_filter, text_filter, hard_blacklist,
-     whitelist, tld_blacklist, blacklist) = lists
+     whitelist, tld_blacklist) = lists
 
     url, text = result[0].lower(), result[1].lower()
 

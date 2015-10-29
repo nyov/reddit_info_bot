@@ -14,7 +14,7 @@ from . import praw
 from .reddit import reddit_login, build_subreddit_feeds, handle_bot_action, check_downvotes
 from .spamfilter import spamfilter_lists
 from .log import setup_logging
-from .util import chwd
+from .util import chwd, cached_psl
 from .exceptions import ConfigurationError
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,6 @@ def cmd_run(settings, **ka):
         warnings.warn(msg, RuntimeWarning)
     del workdir
 
-    global cachedir # global for publicsuffix
     cachedir = settings.get('BOT_CACHEDIR', '')
     # relative to workdir, or absolute path
     # will be workdir if not provided
@@ -51,6 +50,14 @@ def cmd_run(settings, **ka):
         if not os.path.isdir(cachedir):
             raise ConfigurationError('Provided BOT_CACHEDIR does not exist: %s' % cachedir)
         cachedir = cachedir.rstrip('/') + '/'
+
+    caches = {
+        'root': cachedir,
+        'comments_seen': cachedir + 'comments_seen.cache',
+        'spamfilter': cachedir + 'spamfilter.cache',
+        'pubsuflist': cachedir + 'public_suffix_list.dat',
+    }
+    del cachedir
 
     setup_logging(settings)
     instance = settings.get('BOT_NAME', None)
@@ -74,12 +81,13 @@ def cmd_run(settings, **ka):
         logger.info('log mode enabled')
 
     # force early cache-refreshing spamlists
-    spamfilter_lists(cachedir)
+    spamfilter_lists(caches['root'])
+    # cache-load psl
+    cached_psl(from_file=caches['pubsuflist'])
 
     already_done = []
-    cachefile = '%salready_done.p' % (cachedir,)
-    if os.path.isfile(cachefile):
-        with open(cachefile, 'rb') as f:
+    if os.path.isfile(caches['comments_seen']):
+        with open(caches['comments_seen'], 'rb') as f:
             already_done = pickle.load(f)
 
     (account1, account2) = reddit_login(settings)
@@ -133,7 +141,7 @@ def cmd_run(settings, **ka):
             if delete_downvotes_enabled:
                     start_time = check_downvotes(account1.user, start_time, delete_downvotes_after, settings)
 
-            with open(cachefile, 'wb') as df:
+            with open(caches['comments_seen'], 'wb') as df:
                 pickle.dump(already_done, df, protocol=2)
 
             if not find_keywords_enabled:
