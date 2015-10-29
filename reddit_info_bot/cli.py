@@ -87,18 +87,12 @@ def _load_config(file):
 
     return cfg
 
-def usage(version, instance=None):
+def usage(instance):
     """Format program description output"""
     import textwrap
 
-    version = ' %s' % version
-    if instance and instance != 'reddit_info_bot':
-        instance = ' (as %s)' % instance
-    else:
-        instance = ''
-
     doc = """
-    reddit_info_bot{version_instance}
+    {botname}
 
     Usage: reddit_info_bot [-c CONFIGFILE] [-l LOGFILE] [-v|-vv|-vvv]
 
@@ -111,7 +105,7 @@ def usage(version, instance=None):
       -h --help                Show this screen.
                                (Use with -c to show CONFIG's instance)
       --version                Show version.
-    """.format(version_instance=version + instance)
+    """.format(botname=instance)
     return textwrap.dedent(doc)
 
 def get_config_sources(name, ext='cfg', dir=None):
@@ -156,13 +150,25 @@ def execute(argv=None, settings=None):
                 for option, value in cfg:
                     settings.set(option, value)
 
-    instance = settings.get('BOT_NAME', None)
-    procname = instance
-    if procname and procname != 'reddit_info_bot':
-        procname = 'reddit_info_bot (%s)' % procname
-    setprocname(procname)
+    bot_name = settings.get('BOT_NAME', '')
+    if bot_name:
+        procname = bot_name
+        if bot_name == 'reddit_info_bot':
+            bot_name = ''
+        else:
+            procname = 'reddit_info_bot (%s)' % bot_name
+        setprocname(procname)
+    bot_version = settings.get('BOT_VERSION', '')
+    if bot_version == __version__:
+        bot_version = ''
+    bot_instance = '%s %s' % (bot_name, bot_version)
+    bot_instance = bot_instance.strip()
+    if bot_instance:
+        bot_instance = ' (%s)' % bot_instance
+    settings.set('_BOT_INSTANCE_', 'reddit_info_bot %s%s' %
+                 (__version__, bot_instance)) # (runtime setting)
 
-    _usage = usage(__version__, instance)
+    _usage = usage(settings.get('_BOT_INSTANCE_'))
     args = docopt(_usage,
                   argv=argv[1:],
                   help=True,

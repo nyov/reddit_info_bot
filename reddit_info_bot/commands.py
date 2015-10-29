@@ -21,13 +21,13 @@ logger = logging.getLogger(__name__)
 
 
 def bot_commands():
-    """list of registered bot commands"""
+    """List of registered bot commands"""
     cmds = {
         'run': cmd_run,
     }
     return cmds
 
-def cmd_run(settings, **ka):
+def cmd_run(settings):
     """Main routine
     """
     # setup
@@ -51,22 +51,28 @@ def cmd_run(settings, **ka):
             raise ConfigurationError('Provided BOT_CACHEDIR does not exist: %s' % cachedir)
         cachedir = cachedir.rstrip('/') + '/'
 
-    caches = {
-        'root': cachedir,
+    settings.set('_CACHEDIR_', cachedir) # (runtime setting)
+
+    open_files = {
         'comments_seen': cachedir + 'comments_seen.cache',
         'spamfilter': cachedir + 'spamfilter.cache',
         'pubsuflist': cachedir + 'public_suffix_list.dat',
     }
     del cachedir
 
+    settings.set('_FILE_', open_files) # (runtime setting)
+
+    # startup
+
+    sys.stdout.write('%s starting\n' % settings.get('_BOT_INSTANCE_', 'reddit_info_bot'))
+
     setup_logging(settings)
-    instance = settings.get('BOT_NAME', None)
-    if instance:
-        version = settings.get('BOT_VERSION', None)
-        version = ' %s' % version if version != __version__ else ''
-        logger.info('Starting reddit-infobot %s (as: %s%s)' % (__version__, instance, version))
-    else:
-        logger.info('Starting reddit-infobot %s' % __version__)
+
+    cmd_running(settings)
+
+def cmd_running(settings):
+
+    logger.info('%s started\n' % settings.get('_BOT_INSTANCE_', 'reddit_info_bot'))
 
     # verify modes
     botmodes = settings.getlist('BOT_MODE', ['log'])
@@ -81,14 +87,18 @@ def cmd_run(settings, **ka):
         logger.info('log mode enabled')
 
     # force early cache-refreshing spamlists
-    spamfilter_lists(caches['root'])
+    spamfilter_lists(settings.get('_CACHEDIR_'))
     # cache-load psl
-    cached_psl(from_file=caches['pubsuflist'])
-
+    cached_psl(from_file=settings.getdict('_FILE_')['pubsuflist'])
+    # load cached comments-done-list
+    comments_seen = settings.getdict('_FILE_')['comments_seen']
     already_done = []
-    if os.path.isfile(caches['comments_seen']):
-        with open(caches['comments_seen'], 'rb') as f:
-            already_done = pickle.load(f)
+    if os.path.isfile(comments_seen):
+        with open(comments_seen, 'rb') as f:
+            try:
+                already_done = pickle.load(f)
+            except Exception:
+                already_done = []
 
     (account1, account2) = reddit_login(settings)
 
@@ -141,7 +151,7 @@ def cmd_run(settings, **ka):
             if delete_downvotes_enabled:
                     start_time = check_downvotes(account1.user, start_time, delete_downvotes_after, settings)
 
-            with open(caches['comments_seen'], 'wb') as df:
+            with open(comments_seen, 'wb') as df:
                 pickle.dump(already_done, df, protocol=2)
 
             if not find_keywords_enabled:
