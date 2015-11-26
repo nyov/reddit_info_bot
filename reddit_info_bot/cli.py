@@ -6,7 +6,7 @@ from docopt import docopt
 
 from .settings import Settings
 from .commands import bot_commands
-from .util import string_translate, import_string_from_file, import_file
+from .util import string_translate, import_string_from_file, import_file, setprocname
 from .version import __version__
 
 logger = logging.getLogger(__name__)
@@ -157,6 +157,10 @@ def execute(argv=None, settings=None):
                     settings.set(option, value)
 
     instance = settings.get('BOT_NAME', None)
+    procname = instance
+    if procname and procname != 'reddit_info_bot':
+        procname = 'reddit_info_bot (%s)' % procname
+    setprocname(procname)
 
     _usage = usage(__version__, instance)
     args = docopt(_usage,

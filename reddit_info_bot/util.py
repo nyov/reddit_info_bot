@@ -93,3 +93,25 @@ def import_string_from_file(filepath, module_name='configfile'):
     module = imp.new_module(module_name)
     six.exec_(code, module.__dict__)
     return module
+
+def setprocname(name):
+    """ Set the process name if possible.
+
+    Requires setproctitle (python-setproctitle)
+    from https://github.com/dvarrazzo/py-setproctitle
+    (preferred) or python-prctl (debian package)
+    from https://github.com/seveas/python-prctl .
+    """
+    try:
+        import setproctitle
+        setproctitle.setproctitle(name)
+    except ImportError:
+        try:
+            import prctl
+            # for ps and top, up to 16 bytes long
+            prctl.set_name(name)
+            # for ps aux and top -c
+            # will silently truncate to **argv (see docs)
+            prctl.set_proctitle(name)
+        except ImportError:
+            return
