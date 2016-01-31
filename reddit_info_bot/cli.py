@@ -2,6 +2,8 @@ from __future__ import absolute_import, unicode_literals
 import sys, os
 import six
 import logging
+import atexit
+from functools import partial
 from docopt import docopt
 
 from .settings import Settings
@@ -207,6 +209,8 @@ def execute(argv=None, settings=None):
     loglevel = loglevel[options.pop('VERBOSE')]
     if loglevel != 'ERROR':
         settings.set('LOG_LEVEL', loglevel)
+    for option, value in options:
+        settings.set(option, value)
 
     # supported commands
     cmds = bot_commands()
@@ -225,6 +229,11 @@ def execute(argv=None, settings=None):
     cmdargs = {
         'settings':settings,
     }
+
+    if 'shutdown' in cmds:
+        shutdown = cmds['shutdown']
+        shutdown_func = partial(shutdown, settings)
+        atexit.register(shutdown_func)
 
     exitcode = cmd(**cmdargs)
     if not exitcode:

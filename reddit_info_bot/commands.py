@@ -24,6 +24,7 @@ def bot_commands():
     """List of registered bot commands"""
     cmds = {
         'run': cmd_run,
+        'shutdown': cmd_shutdown,
     }
     return cmds
 
@@ -172,3 +173,7 @@ def cmd_running(settings):
             (account1, account2) = reddit_login(settings)
         except praw.errors.PRAWException as e:
             logger.error('Some unspecified PRAW error caught in main loop: %s' % e)
+
+def cmd_shutdown(settings):
+    """Shutdown sequence
+    """
