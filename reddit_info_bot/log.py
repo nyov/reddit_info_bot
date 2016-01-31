@@ -50,3 +50,5 @@ def setup_logging(settings=None, install_root_handler=True):
         handler.setLevel(settings.get('LOG_LEVEL'))
 
         logging.root.addHandler(handler)
+
+        return handler.stream # file handle

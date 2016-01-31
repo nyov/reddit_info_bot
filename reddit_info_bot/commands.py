@@ -28,6 +28,14 @@ def bot_commands():
     }
     return cmds
 
+def cmd_shutdown(settings):
+    """Shutdown sequence
+    """
+    # close open files
+    open_file_handles = settings.getdict('_FILE_')
+    for fh in open_file_handles.values():
+        fh.__exit__(None, None, None)
+
 def cmd_run(settings):
     """Main routine
     """
@@ -45,29 +53,35 @@ def cmd_run(settings):
 
     cachedir = settings.get('BOT_CACHEDIR', '')
     # relative to workdir, or absolute path
-    # will be workdir if not provided
+    # (will be workdir if not provided)
     if cachedir:
         cachedir = os.path.abspath(cachedir)
         if not os.path.isdir(cachedir):
             raise ConfigurationError('Provided BOT_CACHEDIR does not exist: %s' % cachedir)
         cachedir = cachedir.rstrip('/') + '/'
-
     settings.set('_CACHEDIR_', cachedir) # (runtime setting)
 
     open_files = {
         'comments_seen': cachedir + 'comments_seen.cache',
-        'spamfilter': cachedir + 'spamfilter.cache',
+        #'spamfilter': cachedir + 'spamfilter.cache',
         'pubsuflist': cachedir + 'public_suffix_list.dat',
     }
     del cachedir
 
-    settings.set('_FILE_', open_files) # (runtime setting)
-
     # startup
+    #
+    # Environment is set up at this point,
+    # now open files.
 
     sys.stdout.write('%s starting\n' % settings.get('_BOT_INSTANCE_', 'reddit_info_bot'))
 
-    setup_logging(settings)
+    # open files
+    open_file_handles = {}
+    for file, filename in open_files.items():
+        open_file_handles[file] = open(filename, 'ab+').__enter__()
+    settings.set('_FILE_', open_file_handles) # (runtime setting)
+
+    log_fh = setup_logging(settings)
 
     cmd_running(settings)
 
@@ -90,16 +104,15 @@ def cmd_running(settings):
     # force early cache-refreshing spamlists
     spamfilter_lists(settings.get('_CACHEDIR_'))
     # cache-load psl
-    cached_psl(from_file=settings.getdict('_FILE_')['pubsuflist'])
+    cached_psl(settings.getdict('_FILE_')['pubsuflist'])
     # load cached comments-done-list
-    comments_seen = settings.getdict('_FILE_')['comments_seen']
-    already_done = []
-    if os.path.isfile(comments_seen):
-        with open(comments_seen, 'rb') as f:
-            try:
-                already_done = pickle.load(f)
-            except Exception:
-                already_done = []
+    comments_seen_fh = settings.getdict('_FILE_')['comments_seen']
+    try:
+        comments_seen_fh.seek(0)
+        already_done = pickle.load(comments_seen_fh) or []
+        comments_seen_fh.seek(0)
+    except Exception:
+        already_done = []
 
     (account1, account2) = reddit_login(settings)
 
@@ -152,8 +165,8 @@ def cmd_running(settings):
             if delete_downvotes_enabled:
                     start_time = check_downvotes(account1.user, start_time, delete_downvotes_after, settings)
 
-            with open(comments_seen, 'wb') as df:
-                pickle.dump(already_done, df, protocol=2)
+            comments_seen_fh.seek(0)
+            pickle.dump(already_done, comments_seen_fh, protocol=2)
 
             if not find_keywords_enabled:
                 # no need to hammer the API, once every minute should suffice in this case
@@ -173,7 +186,3 @@ def cmd_running(settings):
             (account1, account2) = reddit_login(settings)
         except praw.errors.PRAWException as e:
             logger.error('Some unspecified PRAW error caught in main loop: %s' % e)
-
-def cmd_shutdown(settings):
-    """Shutdown sequence
-    """

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, unicode_literals
 import sys, os
+import logging
 import codecs
 import unicodedata
 import six
@@ -10,20 +11,25 @@ from six.moves.urllib.parse import urlsplit
 
 from .publicsuffix import PublicSuffixList, fetch as download_psl
 
+logger = logging.getLogger(__name__)
+
 
 psl_cached = None
 
-def cached_psl(from_file='public_suffix_list.dat'):
+def cached_psl(fh):
     global psl_cached
     if not psl_cached:
-        try:
-            with open(from_file, 'rb') as f:
-                psl_cached = PublicSuffixList(f)
-        except (IOError, OSError):
-            with download_psl() as inf, open(from_file, 'wb') as outf:
-                outf.write(inf.read().encode('utf-8'))
-            with open(from_file, 'rb') as f:
-                psl_cached = PublicSuffixList(f)
+        fh.seek(0, os.SEEK_END)
+        size = fh.tell()
+        fh.seek(0)
+        if size <= 0:
+            logger.debug('No cached PublicSuffixList data, downloading')
+            with download_psl() as inf:
+                psl_cached = inf.read().encode('utf-8')
+                fh.write(psl_cached)
+        else:
+            psl_cached = PublicSuffixList(fh)
+        logger.debug('PublicSuffixList loaded')
     return psl_cached
 
 def tld_from_suffix(suffix):
@@ -31,7 +37,9 @@ def tld_from_suffix(suffix):
 
 def domain_suffix(link):
     parse = urlsplit(link)
-    psl = cached_psl()
+    #psl = cached_psl()
+    # FIXME
+    psl = psl_cached
     return psl.get_public_suffix(parse.netloc)
 
 
