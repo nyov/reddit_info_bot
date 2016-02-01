@@ -18,7 +18,6 @@ LOG_FILE = None
 LOG_FILE_ENCODING = 'utf-8'
 LOG_FORMAT = '%(asctime)s [%(name)s] %(levelname)s: %(message)s'
 LOG_DATEFORMAT = '%Y-%m-%d %H:%M:%S'
-LOG_CAPTURE_STDOUT = False
 LOG_LEVEL = 'ERROR'
 LOG_CONFIG = {
     # ignore logs from libraries (such as requests/urllib3)
