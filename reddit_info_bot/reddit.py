@@ -8,9 +8,8 @@ import requests
 import re
 
 from . import praw
-from .spamfilter import isspam, spamfilter_lists
-from .search import image_search
-from .util import domain_suffix, remove_control_characters
+from .search import image_search, filter_image_search, format_image_search
+from .util import domain_suffix
 from .exceptions import ConfigurationError
 
 logger = logging.getLogger(__name__)
@@ -65,19 +64,19 @@ def check_shadowban(user, user_agent):
         return True
     return False
 
-def reddit_login(config):
-    user_agent = config.get('BOT_AGENT')
+def reddit_login(settings):
+    user_agent = settings.get('BOT_AGENT')
 
-    client_id = config.get('OAUTH_CLIENT_ID')
-    client_secret = config.get('OAUTH_SECRET_TOKEN')
-    account_name = config.get('REDDIT_ACCOUNT_NAME')
-    account_pass = config.get('REDDIT_ACCOUNT_PASS')
+    client_id = settings.get('OAUTH_CLIENT_ID')
+    client_secret = settings.get('OAUTH_SECRET_TOKEN')
+    account_name = settings.get('REDDIT_ACCOUNT_NAME')
+    account_pass = settings.get('REDDIT_ACCOUNT_PASS')
 
     use_oauth = client_id and client_secret
     use_login = account_name and account_pass
     if not use_login:
         raise ConfigurationError('Missing REDDIT_ACCOUNT_NAME setting')
-    shadowbanned = check_shadowban(account_name, config.get('SEARCH_USER_AGENT'))
+    shadowbanned = check_shadowban(account_name, settings.get('SEARCH_USER_AGENT'))
     if shadowbanned:
         logger.warning("User '%s' may be shadowbanned." % account_name)
     if use_oauth and use_login:
@@ -89,15 +88,15 @@ def reddit_login(config):
         logger.debug("Logged into account '%s' using password (useragent: %s)" % (account1.user, user_agent))
 
     # load a second praw instance for the second account (the one used to check the spam links)
-    client2_id = config.get('SECOND_OAUTH_CLIENT_ID')
-    client2_secret = config.get('SECOND_OAUTH_SECRET_TOKEN')
-    account2_name = config.get('SECOND_ACCOUNT_NAME')
-    account2_pass = config.get('SECOND_ACCOUNT_PASS')
+    client2_id = settings.get('SECOND_OAUTH_CLIENT_ID')
+    client2_secret = settings.get('SECOND_OAUTH_SECRET_TOKEN')
+    account2_name = settings.get('SECOND_ACCOUNT_NAME')
+    account2_pass = settings.get('SECOND_ACCOUNT_PASS')
 
     use_second_oauth = client2_id and client2_secret
     use_second_login = account2_name and account2_pass
     if use_second_login:
-        shadowbanned = check_shadowban(account2_name, config.get('SEARCH_USER_AGENT'))
+        shadowbanned = check_shadowban(account2_name, settings.get('SEARCH_USER_AGENT'))
         if shadowbanned:
             logger.warning('%s may be shadowbanned.' % account2_name)
         if use_second_oauth:
@@ -201,7 +200,7 @@ def reddit_msg_linkfilter(messages, sending_account, receiving_account, submissi
         logger.error('reddit_msg_linkfilter completely failed on: %s' % str(failed_messages))
     return verified_messages
 
-def _reddit_spamfilter(results, sending_account, receiving_account, submission_id):
+def reddit_spamfilter(results, sending_account, receiving_account, submission_id):
     urls = set([url for url, text in results])
     verified_urls = reddit_msg_linkfilter(urls, sending_account, receiving_account, submission_id)
     verified_results = []
@@ -211,32 +210,9 @@ def _reddit_spamfilter(results, sending_account, receiving_account, submission_i
             verified_results.append(result)
     return verified_results
 
-def _filter_results(results, account1, account2, check_submission_id):
-    """Filter search results
-    """
-    def sanitize_string(string):
-        # strip possible control characters
-        string = remove_control_characters(string)
+def reddit_format_results(results, escape_chars=True):
+    """Format search results for reddit.
 
-        # also strip non-ascii characters
-        #string = ''.join(c for c in string if ord(c) in range(32, 127))
-
-        string = string.strip()
-        return string
-
-    results = [[sanitize_string(v) for v in result]
-               for result in results]
-
-    # filter results for spam
-    spamlists = spamfilter_lists()
-    results = [result for result in results if not isspam(result, spamlists)]
-    if account2 and check_submission_id: # do reddit msg spamcheck if second account is configured
-        results = _reddit_spamfilter(results, account2, account1, check_submission_id)
-
-    return results
-
-def _format_results(results):
-    """Format search results
     Returns a markdown-formatted and spam-filtered list of the results.
     """
     def escape_markdown(string):
@@ -260,8 +236,9 @@ def _format_results(results):
         string = ''.join(c if c not in escape_chars else '\%s' % c for c in string)
         return string
 
-    results = [[escape_markdown(v) for v in result]
-               for result in results]
+    if escape_chars:
+        results = [[escape_markdown(v) for v in result]
+                   for result in results]
 
     # format output
     markdown_links = ['[%s](%s)' % (text, url) for url, text in results]
@@ -273,46 +250,64 @@ def _format_results(results):
 # Bot actions
 #
 
+def check_downvotes(settings, user):
+    deletion_wait_time = settings.getint('BOTCMD_DOWNVOTES_DELETE_AFTER', 1) * 60 # in minutes
+    deletion_comment_score = settings.getint('BOTCMD_DOWNVOTES_DELETION_SCORE', 1)
+    deletion_testmode = settings.getbool('BOTCMD_DOWNVOTES_TESTMODE', False)
+
+    my_comments = user.get_comments(limit=100)
+    for comment in my_comments:
+        # check comment age, skip if not old enough
+        if comment.created_utc < deletion_wait_time:
+            continue
+        if comment.score < deletion_comment_score:
+            if deletion_testmode:
+                logger.warning('would have deleted comment %s (score: %s): %s' %
+                        (comment.id, comment.score, comment.title))
+                continue
+            logger.info('deleting comment %s: %s' % (comment.id, comment.title))
+            comment.delete()
+
 def _any_from_list_in_string(list_, string_):
     string_ = str(string_).lower()
     #return any(str(w).lower() in string_ for w in list_)
     return [str(w).lower() for w in list_ if str(w).lower() in string_]
 
-def _applicable_comment(comment, config, account, already_done, subreddit_list, search_list, information_reply):
-    time_limit_minutes = config.getint('COMMENT_REPLY_AGE_LIMIT')
-    image_formats = config.getlist('IMAGE_FORMATS')
-    footer_message = config.get('FOOTER_INFO_MESSAGE')
+def _applicable_comment(comment, settings, account, already_done, subreddit_list, search_list, information_reply):
+    time_limit_minutes = settings.getint('COMMENT_REPLY_AGE_LIMIT')
+    image_formats = settings.getlist('IMAGE_FORMATS')
+    footer_message = settings.get('FOOTER_INFO_MESSAGE')
 
     def done(): # put in database and abort processing
         already_done.append(comment.id)
         return False
 
     if comment.id in already_done:
-        #logger.debug('[D] comment %s already logged as done' % comment.id)
+        #logger.debug('[D] comment %s already logged as done [%s]' % (comment.id, comment.permalink))
         return False
     if str(comment.subreddit) not in subreddit_list: #check if it's in one of the right subs
-        logger.debug('[!] %s - comment\'s subreddit is not in our list' % comment.id)
+        logger.debug('[!] %s - comment\'s subreddit is not in our list [%s]' % (comment.id, comment.permalink))
         return done()
     comment_time_diff = (time.time() - comment.created_utc)
     if comment_time_diff / 60 > time_limit_minutes:
-        logger.debug('[O] %s - comment has been created %d minutes ago, our reply-limit is %d' \
-                     % (comment.id, comment_time_diff / 60, time_limit_minutes))
+        logger.debug('[O] %s - comment has been created %d minutes ago, our reply-limit is %d [%s]' \
+                     % (comment.id, comment_time_diff / 60, time_limit_minutes, comment.permalink))
         return done()
     is_image = _any_from_list_in_string(image_formats, comment.submission.url)
     if not is_image:
         # not relevant; unless we see an imgur/gfycat domain (those are always images)
         domain = domain_suffix(comment.submission.url)
         if domain not in ('imgur.com', 'gfycat.com'):
-            logger.debug('[T] %s - comment has no picture' % comment.id)
+            logger.debug('[T] %s - comment has no picture [%s]' % (comment.id, comment.permalink))
             return done()
     comment_body = comment.body.encode('utf-8')
     keywords = _any_from_list_in_string(search_list, comment_body)
     if not keywords:
-        logger.debug('[P] %s - comment has no keyword' % comment.id)
+        logger.debug('[P] %s - comment has no keyword [%s]' % (comment.id, comment.permalink))
         return done()
     # found a keyword
     if not comment.author:
-        logger.debug('[X] %s - comment has no author / does not exist' % comment.id)
+        logger.debug('[X] %s - comment has no author / does not exist [%s]' % (comment.id, comment.permalink))
         return done()
     top_level = [c.replies for c in comment.submission.comments] # FIXME: do we need this?
     submission_comments = []
@@ -321,13 +316,13 @@ def _applicable_comment(comment, config, account, already_done, subreddit_list, 
             submission_comments.append(j)
 
     if any(i for i in submission_comments if footer_message in i.body): # already replied? FIXME: wont match if our FOOTER_MESSAGE changed!
-        logger.debug('[R] %s - comment has our footer message (ours)' % comment.id)
+        logger.debug('[R] %s - comment has our footer message (ours) [%s]' % (comment.id, comment.permalink))
         return done()
     if any(i for i in submission_comments if information_reply in i.body): # already replied? (this applies only to `find_keywords` method)
-        logger.debug('[R] %s - comment has our info message (ours)' % comment.id)
+        logger.debug('[R] %s - comment has our info message (ours) [%s]' % (comment.id, comment.permalink))
         return done()
     if comment.author == account.user: # ooh, that's us!? we lost our memory?
-        logger.debug('[U] %s - comment author is us (ours)' % comment.id)
+        logger.debug('[U] %s - comment author is us (ours) [%s]' % (comment.id, comment.permalink))
         return done()
 
     return keywords # good
@@ -352,11 +347,11 @@ def _comment_reply(comment, reply_func, reply_content):
             elif 'minute' in min_secs:
                 backoff = int(backoff) * 60
             backoff += 3 # grace
-            logger.warning('Ratelimit hit. Backing off %d seconds! [%s]' % (backoff, e))
+            logger.warning('Ratelimit hit. Backing off %d seconds! (%s)' % (backoff, e))
             time.sleep(backoff)
         # the following are permanent errors, no retry
         except praw.errors.InvalidComment:
-            logger.warning('[F] %s - comment invalid (was deleted while trying to reply?)', comment.id)
+            logger.warning('[F] %s - comment invalid (was deleted while trying to reply?) [%s]', (comment.id, comment.permalink))
             # dont need to store this, since it's gone(?)
             #already_done.append(comment.id)
             return
@@ -368,8 +363,8 @@ def _comment_reply(comment, reply_func, reply_content):
             logger.error('Some unspecified PRAW issue occured while trying to reply: %s' % e)
             return # done for now but don't save state and retry later
 
-def handle_bot_action(comments, config, account, account2, subreddit_list, already_done, action):
-    botmodes = config.getlist('BOT_MODE', ['log'])
+def handle_bot_action(comments, settings, account, account2, subreddit_list, already_done, action):
+    botmodes = settings.getlist('BOT_MODE', ['log'])
 
     # find_username_mentions
     def find_username_mentions(comment, reply_content): # reply_func
@@ -381,9 +376,6 @@ def handle_bot_action(comments, config, account, account2, subreddit_list, alrea
         elif 'pm' in botmodes:
             comment.reply(reply_content)
             comment.mark_as_read()
-        #if 'pm' in botmodes:
-        #    whatever = account.send_message(comment.author, 'Info Bot Information', reply_content)
-        #    logger.info(whatever)
         return
 
     # find_keywords
@@ -392,20 +384,21 @@ def handle_bot_action(comments, config, account, account2, subreddit_list, alrea
             logger.warning(reply_content)
         if 'comment' in botmodes:
             comment.reply(reply_content)
+            comment.mark_as_read()
         if 'pm' in botmodes:
             whatever = account.send_message(comment.author, 'Info Bot Information', reply_content)
             logger.info(whatever)
         return
 
     if action == 'find_username_mentions':
-        search_list = config.getlist('BOTCMD_IMAGESEARCH')
+        search_list = settings.getlist('BOTCMD_IMAGESEARCH')
         reply_func = find_username_mentions
     elif action == 'find_keywords':
-        search_list = config.getlist('BOTCMD_INFORMATIONAL')
+        search_list = settings.getlist('BOTCMD_INFORMATIONAL')
         reply_func = find_keywords
     else:
         return
-    information_reply = config.get('BOTCMD_INFORMATIONAL_REPLY')
+    information_reply = settings.get('BOTCMD_INFORMATIONAL_REPLY')
 
     if not search_list:
         return
@@ -414,14 +407,17 @@ def handle_bot_action(comments, config, account, account2, subreddit_list, alrea
     for comment in comments:
         count += 1
         comment_body = comment.body.encode('utf-8')
-        keywords = _applicable_comment(comment, config, account, already_done, subreddit_list, search_list, information_reply)
+        keywords = _applicable_comment(comment, settings, account, already_done, subreddit_list, search_list, information_reply)
         if not keywords:
             continue
-        logger.info('[R] Detected keyword/s %s in %s' % (', '.join(keywords), comment.id))
+        logger.info('[N] Detected keyword/s %s in %s' % (', '.join(keywords), comment.id))
 
         if action == 'find_username_mentions':
             try:
-                reply_content = image_search(comment.submission.url, config, account, account2, display_limit=5)
+                display_limit = 5
+                search_results = image_search(settings, comment.submission.url)
+                filter_results = filter_image_search(settings, search_results, account, account2)
+                reply_content = format_image_search(settings, filter_results, display_limit)
                 if not reply_content:
                     logger.error('image_search failed (bug)! skipping')
                     # try that again, instead of replying with no results
@@ -433,32 +429,11 @@ def handle_bot_action(comments, config, account, account2, subreddit_list, alrea
             reply_content = information_reply
 
         _comment_reply(comment, reply_func, reply_content)
-        already_done.append(comment.id)
-        logger.info('replied to comment: {0}'.format(comment.body))
+        # do not mark as 'done' in test-mode
+        if 'comment' in botmodes or 'pm' in botmodes:
+            already_done.append(comment.id)
+        logger.info('replied to comment {0}: {1}'.format(comment.id, comment.body))
 
     #se = '/'.join(['%d %s' % (v, k) for k, v in stats])
     #logger.info('(%d comments - %s)' % (count, se))
     logger.info('(%d comments scanned)' % (count,))
-
-
-def check_downvotes(user, start_time, deletion_wait_time, config):
-    botmodes = config.getlist('BOT_MODE', ['log'])
-    # FIXME: should check for comment's creation time
-    current_time = int(time.time()/60)
-    if (current_time - start_time) >= deletion_wait_time:
-        my_comments = user.get_comments(limit=None)
-        for comment in my_comments:
-            if comment.score < 1:
-                comment_id = comment.id
-                if 'comment' in botmodes:
-                    comment.delete()
-                    logger.info('deleted comment: %s' % comment_id)
-                elif 'pm' in botmodes:
-                    comment.delete()
-                    logger.info('deleted comment: %s' % comment_id)
-                #if 'pm' in botmodes:
-                #    logger.info('should delete comment: %s' % comment_id)
-                if 'log' in botmodes:
-                    logger.warning('would have deleted comment: %s' % comment_id)
-        return current_time
-    return start_time

@@ -216,8 +216,8 @@ def execute(argv=None, settings=None):
         settings.set('LOG_LEVEL', loglevel)
     settings.set('DETACH_PROCESS', options.pop('DAEMONIZE'))
     settings.set('PID_FILE', options.pop('PID_FILE'))
-    for option, value in options:
-        settings.set(option, value)
+    #for option, value in options.items():
+    #    settings.set(option, value)
 
     # supported commands
     cmds = bot_commands()
@@ -225,6 +225,7 @@ def execute(argv=None, settings=None):
     # command to execute
     cmdname = None
     for opt, arg in options.items(): # argv
+        opt = opt.lower()
         if arg is True and opt in cmds.keys():
             cmdname = opt
 

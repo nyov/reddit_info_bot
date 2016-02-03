@@ -1,4 +1,4 @@
-# -*- python -*-
+# -*- mode: python; coding: utf-8; -*-
 """
 reddit_info_bot settings
 
@@ -58,8 +58,10 @@ Obtain more information by making a comment in the thread which includes /u/%s""
 )
 
 
-BOTCMD_DELETE_DOWNVOTES_ENABLED = True
-BOTCMD_DELETE_DOWNVOTES_AFTER = 30 # only act on comments after X minutes age
+BOTCMD_DOWNVOTES_ENABLED = True
+BOTCMD_DOWNVOTES_TESTMODE = True # if enabled, only log action
+BOTCMD_DOWNVOTES_DELETE_AFTER = 30 # only act on comments after X minutes age
+BOTCMD_DOWNVOTES_DELETION_SCORE = 1 # karma score below which a comment is removed
 
 
 COMMENT_REPLY_AGE_LIMIT = 2 # ignore comments older than minutes
