@@ -3,7 +3,7 @@ Contains the default values for all settings of reddit_info_bot.
 
 """
 import platform
-from . import __version__ as BOT_VERSION
+from .version import __version__ as BOT_VERSION
 
 ##
 ## program settings
@@ -11,8 +11,25 @@ from . import __version__ as BOT_VERSION
 
 BOT_NAME = 'reddit_info_bot'
 BOT_WORKDIR = '/'
+BOT_CACHEDIR = None
+BOT_CHROOTDIR = None
+BOT_UMASK = 0o002
 
-LOG_LEVEL = 'DEBUG'
+DETACH_PROCESS = False
+COREDUMPS_DISABLED = False
+
+PID_FILE = None
+
+LOG_ENABLED = True
+LOG_FILE = None
+LOG_FILE_ENCODING = 'utf-8'
+LOG_FORMAT = '%(asctime)s [%(name)s] %(levelname)s: %(message)s'
+LOG_DATEFORMAT = '%Y-%m-%d %H:%M:%S'
+LOG_LEVEL = 'ERROR'
+LOG_CONFIG = {
+    # ignore logs from libraries (such as requests/urllib3)
+    'disable_existing_loggers': True,
+}
 
 ##
 ## reddit settings
@@ -20,17 +37,22 @@ LOG_LEVEL = 'DEBUG'
 
 REDDIT_ACCOUNT_NAME = ''
 REDDIT_ACCOUNT_PASS = ''
+OAUTH_CLIENT_ID = ''
+OAUTH_SECRET_TOKEN = ''
 
 SECOND_ACCOUNT_NAME = ''
 SECOND_ACCOUNT_PASS = ''
+SECOND_OAUTH_CLIENT_ID = ''
+SECOND_OAUTH_SECRET_TOKEN = ''
 
 
-BOT_OWNER = REDDIT_ACCOUNT_NAME or BOT_NAME
+BOT_OWNER = REDDIT_ACCOUNT_NAME or None
 
-# bot agent according to reddit-api rules
+# bot agent according to reddit-api rules:
+#  <platform>:<app ID>:<version string> (by /u/<reddit username>)
 BOT_AGENT = '%s:%s:%s%s' % (
     platform.system(),
-    BOT_NAME,
+    BOT_NAME or 'reddit_info_bot',
     BOT_VERSION,
     ' (by /u/%s)' % BOT_OWNER if BOT_OWNER else '',
 )
@@ -42,21 +64,35 @@ BOTCMD_IMAGESEARCH_ENABLED = True
 BOTCMD_IMAGESEARCH = [ # (main) initiate image search
     'u/%s' % REDDIT_ACCOUNT_NAME,
 ]
+BOTCMD_IMAGESEARCH_NO_RESULTS_MESSAGE = (
+"""No search results found."""
+)
+
 
 BOTCMD_INFORMATIONAL_ENABLED = False
 BOTCMD_INFORMATIONAL = [ # reply to potential queries with bot-info
     'source?',
     'sauce?',
 ]
+BOTCMD_INFORMATIONAL_REPLY = (
+"""It appears that you are looking for more information.
+
+Obtain more information by making a comment in the thread which includes /u/%s""" % REDDIT_ACCOUNT_NAME or BOT_NAME
+)
+
+
+BOTCMD_DELETE_DOWNVOTES_ENABLED = True
+BOTCMD_DELETE_DOWNVOTES_AFTER = 30 # only act on comments after X minutes age
 
 
 COMMENT_REPLY_AGE_LIMIT = 0 # ignore comments older than
-COMMENT_DELETIONCHECK_WAIT_LIMIT = 30 # first schdule deletion of downvoted comment after
 
 REDDIT_SPAMFILTER_SUBMISSION_ID = ''
 
 
 IMAGE_FORMATS = ['.tif', '.tiff', '.gif', '.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd', '.png']
+VIDEO_FORMATS = ['.gifv', '.mp4', '.webm', '.ogg']
+IMAGE_FORMATS += VIDEO_FORMATS
 
 
 FOOTER_INFO_MESSAGE = (
@@ -65,15 +101,6 @@ FOOTER_INFO_MESSAGE = (
  *****
  ^(%s %s)
 """ % (BOT_NAME, BOT_VERSION)
-)
-
-NO_SEARCH_RESULTS_MESSAGE = (
-"""No search results found."""
-)
-
-INFOREPLY_MESSAGE = (
-"""It appears that you are looking for more information.\n\nObtain more information by making a comment in the thread which includes /u/%s""" \
-    % REDDIT_ACCOUNT_NAME
 )
 
 

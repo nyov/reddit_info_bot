@@ -1,72 +1,118 @@
-from __future__ import (absolute_import, unicode_literals, print_function)
+from __future__ import absolute_import, unicode_literals
 import sys, os
 import six
-import imp
+import logging
+import atexit
+from functools import partial
 from docopt import docopt
 
 from .settings import Settings
-from .util import string_translate
+from .commands import bot_commands
+from .util import string_translate, import_string_from_file, import_file, setprocname
 from .version import __version__
-from . import run
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_docopt_args(args):
     """Format docopt arguments to options.
-    Strips leading slashes, turns other slashes into underscores.
+
+    Strips leading slashes, turns other slashes into underscores,
+    uppercases all text.
     """
     for arg, argv in args.items():
         akey = arg.lstrip('-')
         akey = string_translate(akey, '-', '_')
+        akey = akey.upper()
         args[akey] = args.pop(arg)
     return args
 
-def _import_configfile(filepath, module_name='configfile'):
-    """Import anything as a python source file.
-
-    (And do not generate cache files where none belong.)
+def _get_option_value(argv, args, pop=False):
+    """Return an option's value from argv.
+    With `pop`=`True`, pop it from the passed argv.
     """
-    abspath = os.path.abspath(filepath)
-    try:
-        with open(abspath, 'r') as cf:
-            code = cf.read()
-    except (IOError, OSError) as e:
-        sys.exit(e)
-    module = imp.new_module(module_name)
-    six.exec_(code, module.__dict__)
-    return module
+    i = 0
+    optvalue = None
+    for arg in argv:
+        # sort by length, longest first
+        args = list(args)
+        args.sort(key=len, reverse=True)
+        if arg.startswith(tuple(args)):
+            for key in args:
+                arg = arg.replace(key, '')
+            arg = arg.lstrip('=')
+            # was passed as '--option=file'
+            if len(arg) > 0:
+                optvalue=arg
+                if pop:
+                    del argv[i]
+                break
+            # missing value
+            if len(argv) < i+2:
+                return None
+            # was passed as '-o file'
+            optvalue = argv[i+1]
+            if pop:
+                del argv[i], argv[i+1]
+            break
+        i += 1
+    del i
+    return optvalue
 
 def _load_config(file):
-    if not isinstance(file, six.string_types):
-        return
-    module = _import_configfile(file)
-    for name in dir(module):
-        if name.isupper():
-            yield name, getattr(module, name)
-    del module
+    def import_config():
+        if not isinstance(file, six.string_types):
+            return
+        #module = import_file(file)
+        module = import_string_from_file(file)
+        for name in dir(module):
+            if name.isupper():
+                yield name, getattr(module, name)
+        del module
 
-def _get_commands():
-    cmds = {
-        'run': run_command,
-    }
-    return cmds
+    try:
+        cfg = list(import_config())
+    except SyntaxError as e:
+        import traceback
+        msg = 'Error parsing configuration file:\n\n'
+        t, e, tb = sys.exc_info()
+        args = []
+        for i, arg in enumerate(e.args):
+            if isinstance(arg, tuple):
+                (_, line, pos, string) = arg
+                args += [(file, line, pos, string)]
+                continue
+            args += [arg]
+        e.args = tuple(args)
+        msg += ''.join(traceback.format_exception(t, e, None, 0))
+        sys.exit(msg)
 
-def usage(version):
+    return cfg
+
+def usage(instance):
     """Format program description output"""
     import textwrap
 
-    version = ' %s' % version
-
     doc = """
-    reddit_info_bot{version}
+    {botname}
 
-    Usage: reddit_info_bot [-c CONFIGFILE]
+    Usage: reddit_info_bot [-d] [-c CONFIGFILE] [-l LOGFILE] [-p PIDFILE] [-v|-vv|-vvv]
 
-      -c FILE --config=FILE   Load configuration from custom file
-                              instead of default locations.
-                              (To run multiple instances in parallel)
-      -h --help               Show this screen.
-      --version               Show version.
-    """.format(version=version)
+      -c FILE --config=FILE    Load configuration from custom file
+                               instead of default locations.
+                               (To run multiple instances in parallel)
+      -d --daemonize           Detach from controlling terminal.
+                               (Use with -l unless you want silence.)
+                               (Preferrably run from a daemon supervisor
+                                like SysV-init, systemd, upstart instead.)
+      -p FILE --pid-file=FILE  Create a pidfile.
+      -l FILE --log-file=FILE  Log to file instead of stdout.
+      -v --verbose             Increase log-level verbosity.
+                               (-vv for info, -vvv for debug level)
+      -h --help                Show this screen.
+                               (Use with -c to show CONFIG's instance)
+      --version                Show version.
+    """.format(botname=instance)
     return textwrap.dedent(doc)
 
 def get_config_sources(name, ext='cfg', dir=None):
@@ -93,19 +139,43 @@ def get_config_sources(name, ext='cfg', dir=None):
     ]
     return sources
 
-def run_command(**kwargs):
-    return run(**kwargs)
-
 def execute(argv=None, settings=None):
     if argv is None:
         argv = sys.argv
+    if isinstance(settings, dict):
+        settings = Settings(settings)
     if settings is None:
         # load default settings
         settings = Settings()
-    if isinstance(settings, dict):
-        settings = Settings(settings)
 
-    _usage = usage(__version__)
+        # pre-parse config option for docopt output
+        config = _get_option_value(argv, ('-c', '--config'))
+        if config:
+            # import settings from passed configfile
+            cfg = _load_config(config)
+            if cfg:
+                for option, value in cfg:
+                    settings.set(option, value)
+
+    bot_name = settings.get('BOT_NAME', '')
+    if bot_name:
+        procname = bot_name
+        if bot_name == 'reddit_info_bot':
+            bot_name = ''
+        else:
+            procname = 'reddit_info_bot (%s)' % bot_name
+        setprocname(procname)
+    bot_version = settings.get('BOT_VERSION', '')
+    if bot_version == __version__:
+        bot_version = ''
+    bot_instance = '%s %s' % (bot_name, bot_version)
+    bot_instance = bot_instance.strip()
+    if bot_instance:
+        bot_instance = ' (%s)' % bot_instance
+    settings.set('_BOT_INSTANCE_', 'reddit_info_bot %s%s' %
+                 (__version__, bot_instance)) # (runtime setting)
+
+    _usage = usage(settings.get('_BOT_INSTANCE_'))
     args = docopt(_usage,
                   argv=argv[1:],
                   help=True,
@@ -113,7 +183,7 @@ def execute(argv=None, settings=None):
                   options_first=False)
     options = _parse_docopt_args(args)
 
-    config = options.pop('config')
+    config = options.pop('CONFIG')
     if not config:
         # check hardcoded name and place of default configuration
         sources = get_config_sources('config', 'py', dir='reddit-infobot')
@@ -130,20 +200,27 @@ def execute(argv=None, settings=None):
             )
             sys.exit(errmsg)
 
-    cfg = _load_config(config)
-    cfg = list(cfg)
-    if not cfg:
-        errmsg = 'Configuration file invalid, no settings found!'
-        sys.exit(errmsg)
-    for option, value in cfg:
+        cfg = _load_config(config)
+        if not cfg:
+            errmsg = 'Configuration file invalid, no settings found!'
+            sys.exit(errmsg)
+        for option, value in cfg:
+            settings.set(option, value)
+
+    log_file = options.pop('LOG_FILE')
+    if log_file:
+        settings.set('LOG_FILE', log_file)
+    loglevel = {0:'ERROR',1:'WARNING',2:'INFO',3:'DEBUG'}
+    loglevel = loglevel[options.pop('VERBOSE')]
+    if loglevel != 'ERROR':
+        settings.set('LOG_LEVEL', loglevel)
+    settings.set('DETACH_PROCESS', options.pop('DAEMONIZE'))
+    settings.set('PID_FILE', options.pop('PID_FILE'))
+    for option, value in options:
         settings.set(option, value)
 
-    instance = settings.get('BOT_NAME', None)
-    if instance:
-        print('reddit_info_bot configured as: %s' % instance)
-
     # supported commands
-    cmds = _get_commands()
+    cmds = bot_commands()
 
     # command to execute
     cmdname = None
@@ -152,14 +229,18 @@ def execute(argv=None, settings=None):
             cmdname = opt
 
     if not cmdname:
-        # default action
-        cmdname = 'run'
+        cmdname = 'run' # default action
     cmd = cmds[cmdname]
 
+    # arguments to pass to command
     cmdargs = {
-        'instance':instance,
         'settings':settings,
     }
+
+    if 'shutdown' in cmds:
+        shutdown = cmds['shutdown']
+        shutdown_func = partial(shutdown, settings)
+        atexit.register(shutdown_func)
 
     exitcode = cmd(**cmdargs)
     if not exitcode:
