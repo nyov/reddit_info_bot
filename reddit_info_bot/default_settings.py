@@ -25,7 +25,7 @@ LOG_FILE = None
 LOG_FILE_ENCODING = 'utf-8'
 LOG_FORMAT = '%(asctime)s [%(name)s] %(levelname)s: %(message)s'
 LOG_DATEFORMAT = '%Y-%m-%d %H:%M:%S'
-LOG_LEVEL = 'ERROR'
+LOG_LEVEL = 'INFO'
 LOG_CONFIG = {
     # ignore logs from libraries (such as requests/urllib3)
     'disable_existing_loggers': True,
@@ -85,7 +85,7 @@ BOTCMD_DELETE_DOWNVOTES_ENABLED = True
 BOTCMD_DELETE_DOWNVOTES_AFTER = 30 # only act on comments after X minutes age
 
 
-COMMENT_REPLY_AGE_LIMIT = 0 # ignore comments older than
+COMMENT_REPLY_AGE_LIMIT = 0 # ignore comments older than X minutes
 
 REDDIT_SPAMFILTER_SUBMISSION_ID = ''
 
