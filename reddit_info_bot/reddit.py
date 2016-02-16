@@ -16,6 +16,8 @@ from .exceptions import ConfigurationError
 logger = logging.getLogger(__name__)
 
 
+# Reddit authentication helpers
+
 def _praw_session(user_agent):
     with warnings.catch_warnings():
         # discard ugly "`bot` in your user_agent may be problematic"-message
@@ -38,7 +40,7 @@ def r_oauth_login(user_agent, client_id, client_secret,
     session = _praw_session(user_agent)
     session.set_oauth_app_info(client_id, client_secret, redirect_uri)
     if not session.has_oauth_app_info:
-        raise ConfigurationError('Missing OAuth credentials')
+        raise ConfigurationError('Missing OAuth credentials for Reddit login')
     if refresh_token:
         session.refresh_access_information(refresh_token, update_session=True)
     else:
@@ -46,6 +48,10 @@ def r_oauth_login(user_agent, client_id, client_secret,
         session.set_access_credentials(**access)
     return session
 
+def r_logout(session):
+    session.clear_authentication()
+
+# Reddit / PRAW functionality
 
 def check_shadowban(user, user_agent):
     """Simple check for a potential shadowban on `user`
@@ -60,8 +66,6 @@ def check_shadowban(user, user_agent):
     return False
 
 def reddit_login(config):
-    logger.info('Logging into Reddit API')
-
     user_agent = config.get('BOT_AGENT')
 
     client_id = config.get('OAUTH_CLIENT_ID')
@@ -75,14 +79,14 @@ def reddit_login(config):
         raise ConfigurationError('Missing REDDIT_ACCOUNT_NAME setting')
     shadowbanned = check_shadowban(account_name, config.get('SEARCH_USER_AGENT'))
     if shadowbanned:
-        logger.warning('%s may be shadowbanned.' % account_name)
+        logger.warning("User '%s' may be shadowbanned." % account_name)
     if use_oauth and use_login:
         account1 = r_oauth_login(user_agent, client_id, client_secret,
                                  username=account_name, password=account_pass)
-        logger.debug('Logged in using OAuth2 (useragent: %s)' % user_agent)
+        logger.debug("Logged into account '%s' using OAuth2 (useragent: %s)" % (account1.user, user_agent))
     else:
         account1 = r_login(user_agent, account_name, account_pass)
-        logger.debug('Logged in using password (useragent: %s)' % user_agent)
+        logger.debug("Logged into account '%s' using password (useragent: %s)" % (account1.user, user_agent))
 
     # load a second praw instance for the second account (the one used to check the spam links)
     client2_id = config.get('SECOND_OAUTH_CLIENT_ID')
@@ -104,10 +108,20 @@ def reddit_login(config):
             account2 = r_login(user_agent, account2_name, account2_pass)
             logger.debug('Logged in second account using password')
     else:
-        account2 = False
+        account2 = None
 
     return (account1, account2)
 
+def reddit_logout(account):
+    if not account:
+        return
+    user = str(account.user)
+    r_logout(account)
+    logger.debug('Logged out of Reddit API account (%s)' % (user,))
+    success = not account.is_logged_in() and not account.is_oauth_session()
+    # remove reddit object entirely
+    del account
+    return success
 
 MAX_URL_LENGTH = 2010
 

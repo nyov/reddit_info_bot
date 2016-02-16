@@ -11,7 +11,10 @@ import pickle
 
 from .version import __version__, version_info
 from . import praw
-from .reddit import reddit_login, build_subreddit_feeds, handle_bot_action, check_downvotes
+from .reddit import (
+    reddit_login, reddit_logout,
+    build_subreddit_feeds, handle_bot_action, check_downvotes,
+)
 from .spamfilter import spamfilter_lists
 from .log import setup_logging
 from .util import chwd, cached_psl, daemon_context
@@ -119,6 +122,7 @@ def cmd_running(settings):
     except Exception:
         already_done = []
 
+    logger.info('Logging into Reddit API')
     (account1, account2) = reddit_login(settings)
 
     logger.info('Fetching Subreddit list')
@@ -191,3 +195,11 @@ def cmd_running(settings):
             (account1, account2) = reddit_login(settings)
         except praw.errors.PRAWException as e:
             logger.error('Some unspecified PRAW error caught in main loop: %s' % e)
+
+    #
+    # shutdown
+    #
+
+    logger.info('Logging out of Reddit API')
+    reddit_logout(account2)
+    reddit_logout(account1)
