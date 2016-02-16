@@ -16,7 +16,7 @@ from .reddit import (
     build_subreddit_feeds, handle_bot_action, check_downvotes,
 )
 from .spamfilter import spamfilter_lists
-from .log import setup_logging
+from .log import setup_logging, release_logging
 from .util import chwd, cached_psl, daemon_context
 from .exceptions import ConfigurationError
 
@@ -28,16 +28,30 @@ def bot_commands():
     cmds = {
         'run': cmd_run,
         'shutdown': cmd_shutdown,
+        'exit': cmd_exit,
     }
     return cmds
 
-def cmd_shutdown(settings):
-    """Shutdown sequence
+def cmd_exit(settings):
+    """Deallocation (atexit)
+
+    Last second clean up.
+    This is always called on clean Python interpreter shutdown.
     """
     # close open files
     open_file_handles = settings.getdict('_FILE_')
     for fh in open_file_handles.values():
         fh.__exit__(None, None, None)
+
+def cmd_shutdown(settings):
+    """Soft termination sequence"""
+
+    log_handler = settings.get('_LOGHANDLER_')
+    release_logging(log_handler)
+
+    sys.stdout.write('%s shut down on %s\n' % (
+                     settings.get('_BOT_INSTANCE_', 'reddit_info_bot'),
+                     time.asctime()))
 
 def cmd_run(settings):
     """Main routine
@@ -78,7 +92,9 @@ def cmd_run(settings):
     # Environment is set up at this point,
     # now open files and daemonize.
 
-    sys.stdout.write('%s starting\n' % settings.get('_BOT_INSTANCE_', 'reddit_info_bot'))
+    sys.stdout.write('%s starting up at %s\n' % (
+                     settings.get('_BOT_INSTANCE_', 'reddit_info_bot'),
+                     time.asctime()))
 
     # open files
     open_file_handles = {}
@@ -86,12 +102,15 @@ def cmd_run(settings):
         open_file_handles[file] = open(filename, 'ab+').__enter__()
     settings.set('_FILE_', open_file_handles) # (runtime setting)
 
-    log_fh = setup_logging(settings)
+    # configure logging
+    log_handler = setup_logging(settings)
+    settings.set('_LOGHANDLER_', log_handler) # (runtime setting)
 
     files_preserve = open_file_handles.values()
-    files_preserve.append(log_fh)
+    files_preserve.append(log_handler.stream)
     with daemon_context(settings, files_preserve=files_preserve):
         cmd_running(settings)
+        cmd_shutdown(settings)
 
 def cmd_running(settings):
 

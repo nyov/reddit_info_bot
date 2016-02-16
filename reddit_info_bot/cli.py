@@ -237,10 +237,9 @@ def execute(argv=None, settings=None):
         'settings':settings,
     }
 
-    if 'shutdown' in cmds:
-        shutdown = cmds['shutdown']
-        shutdown_func = partial(shutdown, settings)
-        atexit.register(shutdown_func)
+    if 'exit' in cmds:
+        exit_func = partial(cmds['exit'], settings)
+        atexit.register(exit_func)
 
     exitcode = cmd(**cmdargs)
     if not exitcode:

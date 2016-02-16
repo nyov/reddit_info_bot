@@ -51,4 +51,8 @@ def setup_logging(settings=None, install_root_handler=True):
 
         logging.root.addHandler(handler)
 
-        return handler.stream # file handle
+        return handler
+
+def release_logging(handler):
+    handler.close()
+    logging.root.removeHandler(handler)
