@@ -18,6 +18,7 @@ from .reddit import (
 from .spamfilter import spamfilter_lists
 from .log import setup_logging, release_logging
 from .util import chwd, cached_psl, daemon_context
+from .signals import signal_map, running
 from .exceptions import ConfigurationError
 
 logger = logging.getLogger(__name__)
@@ -108,7 +109,7 @@ def cmd_run(settings):
 
     files_preserve = open_file_handles.values()
     files_preserve.append(log_handler.stream)
-    with daemon_context(settings, files_preserve=files_preserve):
+    with daemon_context(settings, files_preserve=files_preserve, signal_map=signal_map):
         cmd_running(settings)
         cmd_shutdown(settings)
 
@@ -167,7 +168,7 @@ def cmd_running(settings):
     delete_downvotes_after = settings.getint('BOTCMD_DELETE_DOWNVOTES_AFTER')
 
     logger.info('Starting run...')
-    while True:
+    while running():
         try:
             # check inbox messages for username mentions and reply to bot requests
             if find_mentions_enabled:
