@@ -29,6 +29,7 @@ def bot_commands():
     """List of registered bot commands"""
     cmds = {
         'run': with_setup(cmd_run),
+        'imagesearch': with_setup(cmd_imagesearch),
         'exit': do_exit,
     }
     return cmds
@@ -118,8 +119,8 @@ def do_setup(settings, command=None, *a, **kw):
 def with_setup(command):
     """setup decorator"""
     @wraps(command)
-    def wrapped(settings):
-        return do_setup(settings, command)
+    def wrapped(settings, *args, **kwargs):
+        return do_setup(settings, command, *args, **kwargs)
     return wrapped
 
 #
@@ -232,3 +233,15 @@ def cmd_run(settings):
     logger.info('Logging out of Reddit API')
     reddit_logout(account2)
     reddit_logout(account1)
+
+def cmd_imagesearch(settings, image_url=None, display_limit=15):
+    from .search import image_search, filter_image_search, format_image_search
+
+    if not image_url:
+        logger.error('Missing url for image search')
+        return
+    search_results = image_search(settings, image_url)
+    filter_results = filter_image_search(settings, search_results)
+    reply_contents = format_image_search(settings, filter_results, display_limit)
+    logger.info('Image-search results:\n%s' % reply_contents)
+    return reply_contents

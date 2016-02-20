@@ -96,8 +96,11 @@ def usage(instance):
     doc = """
     {botname}
 
-    Usage: reddit_info_bot [-d] [-c CONFIGFILE] [-l LOGFILE] [-p PIDFILE] [-v|-vv|-vvv]
+    Usage:
+      reddit_info_bot [options]
+      reddit_info_bot imagesearch <url> [options]
 
+    Options:
       -c FILE --config=FILE    Load configuration from custom file
                                instead of default locations.
                                (To run multiple instances in parallel)
@@ -107,8 +110,7 @@ def usage(instance):
                                 like SysV-init, systemd, upstart instead.)
       -p FILE --pid-file=FILE  Create a pidfile.
       -l FILE --log-file=FILE  Log to file instead of stdout.
-      -v --verbose             Increase log-level verbosity.
-                               (-vv for info, -vvv for debug level)
+      -v --verbose             Set log-level verbosity to 'debug'.
       -h --help                Show this screen.
                                (Use with -c to show CONFIG's instance)
       --version                Show version.
@@ -210,10 +212,8 @@ def execute(argv=None, settings=None):
     log_file = options.pop('LOG_FILE')
     if log_file:
         settings.set('LOG_FILE', log_file)
-    loglevel = {0:'ERROR',1:'WARNING',2:'INFO',3:'DEBUG'}
-    loglevel = loglevel[options.pop('VERBOSE')]
-    if loglevel != 'ERROR':
-        settings.set('LOG_LEVEL', loglevel)
+    if options.pop('VERBOSE', False):
+        settings.set('LOG_LEVEL', 'DEBUG')
     settings.set('DETACH_PROCESS', options.pop('DAEMONIZE'))
     settings.set('PID_FILE', options.pop('PID_FILE'))
     #for option, value in options.items():
@@ -237,6 +237,9 @@ def execute(argv=None, settings=None):
     cmdargs = {
         'settings':settings,
     }
+
+    if cmdname == 'imagesearch':
+        cmdargs.update({'image_url': options['<URL>']})
 
     if 'exit' in cmds:
         exit_func = partial(cmds['exit'], settings)
