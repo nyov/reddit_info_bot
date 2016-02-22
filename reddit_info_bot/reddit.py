@@ -3,9 +3,9 @@ from __future__ import absolute_import, unicode_literals
 import logging
 import warnings
 import time
-import uuid
 import requests
 import re
+import hashlib
 
 from . import praw
 from .search import image_search, filter_image_search, format_image_search
@@ -102,10 +102,10 @@ def reddit_login(settings):
         if use_second_oauth:
             account2 = r_oauth_login(user_agent, client2_id, client2_secret,
                                     username=account2_name, password=account2_pass)
-            logger.debug('Logged in second account using OAuth2')
+            logger.debug("Logged into second account '%' using OAuth2" % account2.user)
         else:
             account2 = r_login(user_agent, account2_name, account2_pass)
-            logger.debug('Logged in second account using password')
+            logger.debug("Logged into second account '%s' using password" % account2.user)
     else:
         account2 = None
 
@@ -146,69 +146,132 @@ def build_subreddit_feeds(subreddits, max_url_length=MAX_URL_LENGTH):
     url_length = 0
     return feed_urls
 
-def reddit_msg_linkfilter(messages, sending_account, receiving_account, submission_id):
-    """ Post reddit comments with one account and check from second account
-    to see if they were filtered out.
+def reddit_messagefilter(messages, sending_account, receiving_account, submission_id):
+    """Post reddit comments with `sending_account` to `submission_id`
+    and check from `receiving_account` to verify they were not filtered out.
     """
-    queue = {}
-    submission = sending_account.get_submission(submission_id=submission_id)
-    # post with first account
-    logger.info('reddit_msg_linkfilter posting messages')
-    count = 0
-    for message in messages:
-        # use a unique id in the message so we'll always recognize it
-        # (even if the text got mangled, e.g. unicode or other strangeness)
-        id = uuid.uuid4()
-        try:
-            _message = '[%s] %s' % (id, message)
-            submission.add_comment(_message)
-        except Exception as e:
-            logger.error('reddit_msg_linkfilter failed to post "%s"\n%s' % (message, e))
-            # FIXME: check exception for http errors (retry?) or other (spam?)
-            continue
-        queue.update({id: message})
-        count += 1
-    logger.info('%d message(s) posted' % count)
 
-    time.sleep(7) # wait a bit
+    def ishashedmessage(text):
+        hash = text[1:33] # the added md5
+        found, = re.findall(r'([a-fA-F\d]{32})', hash) or [False]
+        return found
 
-    # fetch posts on second account
-    logger.info('reddit_msg_linkfilter verifying messages')
-    verified_messages = []
-    fetched_messages = list(receiving_account.get_unread(limit=40))
-    count = 0
-    for msg in fetched_messages:
-        msg_body = msg.body # is unicode
-        if not msg_body.startswith('['):
-            # skip unknown messages
-            #logger.debug('(skipping unknown message "%s...") ' % msg_body[:10], end='')
-            continue
-        for id in queue.keys():
-            if str(id) not in msg_body:
+    def build_message_posts(messages):
+        message_queue = {}
+        for message in messages:
+            # use a unique id in the message so we'll always recognize it
+            # (even if the text got mangled, e.g. unicode or other strangeness)
+            # using a hashsum of message helps to reduce posting duplicate content
+            id = hashlib.md5(message).hexdigest()
+            if id not in message_queue:
+                hashed = '[%s] %s' % (id, message)
+                message_queue.update({id: (message, hashed)})
+        return message_queue
+
+    def submit_messages(message_queue):
+        # post with sending_account
+
+        submission = sending_account.get_submission(submission_id=submission_id)
+        count = all = 0
+        for id, (message, hashed) in message_queue.items():
+            all += 1
+            try:
+                submission.add_comment(hashed)
+            except Exception as e:
+                logger.warning('reddit_messagefilter failed to post "%s"\n%s' % (hashed, e))
+                message_queue.pop(id, None)
                 continue
-            message = queue.pop(id)
-            #if message != msg_body.replace('[%s] ' % id, ''):
-            #    logger.debug('(message got mangled?)')
-            msg.mark_as_read()
-            verified_messages += [message]
             count += 1
-    logger.info('%d unread message(s) fetched, %d verified, %d unknown(s)' % (len(fetched_messages)-1, count, len(fetched_messages)-1-count))
-    if queue: # shouldnt have any messages left at this point
-        logger.info('reddit_msg_linkfilter filtered out: %s' % ', '.join('"%s"' % x for x in queue.values()))
-    failed_messages = [m for m in messages if (m not in verified_messages and m not in queue.values())]
-    if failed_messages:
-        logger.error('reddit_msg_linkfilter completely failed on: %s' % str(failed_messages))
-    return verified_messages
+        logger.debug('%d of %d message(s) posted' % (count, all))
 
-def reddit_spamfilter(results, sending_account, receiving_account, submission_id):
-    urls = set([url for url, text in results])
-    verified_urls = reddit_msg_linkfilter(urls, sending_account, receiving_account, submission_id)
-    verified_results = []
-    for result in results:
-        url = result[0]
-        if url in verified_urls:
-            verified_results.append(result)
-    return verified_results
+    def fetch_posted_messages(refresh=False):
+        #try:
+        #    submission = receiving_account.get_submission(
+        #            submission_id=submission_id, comment_sort='new')
+        #except praw.errors.Forbidden:
+        #    # it does not seem to matter if we check with the posting account
+        #    submission = sending_account.get_submission(
+        #            submission_id=submission_id, comment_sort='new')
+
+        #if isinstance(submission, praw.objects.Moderatable):
+        #    pass # have mod access, will also see banned comments/messages
+
+        submission = sending_account.get_submission(submission_id=submission_id, comment_sort='new')
+
+        if refresh: # drop a previous lookup from cache
+            submission.refresh()
+
+        messages = submission.comments
+        return list(messages)
+
+    def fetch_inbox_messages():
+        # fetch posts on receiving_account
+        # works only for the creator of `submission_id` thread
+        messages = receiving_account.get_messages(limit=200)
+        messages = [m for m in messages if ishashedmessage(m.body)]
+        return messages
+
+    def check_messages(message_queue, messages):
+        fetched_messages = []
+        for message in messages:
+            if not isinstance(message, (praw.objects.Comment, praw.objects.Message)):
+                continue
+            id = ishashedmessage(message.body)
+            if not id:
+                continue
+
+            # mark any new messages as read (so they dont bother us elsewhere)
+            if isinstance(message, praw.objects.Message):
+                message.mark_as_read()
+
+            if id not in message_queue:
+                continue
+
+            # if we have mod status, we may see the banned messages,
+            # and can drop them from queue (confirmed positive)
+            if isinstance(message, praw.objects.Comment):
+                if message.banned_by:
+                    message_queue.pop(id)
+                    if isinstance(message.banned_by, praw.objects.Redditor):
+                        banned_by = message.banned_by
+                    else:
+                        banned_by = 'reddit'
+                    logger.debug('...message banned by %s: %s' % (banned_by, message.body))
+                    continue
+
+            msg, _ = message_queue.pop(id)
+            fetched_messages += [msg]
+        return fetched_messages
+
+    verified_messages = []
+    message_queue = build_message_posts(messages)
+    logger.info('reddit_messagefilter spam-checking %d messages' % len(message_queue))
+
+    # check whats already there (in case we run a search twice)
+    fetched_messages = fetch_posted_messages()
+    verified_messages += check_messages(message_queue, fetched_messages)
+
+    if message_queue:
+        logger.debug('reddit_messagefilter posting %d messages to %s' % (len(message_queue), submission_id))
+        submit_messages(message_queue)
+        time.sleep(7) # wait a bit
+
+        # check again
+        #fetched_messages = fetch_inbox_messages()
+        #if len(fetched_messages) == 0: # are we checking from a different account (not our inbox)?
+        #    # check submission thread instead
+        #    fetched_messages = fetch_posted_messages(refresh=True)
+        [m.mark_as_read() for m in fetch_inbox_messages()] # keep inbox clean
+        fetched_messages = fetch_posted_messages(refresh=True)
+        verified_messages += check_messages(message_queue, fetched_messages)
+
+    verified_messages = set(verified_messages)
+    logger.info('reddit_messagefilter verified %d message(s) as good' % len(verified_messages))
+
+    if message_queue:
+        logger.info('reddit_messagefilter filtered out: %s' % ', '.join('"[%s] %s"' % [(h, m) for (m, h) in message_queue.values()] ))
+
+    return verified_messages
 
 def reddit_format_results(results, escape_chars=True):
     """Format search results for reddit.
@@ -263,9 +326,9 @@ def check_downvotes(settings, user):
         if comment.score < deletion_comment_score:
             if deletion_testmode:
                 logger.warning('would have deleted comment %s (score: %s): %s' %
-                        (comment.id, comment.score, comment.title))
+                        (comment.permalink, comment.score, comment.title))
                 continue
-            logger.info('deleting comment %s: %s' % (comment.id, comment.title))
+            logger.info('deleting comment %s: %s' % (comment.permalink, comment.title))
             comment.delete()
 
 def _any_from_list_in_string(list_, string_):
@@ -333,7 +396,8 @@ def _comment_reply(comment, reply_func, reply_content):
 
     attempt = 0
     while True:
-        if attempt >= 2: # max retries: 2
+        if attempt >= 3: # max retries: 3
+            logger.info('Max failure count reached. Could not reply to comment {0} ({1})'.format(comment.permalink, comment.body))
             return
             #return ('error', 'max retries reached')
         attempt += 1
@@ -346,7 +410,7 @@ def _comment_reply(comment, reply_func, reply_content):
                 backoff = int(backoff)
             elif 'minute' in min_secs:
                 backoff = int(backoff) * 60
-            backoff += 3 # grace
+            backoff += 9 # grace (for timing differences with reddit)
             logger.warning('Ratelimit hit. Backing off %d seconds! (%s)' % (backoff, e))
             time.sleep(backoff)
         # the following are permanent errors, no retry
@@ -356,7 +420,7 @@ def _comment_reply(comment, reply_func, reply_content):
             #already_done.append(comment.id)
             return
         except praw.errors.Forbidden as e:
-            logger.warning('[F] %s - cannot reply to comment. Bot forbidden from this sub: %s' % (comment.id, e)) # FIXME: add SUB
+            logger.warning('[F] %s - cannot reply to comment %s. Bot forbidden from this sub: %s' % (comment.permalink, comment.submission, e))
             already_done.append(comment.id)
             return
         except praw.errors.PRAWException as e:
@@ -369,26 +433,26 @@ def handle_bot_action(comments, settings, account, account2, subreddit_list, alr
     # find_username_mentions
     def find_username_mentions(comment, reply_content): # reply_func
         if 'log' in botmodes:
-            logger.warning(reply_content)
+            logger.warning('find_username_mentions would post:\n%s' % reply_content)
         if 'comment' in botmodes:
             comment.reply(reply_content)
             comment.mark_as_read()
         elif 'pm' in botmodes:
             comment.reply(reply_content)
             comment.mark_as_read()
-        return
+        return True
 
     # find_keywords
     def find_keywords(comment, reply_content): # reply_func
         if 'log' in botmodes:
-            logger.warning(reply_content)
+            logger.warning('find_keywords would post:\n%s' % reply_content)
         if 'comment' in botmodes:
             comment.reply(reply_content)
             comment.mark_as_read()
         if 'pm' in botmodes:
             whatever = account.send_message(comment.author, 'Info Bot Information', reply_content)
             logger.info(whatever)
-        return
+        return True
 
     if action == 'find_username_mentions':
         search_list = settings.getlist('BOTCMD_IMAGESEARCH')
@@ -410,7 +474,7 @@ def handle_bot_action(comments, settings, account, account2, subreddit_list, alr
         keywords = _applicable_comment(comment, settings, account, already_done, subreddit_list, search_list, information_reply)
         if not keywords:
             continue
-        logger.info('[N] Detected keyword/s %s in %s' % (', '.join(keywords), comment.id))
+        logger.info('[N] Detected keyword(s) %s in %s' % (', '.join(keywords), comment.permalink))
 
         if action == 'find_username_mentions':
             try:
@@ -424,15 +488,17 @@ def handle_bot_action(comments, settings, account, account2, subreddit_list, alr
                     continue
             except Exception as e:
                 logger.error('Error occured in image_search: %s' % e)
+                raise
                 continue
         if action == 'find_keywords':
             reply_content = information_reply
 
-        _comment_reply(comment, reply_func, reply_content)
-        # do not mark as 'done' in test-mode
-        if 'comment' in botmodes or 'pm' in botmodes:
-            already_done.append(comment.id)
-        logger.info('replied to comment {0}: {1}'.format(comment.id, comment.body))
+        done = _comment_reply(comment, reply_func, reply_content)
+        if done:
+            # do not mark as 'done' in test-mode
+            if 'comment' in botmodes or 'pm' in botmodes:
+                already_done.append(comment.id)
+            logger.info('replied to comment {0} ({1})'.format(comment.permalink, comment.body))
 
     #se = '/'.join(['%d %s' % (v, k) for k, v in stats])
     #logger.info('(%d comments - %s)' % (count, se))
