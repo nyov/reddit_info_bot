@@ -93,4 +93,5 @@ def response_ratelimit(request_func):
 
     return _request_wrapper
 
-praw.BaseReddit._request = response_ratelimit(praw.BaseReddit._request)
+# NOTE: disabled as too much noise
+#praw.BaseReddit._request = response_ratelimit(praw.BaseReddit._request)
