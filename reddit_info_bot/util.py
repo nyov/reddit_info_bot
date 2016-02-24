@@ -39,10 +39,7 @@ def tld_from_suffix(suffix):
 
 def domain_suffix(link):
     parse = urlsplit(link)
-    #psl = cached_psl()
-    # FIXME
-    psl = psl_cached
-    return psl.get_public_suffix(parse.netloc)
+    return psl_cached.get_public_suffix(parse.netloc)
 
 
 def remove_control_characters(string):

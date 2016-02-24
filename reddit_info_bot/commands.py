@@ -173,6 +173,8 @@ def cmd_run(settings):
     logger.info('Starting run...')
     while running():
         try:
+            sleep_timer = 60
+
             # check inbox messages for username mentions and reply to bot requests
             if settings.getbool('BOTCMD_IMAGESEARCH_ENABLED'):
                 logger.info('finding username mentions')
@@ -180,18 +182,17 @@ def cmd_run(settings):
                 if messages:
                     handle_bot_action(messages, settings, account1, account2, subreddit_list, comments_seen, 'find_username_mentions')
 
-            # scan for potential comments to reply to
             if settings.getbool('BOTCMD_INFORMATIONAL_ENABLED'):
+                sleep_timer = 10
                 for count, stream in enumerate(comment_stream_urls): #uses separate comment streams for large subreddit list due to URL length limit
                     logger.info('visiting comment stream %d/%d "%s..."' % (count+1, len(comment_stream_urls), str(stream)[:60]))
                     stream_comments = stream.get_comments()
                     #stream_comments = stream.get_comments(limit=100)
                     #stream_comments = stream.get_comments(limit=None) # all
                     if stream_comments:
-                        handle_bot_action(stream_comments, settings, account1, None, subreddit_list, comments_seen, 'find_keywords')
 
-                        # back off a second
-                        time.sleep(1)
+                        # scan for potential comments to reply to
+                        handle_bot_action(stream_comments, settings, account1, None, subreddit_list, comments_seen, 'find_keywords')
 
             # check downvoted comments (to delete where necessary)
             if settings.getbool('BOTCMD_DOWNVOTES_ENABLED'):
@@ -207,15 +208,8 @@ def cmd_run(settings):
             comments_seen_fh.truncate()
             comments_seen_fh.flush()
 
-            if not settings.getbool('BOTCMD_INFORMATIONAL_ENABLED'):
-                # no need to hammer the API, once every minute should suffice in this case
-                sleep = 60
-                logger.info('Sleeping %d seconds.' % sleep)
-                time.sleep(sleep)
-            else:
-                sleep = 10
-                logger.info('Finished visiting all streams. Sleeping %d seconds.' % sleep)
-                time.sleep(sleep)
+            logger.info('Sleeping %d seconds.' % sleep_timer)
+            time.sleep(sleep_timer)
 
         except praw.errors.ClientException:
             raise
