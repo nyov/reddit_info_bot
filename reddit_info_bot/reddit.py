@@ -336,16 +336,16 @@ def _any_from_list_in_string(list_, string_):
     #return any(str(w).lower() in string_ for w in list_)
     return [str(w).lower() for w in list_ if str(w).lower() in string_]
 
-def _applicable_comment(comment, settings, account, already_done, subreddit_list, search_list, information_reply):
+def _applicable_comment(comment, settings, account, comments_seen, subreddit_list, search_list, information_reply):
     time_limit_minutes = settings.getint('COMMENT_REPLY_AGE_LIMIT')
     image_formats = settings.getlist('IMAGE_FORMATS')
     footer_message = settings.get('FOOTER_INFO_MESSAGE')
 
     def done(): # put in database and abort processing
-        already_done.append(comment.id)
+        comments_seen.append(comment.id)
         return False
 
-    if comment.id in already_done:
+    if comment.id in comments_seen:
         #logger.debug('[D] comment %s already logged as done [%s]' % (comment.id, comment.permalink))
         return False
     if str(comment.subreddit) not in subreddit_list: #check if it's in one of the right subs
@@ -417,17 +417,17 @@ def _comment_reply(comment, reply_func, reply_content):
         except praw.errors.InvalidComment:
             logger.warning('[F] %s - comment invalid (was deleted while trying to reply?) [%s]', (comment.id, comment.permalink))
             # dont need to store this, since it's gone(?)
-            #already_done.append(comment.id)
+            #comments_seen.append(comment.id)
             return
         except praw.errors.Forbidden as e:
             logger.warning('[F] %s - cannot reply to comment %s. Bot forbidden from this sub: %s' % (comment.permalink, comment.submission, e))
-            already_done.append(comment.id)
+            comments_seen.append(comment.id)
             return
         except praw.errors.PRAWException as e:
             logger.error('Some unspecified PRAW issue occured while trying to reply: %s' % e)
             return # done for now but don't save state and retry later
 
-def handle_bot_action(comments, settings, account, account2, subreddit_list, already_done, action):
+def handle_bot_action(comments, settings, account, account2, subreddit_list, comments_seen, action):
     botmodes = settings.getlist('BOT_MODE', ['log'])
 
     # find_username_mentions
@@ -471,7 +471,7 @@ def handle_bot_action(comments, settings, account, account2, subreddit_list, alr
     for comment in comments:
         count += 1
         comment_body = comment.body.encode('utf-8')
-        keywords = _applicable_comment(comment, settings, account, already_done, subreddit_list, search_list, information_reply)
+        keywords = _applicable_comment(comment, settings, account, comments_seen, subreddit_list, search_list, information_reply)
         if not keywords:
             continue
         logger.info('[N] Detected keyword(s) %s in %s' % (', '.join(keywords), comment.permalink))
@@ -497,7 +497,7 @@ def handle_bot_action(comments, settings, account, account2, subreddit_list, alr
         if done:
             # do not mark as 'done' in test-mode
             if 'comment' in botmodes or 'pm' in botmodes:
-                already_done.append(comment.id)
+                comments_seen.append(comment.id)
             logger.info('replied to comment {0} ({1})'.format(comment.permalink, comment.body))
 
     #se = '/'.join(['%d %s' % (v, k) for k, v in stats])

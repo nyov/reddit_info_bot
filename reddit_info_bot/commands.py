@@ -145,9 +145,9 @@ def cmd_run(settings):
     comments_seen_fh = settings.getdict('_FILE_')['comments_seen']
     try:
         comments_seen_fh.seek(0)
-        already_done = pickle.load(comments_seen_fh) or []
+        comments_seen = pickle.load(comments_seen_fh) or []
     except Exception:
-        already_done = []
+        comments_seen = []
 
     logger.info('Logging into Reddit API')
     (account1, account2) = reddit_login(settings)
@@ -178,17 +178,17 @@ def cmd_run(settings):
                 logger.info('finding username mentions')
                 messages = account1.get_unread(limit=100)
                 if messages:
-                    handle_bot_action(messages, settings, account1, account2, subreddit_list, already_done, 'find_username_mentions')
+                    handle_bot_action(messages, settings, account1, account2, subreddit_list, comments_seen, 'find_username_mentions')
 
             # scan for potential comments to reply to
             if settings.getbool('BOTCMD_INFORMATIONAL_ENABLED'):
                 for count, stream in enumerate(comment_stream_urls): #uses separate comment streams for large subreddit list due to URL length limit
                     logger.info('visiting comment stream %d/%d "%s..."' % (count+1, len(comment_stream_urls), str(stream)[:60]))
-                    feed_comments = stream.get_comments()
-                    #feed_comments = stream.get_comments(limit=100)
-                    #feed_comments = stream.get_comments(limit=None) # all
-                    if feed_comments:
-                        handle_bot_action(feed_comments, settings, account1, None, subreddit_list, already_done, 'find_keywords')
+                    stream_comments = stream.get_comments()
+                    #stream_comments = stream.get_comments(limit=100)
+                    #stream_comments = stream.get_comments(limit=None) # all
+                    if stream_comments:
+                        handle_bot_action(stream_comments, settings, account1, None, subreddit_list, comments_seen, 'find_keywords')
 
                         # back off a second
                         time.sleep(1)
@@ -203,7 +203,7 @@ def cmd_run(settings):
                     check_downvotes(settings, account1.user)
 
             comments_seen_fh.seek(0)
-            pickle.dump(already_done, comments_seen_fh, protocol=2)
+            pickle.dump(comments_seen, comments_seen_fh, protocol=2)
             comments_seen_fh.truncate()
             comments_seen_fh.flush()
 
