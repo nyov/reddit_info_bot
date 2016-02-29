@@ -4,3 +4,4 @@ docopt>=0.6.1
 parsel>=1.0.0
 lockfile
 python-daemon
+setproctitle # optional

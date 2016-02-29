@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Contains the default values for all settings of reddit_info_bot.
 
@@ -25,7 +26,7 @@ LOG_FILE = None
 LOG_FILE_ENCODING = 'utf-8'
 LOG_FORMAT = '%(asctime)s [%(name)s] %(levelname)s: %(message)s'
 LOG_DATEFORMAT = '%Y-%m-%d %H:%M:%S'
-LOG_LEVEL = 'ERROR'
+LOG_LEVEL = 'INFO'
 LOG_CONFIG = {
     # ignore logs from libraries (such as requests/urllib3)
     'disable_existing_loggers': True,
@@ -64,6 +65,18 @@ BOTCMD_IMAGESEARCH_ENABLED = True
 BOTCMD_IMAGESEARCH = [ # (main) initiate image search
     'u/%s' % REDDIT_ACCOUNT_NAME,
 ]
+BOTCMD_IMAGESEARCH_MESSAGE_TEMPLATE = (
+"""___
+
+**Best {search_engine} Guesses**
+
+{search_results}
+
+"""
+)
+BOTCMD_IMAGESEARCH_NO_SEARCHENGINE_RESULTS_MESSAGE = (
+"""No available links from this search engine found."""
+)
 BOTCMD_IMAGESEARCH_NO_RESULTS_MESSAGE = (
 """No search results found."""
 )
@@ -81,11 +94,13 @@ Obtain more information by making a comment in the thread which includes /u/%s""
 )
 
 
-BOTCMD_DELETE_DOWNVOTES_ENABLED = True
-BOTCMD_DELETE_DOWNVOTES_AFTER = 30 # only act on comments after X minutes age
+BOTCMD_DOWNVOTES_ENABLED = True
+BOTCMD_DOWNVOTES_TESTMODE = False # if enabled, only log action
+BOTCMD_DOWNVOTES_DELETE_AFTER = 30 # only act on comments after X minutes age
+BOTCMD_DOWNVOTES_DELETION_SCORE = 1 # karma score below which a comment is removed
 
 
-COMMENT_REPLY_AGE_LIMIT = 0 # ignore comments older than
+COMMENT_REPLY_AGE_LIMIT = 0 # ignore comments older than X minutes
 
 REDDIT_SPAMFILTER_SUBMISSION_ID = ''
 

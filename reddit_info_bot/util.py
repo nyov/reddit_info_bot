@@ -126,7 +126,7 @@ def setprocname(name):
         except ImportError:
             return
 
-def daemon_context(settings, files_preserve=[], uid=None, gid=None):
+def daemon_context(settings, **kwargs):
     pidfile = settings.get('PID_FILE', None)
     if pidfile:
         pidfile = PIDLockFile(pidfile)
@@ -146,10 +146,6 @@ def daemon_context(settings, files_preserve=[], uid=None, gid=None):
         stdin  = stdin,
         stdout = stdout,
         stderr = stderr,
-        #
-        uid = uid,
-        gid = gid,
-        files_preserve = files_preserve,
+        **kwargs
     )
-
     return context

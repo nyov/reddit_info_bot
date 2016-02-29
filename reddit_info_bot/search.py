@@ -18,14 +18,14 @@ from base64 import b64decode
 from collections import OrderedDict
 from six.moves.urllib.parse import urlsplit, urlunsplit
 
-from .util import domain_suffix
+from .util import domain_suffix, remove_control_characters
 
 logger = logging.getLogger(__name__)
 
 
-def get_google_results(image_url, config, limit=15): #limit is the max number of results to grab (not the max to display)
+def get_google_results(image_url, settings, limit=15): #limit is the max number of results to grab (not the max to display)
     headers = {}
-    headers['User-Agent'] = config['SEARCH_USER_AGENT']
+    headers['User-Agent'] = settings['SEARCH_USER_AGENT']
     response_text = requests.get('https://www.google.com/searchbyimage?image_url={0}'.format(image_url), headers=headers).content
     response_text += requests.get('https://www.google.com/searchbyimage?image_url={0}&start=10'.format(image_url), headers=headers).content
     #response_text = response_text[response_text.find('Pages that include'):]
@@ -38,11 +38,11 @@ def get_google_results(image_url, config, limit=15): #limit is the max number of
     results = [(list_class_results[i].find('a')['href'],re.sub('<.*?>', '', re.sub('&#\d\d;', "'", ''.join([str(j) for j in list_class_results[i].find('a').contents])))) for i in xrange(limit)]
     return results
 
-def get_bing_results(image_url, config, limit=15):
+def get_bing_results(image_url, settings, limit=15):
     cj = cookielib.MozillaCookieJar('cookies.txt')
     cj.load()
     opener = build_opener(HTTPCookieProcessor(cj))
-    opener.addheaders = [('User-Agent', config['SEARCH_USER_AGENT'])]
+    opener.addheaders = [('User-Agent', settings['SEARCH_USER_AGENT'])]
     response_text = opener.open("https://www.bing.com/images/searchbyimage?FORM=IRSBIQ&cbir=sbi&imgurl="+image_url).read()
     tree = bs.BeautifulSoup(response_text)
     list_class_results = tree.findAll(attrs={'class':'sbi_sp'})
@@ -53,9 +53,9 @@ def get_bing_results(image_url, config, limit=15):
     results = [(list_class_results[i].findAll(attrs={'class':'info'})[0].find('a')['href'],list_class_results[i].findAll(attrs={'class':'info'})[0].find('a').contents[0]) for i in xrange(limit)]
     return results
 
-def get_yandex_results(image_url, config, limit=15):
+def get_yandex_results(image_url, settings, limit=15):
     headers = {}
-    headers['User-Agent'] = config['SEARCH_USER_AGENT']
+    headers['User-Agent'] = settings['SEARCH_USER_AGENT']
     response_text = requests.get("https://www.yandex.com/images/search?img_url={0}&rpt=imageview&uinfo=sw-1440-sh-900-ww-1440-wh-775-pd-1-wp-16x10_1440x900".format(image_url), headers=headers).content
     response_text = response_text[response_text.find("Sites where the image is displayed"):]
     tree = bs.BeautifulSoup(response_text)
@@ -76,9 +76,9 @@ def get_yandex_results(image_url, config, limit=15):
         limit = len(results)
     return results[:limit]
 
-def get_karmadecay_results(image_url, config, limit=15):
+def get_karmadecay_results(image_url, settings, limit=15):
     headers = {}
-    headers['User-Agent'] = config['SEARCH_USER_AGENT']
+    headers['User-Agent'] = settings['SEARCH_USER_AGENT']
     response_text = requests.get("http://karmadecay.com/search?kdtoolver=b1&q="+image_url, headers=headers).content
     if "No very similar images were found." in response_text:
         return []
@@ -87,7 +87,7 @@ def get_karmadecay_results(image_url, config, limit=15):
     results = [(i[i.find("(",i.find(']'))+1:i.find(")",i.find(']'))],i[i.find("[")+1:i.find("]")]) for i in raw_results]
     return results #[(link,text)]
 
-def get_tineye_results(image_url, config, limit=15):
+def get_tineye_results(image_url, settings, limit=15):
     def extract(r, count):
         sel = Selector(text=r.content.decode(r.encoding))
         page = sel.xpath('//div[@class="results"]//div[@class="row matches"]//div[contains(@class, "match-row")]')
@@ -124,7 +124,7 @@ def get_tineye_results(image_url, config, limit=15):
         'Host': 'www.tineye.com',
         'Referer': 'https://www.tineye.com/',
     }
-    headers['User-Agent'] = config['SEARCH_USER_AGENT']
+    headers['User-Agent'] = settings['SEARCH_USER_AGENT']
     response = requests.post("https://www.tineye.com/search", data={'url': image_url})
 
     results = extract(response, limit)
@@ -139,27 +139,17 @@ def get_tineye_results(image_url, config, limit=15):
     return results
 
 
-def image_search(submission_url, config, account1, account2, display_limit=None):
-    """
-    """
-    from .reddit import _filter_results, _format_results
-
-    extra_message = config.get('FOOTER_INFO_MESSAGE')
-    no_results_message = config.get('BOTCMD_IMAGESEARCH_NO_RESULTS_MESSAGE')
-    submission_id = config.get('REDDIT_SPAMFILTER_SUBMISSION_ID', None)
-
-    logger.info('Image-searching for %s' % submission_url)
-
+def optimize_image_url(image_url):
     # substitute videos with gif versions where possible
     # (because search engines index those)
-    domain = domain_suffix(submission_url)
+    domain = domain_suffix(image_url)
     fileformats = ('.gifv', '.mp4', '.webm', '.ogg')
     if domain in ('imgur.com', 'gfycat.com'):
-        domainparts = urlsplit(submission_url)
-        if submission_url.endswith(fileformats):
+        domainparts = urlsplit(image_url)
+        if image_url.endswith(fileformats):
             for ff in fileformats:
-                submission_url = submission_url.replace(ff, '.gif')
-            logger.debug('Found %s video - substituting with gif url: %s' % (domain, submission_url))
+                image_url = image_url.replace(ff, '.gif')
+            logger.debug('Found %s video - substituting with gif url: %s' % (domain, image_url))
         # no file extension?
         elif domainparts.path.rstrip(string.ascii_lowercase+string.ascii_uppercase) == '/':
             # on imgur, this could be a regular image, but luckily imgur provides a .gif url anyway :)
@@ -167,74 +157,44 @@ def image_search(submission_url, config, account1, account2, display_limit=None)
             if str(domain) == 'gfycat.com':
                 (scheme, netloc, path, query, fragment) = domainparts
                 #maybe_handy_json_url = urlunsplit((scheme, netloc, '/cajax/get' + path, query, fragment))
-                submission_url = urlunsplit((scheme, 'giant.gfycat.com', path, query, fragment))
-            submission_url += '.gif'
-            logger.debug('Found potential %s video - using gif url: %s' % (domain, submission_url))
+                image_url = urlunsplit((scheme, 'giant.gfycat.com', path, query, fragment))
+            image_url += '.gif'
+            logger.debug('Found potential %s video - using gif url: %s' % (domain, image_url))
+    return image_url
 
-    link = re.sub("/","*", submission_url)
-    results = ''
-    i = 0
-    app = unicode(b64decode('aHR0cHM6Ly9zbGVlcHktdHVuZHJhLTU2NTkuaGVyb2t1YXBwLmNvbS9zZWFyY2gv'))
-    while not results:
-        i += 1
-        try:
-            if config.getbool('DEBUG', False):
-                ### for debugging, cache response
-                _dumpfile = 'proxydebug'
-                if not os.path.exists(_dumpfile):
+def image_search(settings, image_url):
+
+    def app_proxy_search():
+        link = re.sub("/","*", image_url)
+        results = ''
+        i = 0
+        app = unicode(b64decode('aHR0cHM6Ly9zbGVlcHktdHVuZHJhLTU2NTkuaGVyb2t1YXBwLmNvbS9zZWFyY2gv'))
+        while not results:
+            i += 1
+            try:
+                if settings.getbool('DEBUG', False):
+                    ### for debugging, cache response
+                    _dumpfile = 'proxydebug'
+                    if not os.path.exists(_dumpfile):
+                        response = urlopen(app+link).read()
+                        with open(_dumpfile, 'wb') as f:
+                            f.write(response)
+                    with open(_dumpfile, 'rb') as f:
+                        response = f.read()
+                else:
                     response = urlopen(app+link).read()
-                    with open(_dumpfile, 'wb') as f:
-                        f.write(response)
-                with open(_dumpfile, 'rb') as f:
-                    response = f.read()
-            else:
-                response = urlopen(app+link).read()
-            results = eval(response)
-        except HTTPError as e:
-            logger.error(e)
-            logger.info("Retrying %d" % i)
+                results = eval(response)
+            except HTTPError as e:
+                logger.error(e)
+                logger.info("Retrying %d" % i)
+        return results
 
-    search_engines = OrderedDict([
-        ('google', 'Google'),
-        ('bing', 'Bing'),
-        ('yandex', 'Yandex'),
-        ('tineye', 'Tineye'),
-        ('karmadecay', 'Karma Decay'),
-    ])
-    search_results = OrderedDict()
-
-    message = '**Best %s Guesses**\n\n%s\n\n'
-    reply = ''
-
-    for engine, provider in search_engines.items():
-        try:
-            # hardcoded results
-            if engine == 'google':
-                result = results[0]
-            if engine == 'bing':
-                result = results[1]
-            if engine == 'yandex':
-                result = results[2]
-            if engine == 'karmadecay':
-                result = results[3]
-                # sometimes we get nonempty empty results...
-                if result == [(u'', u'')]:
-                    result = []
-            if engine == 'tineye':
-                if config.getbool('DEBUG', False):
-                    continue
-                result = get_tineye_results(submission_url, config)
-        except IndexError as e:
-            logger.error('Failed fetching %s results: %s' % (provider, e))
-
+    def app_proxy_filter(result):
         # sanitizing strange remote conversions,
         # unescape previously escaped backslash
         result = [
-            [x.replace('\\', '').replace(r'[', '') for x in r]
-            for r in result
+            [x.replace('\\', '').replace(r'[', '') for x in r] for r in result
         ]
-
-        search_results[provider] = {}
 
         # sanity check on app's response:
         _dropped = _ok = _all = 0
@@ -249,6 +209,7 @@ def image_search(submission_url, config, account1, account2, display_limit=None)
             # quick check for *impossible* urls
             if not url.strip().startswith(('http', 'ftp', '//')): # http | ftp | //:
                 _dropped += 1
+                logger.debug('Dropping invalid proxy result "%s" (%s)' % (url, text))
                 continue
             _ok += 1
             _good += [item]
@@ -259,42 +220,163 @@ def image_search(submission_url, config, account1, account2, display_limit=None)
                     (_dropped, provider, _ok))
         del _dropped, _ok, _all, _good
 
-        search_results[provider].update({'all': len(result)})
+        return result
 
+    logger.info('Image-searching for %s' % image_url)
+
+    image_url = optimize_image_url(image_url)
+
+    search_engines = OrderedDict([
+        ('Google', get_google_results),
+        ('Bing',   get_bing_results),
+        ('Yandex', get_yandex_results),
+        ('Tineye', get_tineye_results),
+        ('Karma Decay', get_karmadecay_results),
+    ])
+
+    proxy_results = app_proxy_search()
+
+    results = OrderedDict()
+
+    for provider, search_engine in search_engines.items():
+        #result = search_engine(image_url, settings)
+        try:
+            # hardcoded results
+            if provider == 'Google':
+                result = proxy_results[0]
+                #result = search_engine(image_url, settings)
+            if provider == 'Bing':
+                result = proxy_results[1]
+                #result = search_engine(image_url, settings)
+            if provider == 'Yandex':
+                result = proxy_results[2]
+                #result = search_engine(image_url, settings)
+            if provider == 'Karma Decay':
+                result = proxy_results[3]
+                ## sometimes we get nonempty empty results...
+                if result == [(u'', u'')]:
+                    result = []
+                #result = search_engine(image_url, settings)
+            if provider == 'Tineye':
+                if settings.getbool('DEBUG', False):
+                    continue
+                result = search_engine(image_url, settings)
+        except IndexError as e:
+            logger.error('Failed fetching %s results: %s' % (provider, e))
+
+        result = app_proxy_filter(result)
+
+        results[provider] = result
+
+    return results
+
+def filter_image_search(settings, search_results, account1=None, account2=None):
+
+    from .reddit import reddit_messagefilter
+    from .spamfilter import spamfilter_results
+
+    def sanitize_string(string):
+        # strip possible control characters
+        string = remove_control_characters(string)
+
+        # also strip non-ascii characters
+        #string = ''.join(c for c in string if ord(c) in range(32, 127))
+
+        string = string.strip()
+        return string
+
+    stats = OrderedDict()
+    filtered_results = OrderedDict()
+    for provider, result in search_results.items():
+        filtered_results[provider] = []
+
+        stats[provider] = {'all': len(result), 'succeeded': 0}
         if not result:
-            reply += message % (provider, 'No available links from this search engine found.')
-            search_results[provider].update({'succeeded': 0, 'failed': 0})
-            del search_engines[engine]
             continue
+
+        result = [[sanitize_string(v) for v in r] for r in result]
 
         # spam-filter results
         logger.debug('...filtering results for %s' % provider)
-        filtered  = _filter_results(result, account1, account2, submission_id)
-
+        filtered = spamfilter_results(result)
         if not filtered:
-            reply += message % (provider, 'No available links from this search engine found.')
-            search_results[provider].update({'succeeded': 0, 'failed': len(result)})
-            del search_engines[engine]
             continue
 
-        search_results[provider].update({'succeeded': len(filtered), 'failed': len(result)-len(filtered)})
+        filtered_results[provider] = filtered
+        stats[provider].update({'succeeded': len(filtered)})
+
+    # reddit-spamfilter results
+    verified_results = OrderedDict()
+    submission_id = settings.get('REDDIT_SPAMFILTER_SUBMISSION_ID', None)
+    if not (account1 and account2 and submission_id):
+        verified_results = filtered_results
+        logger.info('reddit_spamfilter skipped (missing settings)')
+    else:
+        urls = set()
+        for _, results in filtered_results.items():
+            urls |= set([url for url, text in results])
+
+        verified_urls = reddit_messagefilter(urls, account2, account1, submission_id)
+
+        for provider, results in filtered_results.items():
+            verified_results[provider] = []
+            stats[provider].update({'succeeded': 0})
+
+            res = []
+            for result in results:
+                url = result[0]
+                if url in verified_urls:
+                    res.append(result)
+
+            if not res:
+                continue
+
+            verified_results[provider] = res
+            stats[provider].update({'succeeded': len(res)})
+
+    # stats
+    for provider, stats in stats.items():
+        logger.info('%11s: all: %3d / failed: %3d / good: %3d' % (provider,
+            stats.get('all'), stats.get('all')-stats.get('succeeded'), stats.get('succeeded')))
+
+    return verified_results
+
+def format_image_search(settings, search_results, display_limit=None, escape_chars=True):
+
+    from .reddit import reddit_format_results
+
+    results_message_format = settings.get('BOTCMD_IMAGESEARCH_MESSAGE_TEMPLATE').decode('utf-8')
+    no_engine_results_message = settings.get('BOTCMD_IMAGESEARCH_NO_SEARCHENGINE_RESULTS_MESSAGE').decode('utf-8')
+    reply = ''
+
+    check_results = {}
+    for provider, result in search_results.items():
+
+        if not result:
+            reply += results_message_format.format(
+                    search_engine=provider,
+                    search_results=no_engine_results_message,
+                )
+            continue
 
         # limit output to `display_limit` results
         if display_limit:
-            filtered = filtered[:display_limit]
+            result = result[:display_limit]
 
         # format results
-        formatted = _format_results(filtered)
+        formatted = reddit_format_results(result, escape_chars)
+        reply += results_message_format.format(
+                search_engine=provider,
+                search_results=formatted,
+            )
 
-        reply += message % (provider, formatted)
+        check_results[provider] = result
 
-    if not search_engines:
-        reply = no_results_message
+    if not check_results:
+        reply = ''
 
-    # stats
-    for engine, stats in search_results.items():
-        logger.info('%11s: all: %d / failed: %d / good: %d' % (engine,
-            stats.get('all'), stats.get('failed'), stats.get('succeeded')))
+    if not reply:
+        reply = settings.get('BOTCMD_IMAGESEARCH_NO_RESULTS_MESSAGE').decode('utf-8')
 
-    reply += extra_message
+    reply += settings.get('FOOTER_INFO_MESSAGE').decode('utf-8')
     return reply

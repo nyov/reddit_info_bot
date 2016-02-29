@@ -1,4 +1,4 @@
-# -*- python -*-
+# -*- mode: python; coding: utf-8; -*-
 """
 reddit_info_bot settings
 
@@ -42,9 +42,7 @@ BOTCMD_IMAGESEARCH = [ # (main) initiate image search
     'u/%s' % REDDIT_ACCOUNT_NAME,
 ]
 BOTCMD_IMAGESEARCH_NO_RESULTS_MESSAGE = (
-"""Well that's embarrassing.  Not for me, but for the search engines.
-
-I was not able to automatically find results for this link."""
+"""No search results found."""
 )
 
 
@@ -60,8 +58,10 @@ Obtain more information by making a comment in the thread which includes /u/%s""
 )
 
 
-BOTCMD_DELETE_DOWNVOTES_ENABLED = True
-BOTCMD_DELETE_DOWNVOTES_AFTER = 30 # only act on comments after X minutes age
+BOTCMD_DOWNVOTES_ENABLED = True
+BOTCMD_DOWNVOTES_TESTMODE = True # if enabled, only log action
+BOTCMD_DOWNVOTES_DELETE_AFTER = 30 # only act on comments after X minutes age
+BOTCMD_DOWNVOTES_DELETION_SCORE = 1 # karma score below which a comment is removed
 
 
 COMMENT_REPLY_AGE_LIMIT = 2 # ignore comments older than minutes
@@ -77,26 +77,16 @@ IMAGE_FORMATS += VIDEO_FORMATS
 FOOTER_INFO_MESSAGE = (
 """
 
- ***** 
- ^^[Suggestions](http://www.reddit.com/message/compose/?to=info_bot&subject=Suggestion) ^^| ^^[FAQs](http://www.reddit.com/r/info_bot/comments/2cc45a/info_bot_info/) ^^| ^^[Issues](http://www.reddit.com/message/compose/?to=info_bot&subject=Issue)
-
- ^^Downvoted ^^comments ^^from ^^info_bot ^^are ^^automagically ^^removed.
-
+ *****
  ^(%s %s)
 """ % (BOT_NAME, BOT_VERSION)
 )
 
 
-SUBREDDITS = [
-    'all',
-]
-try: # custom external subreddits list
-    from config_subreddits import SUBREDDITS
-    SUBREDDITS = SUBREDDITS
-except ImportError: pass
+SUBREDDITS = ['all']
 
 ##
 ## search agent settings
 ##
 
-SEARCH_USER_AGENT = 'Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17'
+SEARCH_USER_AGENT = '%s/%s' % (BOT_NAME, BOT_VERSION)

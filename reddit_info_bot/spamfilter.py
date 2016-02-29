@@ -12,7 +12,7 @@ try:
 except ImportError:
     intern = lambda x: x # dont use on py2 unicode strings # FIXME (do we need unicode here?)
 from requests.exceptions import HTTPError, ConnectionError, Timeout
-from .util import domain_suffix, tld_from_suffix
+from .util import domain_suffix, tld_from_suffix, remove_control_characters
 
 logger = logging.getLogger(__name__)
 
@@ -117,9 +117,15 @@ def get_filter(filter_type, cachedir):
     filters = set(intern(i['spamtext']) for i in filters)
     return filters
 
+cachedir = None
 
-def spamfilter_lists(cachedir):
+def spamfilter_lists(cache_dir=None):
     # s.r.c filters
+    global cachedir
+    if not cachedir:
+        if not cache_dir:
+            return
+        cachedir = cache_dir
     link_filter = get_filter('link', cachedir)
     thumb_filter = get_filter('thumb', cachedir)
     text_filter = get_filter('text', cachedir)
@@ -180,3 +186,12 @@ def isspam(result, lists):
         return True
     # no spam, result is good
     return False
+
+def spamfilter_results(results):
+    """Filter search results
+    """
+    # filter results for spam
+    spamlists = spamfilter_lists()
+    results = [result for result in results if not isspam(result, spamlists)]
+
+    return results
