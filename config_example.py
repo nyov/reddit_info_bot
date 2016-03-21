@@ -86,7 +86,7 @@ FOOTER_INFO_MESSAGE = (
 SUBREDDITS = ['all']
 
 ##
-## search agent settings
+## search / scrapy spider settings
 ##
 
-SEARCH_USER_AGENT = '%s/%s' % (BOT_NAME, BOT_VERSION)
+USER_AGENT = '%s/%s' % (BOT_NAME, BOT_VERSION)

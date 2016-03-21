@@ -20,6 +20,12 @@ class Settings(object):
             value = self.attributes[name]
         return value
 
+    def __iter__(self):
+        return iter(self.attributes)
+
+    def __len__(self):
+        return len(self.attributes)
+
     def get(self, name, default=None):
         return self[name] if self[name] is not None else default
 

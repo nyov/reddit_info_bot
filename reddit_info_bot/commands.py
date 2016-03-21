@@ -234,7 +234,8 @@ def cmd_imagesearch(settings, image_url=None, display_limit=15):
     if not image_url:
         logger.error('Missing url for image search')
         return
-    search_results = image_search(settings, image_url)
+
+    search_results = image_search(settings, image_url=image_url, num_results=display_limit)
     filter_results = filter_image_search(settings, search_results)
     reply_contents = format_image_search(settings, filter_results, display_limit)
     logger.info('Image-search results:\n%s' % reply_contents)
