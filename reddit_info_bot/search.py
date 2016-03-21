@@ -11,10 +11,8 @@ import requests
 import re
 from parsel import Selector
 from six.moves.urllib.request import build_opener, HTTPCookieProcessor, urlopen
-from six.moves.urllib.error import HTTPError
 
 import string
-from base64 import b64decode
 from collections import OrderedDict
 from six.moves.urllib.parse import urlsplit, urlunsplit
 
@@ -164,64 +162,6 @@ def optimize_image_url(image_url):
 
 def image_search(settings, image_url):
 
-    def app_proxy_search():
-        link = re.sub("/","*", image_url)
-        results = ''
-        i = 0
-        app = unicode(b64decode('aHR0cHM6Ly9zbGVlcHktdHVuZHJhLTU2NTkuaGVyb2t1YXBwLmNvbS9zZWFyY2gv'))
-        while not results:
-            i += 1
-            try:
-                if settings.getbool('DEBUG', False):
-                    ### for debugging, cache response
-                    _dumpfile = 'proxydebug'
-                    if not os.path.exists(_dumpfile):
-                        response = urlopen(app+link).read()
-                        with open(_dumpfile, 'wb') as f:
-                            f.write(response)
-                    with open(_dumpfile, 'rb') as f:
-                        response = f.read()
-                else:
-                    response = urlopen(app+link).read()
-                results = eval(response)
-            except HTTPError as e:
-                logger.error(e)
-                logger.info("Retrying %d" % i)
-        return results
-
-    def app_proxy_filter(result):
-        # sanitizing strange remote conversions,
-        # unescape previously escaped backslash
-        result = [
-            [x.replace('\\', '').replace(r'[', '') for x in r] for r in result
-        ]
-
-        # sanity check on app's response:
-        _dropped = _ok = _all = 0
-        _good = []
-        for idx, item in enumerate(result):
-            _all += 1
-            # result should always be '(url, text)', nothing else
-            if len(item) != 2:
-                _dropped += 1
-                continue
-            (url, text) = item
-            # quick check for *impossible* urls
-            if not url.strip().startswith(('http', 'ftp', '//')): # http | ftp | //:
-                _dropped += 1
-                logger.debug('Dropping invalid proxy result "%s" (%s)' % (url, text))
-                continue
-            _ok += 1
-            _good += [item]
-        result = _good
-
-        if _dropped > 0:
-            logger.info('Dropped %d invalid result(s) from proxy for %s, %d result(s) remaining' % \
-                    (_dropped, provider, _ok))
-        del _dropped, _ok, _all, _good
-
-        return result
-
     logger.info('Image-searching for %s' % image_url)
 
     image_url = optimize_image_url(image_url)
@@ -234,37 +174,13 @@ def image_search(settings, image_url):
         ('Karma Decay', get_karmadecay_results),
     ])
 
-    proxy_results = app_proxy_search()
-
     results = OrderedDict()
 
     for provider, search_engine in search_engines.items():
-        #result = search_engine(image_url, settings)
         try:
-            # hardcoded results
-            if provider == 'Google':
-                result = proxy_results[0]
-                #result = search_engine(image_url, settings)
-            if provider == 'Bing':
-                result = proxy_results[1]
-                #result = search_engine(image_url, settings)
-            if provider == 'Yandex':
-                result = proxy_results[2]
-                #result = search_engine(image_url, settings)
-            if provider == 'Karma Decay':
-                result = proxy_results[3]
-                ## sometimes we get nonempty empty results...
-                if result == [(u'', u'')]:
-                    result = []
-                #result = search_engine(image_url, settings)
-            if provider == 'Tineye':
-                if settings.getbool('DEBUG', False):
-                    continue
-                result = search_engine(image_url, settings)
+            result = search_engine(image_url, settings)
         except IndexError as e:
             logger.error('Failed fetching %s results: %s' % (provider, e))
-
-        result = app_proxy_filter(result)
 
         results[provider] = result
 
