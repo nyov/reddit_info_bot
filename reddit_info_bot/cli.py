@@ -8,7 +8,10 @@ from docopt import docopt
 
 from .settings import Settings
 from .commands import bot_commands
-from .util import string_translate, import_string_from_file, import_file, setprocname
+from .util import (
+    string_translate, import_string_from_file, import_file, setprocname,
+    uri_is_file
+)
 from .version import __version__
 
 logger = logging.getLogger(__name__)
@@ -98,7 +101,7 @@ def usage(instance):
 
     Usage:
       reddit_info_bot [options]
-      reddit_info_bot imagesearch <url> [options]
+      reddit_info_bot imagesearch <url_or_file> [options]
 
     Options:
       -c FILE --config=FILE    Load configuration from custom file
@@ -239,7 +242,14 @@ def execute(argv=None, settings=None):
     }
 
     if cmdname == 'imagesearch':
-        cmdargs.update({'image_url': options['<URL>']})
+        image_src = options['<URL_OR_FILE>']
+        yes, uri = uri_is_file(image_src)
+        if yes:
+            with open(uri, 'rb') as f:
+                # TODO: use buffer
+                cmdargs.update({'image_data': f.read()})
+        else:
+            cmdargs.update({'image_url': uri})
 
     if 'exit' in cmds:
         exit_func = partial(cmds['exit'], settings)

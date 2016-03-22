@@ -228,14 +228,14 @@ def cmd_run(settings):
     reddit_logout(account2)
     reddit_logout(account1)
 
-def cmd_imagesearch(settings, image_url=None, display_limit=15):
+def cmd_imagesearch(settings, image_url=None, image_data=None, display_limit=15):
     from .search import image_search, filter_image_search, format_image_search
 
-    if not image_url:
-        logger.error('Missing url for image search')
+    if not image_url and not image_data:
+        logger.error('Missing source for image search')
         return
 
-    search_results = image_search(settings, image_url=image_url, num_results=display_limit)
+    search_results = image_search(settings, image_url=image_url, image_data=image_data, num_results=display_limit)
     filter_results = filter_image_search(settings, search_results)
     reply_contents = format_image_search(settings, filter_results, display_limit)
     logger.info('Image-search results:\n%s' % reply_contents)

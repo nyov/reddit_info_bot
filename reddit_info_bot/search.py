@@ -38,10 +38,12 @@ def optimize_image_url(image_url):
 def image_search(settings, image_url=None, image_data=None, num_results=15):
     from .spiders import crawler_setup
 
-    if not image_url and not image_data:
+    if image_url:
+        logger.info('Image-searching for %s' % image_url)
+    elif image_data:
+        logger.info('Image-searching for (image data)')
+    else:
         return
-
-    logger.info('Image-searching for %s' % image_url)
 
     # FIXME: dont "optimize" gifv's for karmadecay
     #if image_url:
