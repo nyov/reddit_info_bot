@@ -96,6 +96,12 @@ def image_search(settings, image_url=None, image_data=None, num_results=15):
     pid, status = os.waitpid(pid, 0)
     reader.close()
 
+    # do not forget about empty results
+    providers = ['KarmaDecay', 'Yandex', 'Bing', 'Tineye', 'Google']
+    for provider in providers:
+        if not provider in results:
+            results[provider] = []
+
     # sort for constant key order
     results = OrderedDict(sorted(results.items()))
     return results
