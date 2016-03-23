@@ -4,6 +4,7 @@ import os
 import logging
 import json
 import base64
+import six
 from collections import OrderedDict
 from w3lib.html import get_meta_refresh
 from urllib3.filepost import encode_multipart_formdata
@@ -76,6 +77,8 @@ class ImageSearch(Search):
         # search by image
         if 'image_data' in kwargs:
             self.image_data = kwargs.pop('image_data')
+            self.filetype = None
+            self.fileext = kwargs.get('image_ext') or 'jpg'
 
         super(ImageSearch, self).__init__(*args, **kwargs)
 
@@ -91,7 +94,9 @@ class ImageSearch(Search):
         if self.image_url:
             request = self.from_url(self.image_url)
         elif self.image_data:
-            request = self.from_data(self.image_data)
+            request = self.from_data(self.image_data,
+                                     filetype=self.filetype,
+                                     fileext=self.fileext)
         yield self.pre_search(request)
 
 
@@ -103,24 +108,41 @@ class KarmaDecay(ImageSearch):
     search_image_url = 'http://karmadecay.com/index/'
 
     def from_url(self, image_url):
-        params = OrderedDict([
-            ('kdtoolver', 'b1'),
-            ('q', image_url),
-        ])
-        return FormRequest(self.search_url, method='GET', formdata=params)
+        #form_urlencoded = OrderedDict([
+        #    ('kdtoolver', 'b1'),
+        #    ('q', image_url),
+        #])
+        #return FormRequest(self.search_url, method='GET', formdata=form_urlencoded)
 
-    def from_data(self, image_data, filetype=None, fileext=None):
+        # use POST, more in line with browser
+        form_multipart = OrderedDict([
+            ('MAX_FILE_SIZE', '10485760'),
+            ('image', ''),
+            ('url', image_url),
+            ('search', 'search'),
+            ('nsfwfilter', 'off'),
+            ('subreddit[pics]', 'off'),
+            ('subreddit[funny]', 'off'),
+            ('subreddit[wtf]', 'off'),
+            ('subreddit[nsfw]', 'off'),
+            ('subreddit[others]', 'off'),
+            ('subreddit[all]', 'off'),
+        ])
+        body, content_type = encode_multipart_formdata(form_multipart, boundary=None)
+        headers = {
+            b'Content-Type': content_type,
+            b'DNT': b'1',
+        }
+        return Request(self.search_image_url, method='POST', body=body, headers=headers)
+
+    def from_data(self, image_data, filetype=None, fileext='png'):
         if filetype:
             image_data = ('image.bin', image_data, filetype)
         else:
             # content-type guessed from file extension
-            if not fileext:
-                fileext = 'png'
             image_data = ('image.%s' % fileext, image_data)
-        params = OrderedDict([
+        form_multipart = OrderedDict([
             ('MAX_FILE_SIZE', '10485760'),
-            #('image', ''),
-            #('url', image_url),
             ('image', image_data),
             ('url', ''),
             ('search', 'search'),
@@ -132,7 +154,7 @@ class KarmaDecay(ImageSearch):
             ('subreddit[others]', 'off'),
             ('subreddit[all]', 'off'),
         ])
-        body, content_type = encode_multipart_formdata(params, boundary=None)
+        body, content_type = encode_multipart_formdata(form_multipart, boundary=None)
         headers = {
             b'Content-Type': content_type,
             b'X-Requested-With': b'XMLHttpRequest',
@@ -142,11 +164,21 @@ class KarmaDecay(ImageSearch):
 
     def parse(self, response):
         page_content = response.xpath('//body')
+        if page_content:
+            self.serp = response.url
         self.logger.info('Visited %s', response.url)
 
-        results = page_content.xpath('.//div[@id="content"]/table[@class="search"]//tr[@class="result"]')
-        if not results:
+        no_results = page_content.xpath('//tr[contains(@class, "ns")]') # "No very similar images were found on Reddit."
+        if no_results:
             self.logger.info('No search results')
+            return
+
+        # ignore 'less similar' results. they're usually completely different
+        results = page_content.xpath('.//div[@id="content"]/table[@class="search"]//tr[@class="result"][following-sibling::tr[@class="ls"]]')
+        if not results:
+            results = page_content.xpath('.//div[@id="content"]/table[@class="search"]//tr[@class="result"]')
+            if not results:
+                self.logger.info('No search results')
 
         num_results = response.meta.get('num_results') or 0 # result counter
         for found in results:
@@ -178,7 +210,7 @@ class KarmaDecay(ImageSearch):
 
                 #'source': response.request.url,
                 #'source': response.meta.get('redirect_urls')[0],
-                'search': response.url,
+                'search': self.serp,
             }
             self.write(result)
 
@@ -193,34 +225,31 @@ class Yandex(ImageSearch):
     def from_url(self, image_url):
         image_url = optimize_image_url(image_url)
 
-        params = OrderedDict([
+        form_urlencoded = OrderedDict([
             ('img_url', image_url),
             ('rpt', 'imageview'),
             ('uinfo', 'sw-1440-sh-900-ww-1440-wh-775-pd-1-wp-16x10_1440x900'), # some fake browser info
         ])
-        return FormRequest(self.search_url, method='GET', formdata=params)
+        return FormRequest(self.search_url, method='GET', formdata=form_urlencoded)
 
-    def from_data(self, image_data, filetype=None, fileext=None):
+    def from_data(self, image_data, filetype=None, fileext='png'):
         if filetype:
             image_data = ('image.bin', image_data, filetype)
         else:
             # content-type guessed from file extension
-            if not fileext:
-                fileext = 'png'
             image_data = ('image.%s' % fileext, image_data)
-        params = OrderedDict([
+        form_multipart = OrderedDict([
             ('upfile', image_data),
             #('format', 'json'),
             #('request', '[{"block":"b-page_type_search-by-image__link"}]'),
             ('rpt', 'imageview'),
         ])
-        urlparams = OrderedDict([
+        form_urlencoded = OrderedDict([
             ('uinfo', 'sw-1440-sh-900-ww-1440-wh-775-pd-1-wp-16x10_1440x900'), # some fake browser info
             ('rpt', 'imageview'),
-            #('serpid', 'tXFwPxlgPacPB2xU7yJFZw'), # ???
         ])
-        qstring = '?' + urlencode(urlparams)
-        body, content_type = encode_multipart_formdata(params, boundary=None)
+        qstring = '?' + urlencode(form_urlencoded)
+        body, content_type = encode_multipart_formdata(form_multipart, boundary=None)
         headers = {
             b'Content-Type': content_type,
             b'X-Requested-With': b'XMLHttpRequest',
@@ -240,6 +269,8 @@ class Yandex(ImageSearch):
 
     def parse(self, response):
         page_content = response.xpath('//body')
+        if page_content:
+            self.serp = response.url
         self.logger.info('Visited %s', response.url)
 
         results = page_content.xpath('.//ul[@class="other-sites__container"]/li')
@@ -272,7 +303,7 @@ class Yandex(ImageSearch):
 
                 #'source': response.request.url,
                 #'source': response.meta.get('redirect_urls')[0],
-                'search': response.url,
+                'search': self.serp,
             }
             yield Request(source_link, callback=self.get_url, meta={'dont_redirect': True, 'result': result})
 
@@ -292,55 +323,80 @@ class Bing(ImageSearch):
     search_image_url = 'https://www.bing.com/images/search'
 
     def from_url(self, image_url):
-        # prefer non-https URLs, BING can't find images in https:// urls!?
         image_url = optimize_image_url(image_url)
-        if image_url.startswith('https'):
-            image_url = image_url.replace('https', 'http', True)
 
-        params = OrderedDict([
-            #('FORM', 'IRSBIQ'),
-            ('cbir', 'sbi'),
+        ## prefer non-https URLs, BING can't find images in https:// urls!?
+        #if image_url.startswith('https'):
+        #    image_url = image_url.replace('https', 'http', True)
+        #
+        #form_urlencoded = OrderedDict([
+        #    ('FORM', 'IRSBIQ'),
+        #    ('cbir', 'sbi'),
+        #    ('imgurl', image_url),
+        #])
+        #return FormRequest(self.search_url, method='GET', formdata=form_urlencoded)
+
+        # this seems to be a newer version of bing, and seems to finds results
+        # for more urls as well
+        form_multipart = OrderedDict([
             ('imgurl', image_url),
-        ])
-        return FormRequest(self.search_url, method='GET', formdata=params)
-
-    def from_data(self, image_data, fileext='png'):
-        # bing transcodes images with javascript, then submits base64-encoded jpeg data...
-        image_size = len(image_data) / 1024
-        image_data, (width, height) = convert_image(image_data)
-        image_data = base64.b64encode(image_data) # base64 encoded submission
-        image_data = (None, image_data, None)
-        params = OrderedDict([
-            ('imgurl', ''),
             ('cbir', 'sbi'),
-            ('imageBin', image_data),
+            ('imageBin', ''),
         ])
-        urlparams = OrderedDict([
-            ('q', ''),
+        form_urlencoded = OrderedDict([
+            ('q', 'imgurl:%s' % image_url),
             ('view', 'detailv2'),
             ('iss', 'sbi'),
             ('FORM', 'IRSBIQ'),
-            ('sbifsz', '%s x %s · %s kB · %s' % (width, height, image_size, fileext)), # probably nobody cares about that, but fake it anyway
-            ('sbifnm', 'image.%s' % fileext), # our "filename"
-            ('thw', width),
-            ('thh', height),
         ])
-        qstring = '?' + urlencode(urlparams)
-        body, content_type = encode_multipart_formdata(params, boundary=None)
+        qstring = '?' + urlencode(form_urlencoded)
+        body, content_type = encode_multipart_formdata(form_multipart, boundary=None)
         headers = {
             b'Accept-Language': b'en-US,en;q=0.5',
             b'Content-Type': content_type,
             b'DNT': b'1',
         }
-        return Request(self.search_image_url + qstring, method='POST', body=body, headers=headers)
+        return Request(self.search_image_url + qstring, method='POST',
+                       body=body, headers=headers, callback=self.parse_image)
+
+    def from_data(self, image_data, filetype=None, fileext='png'):
+        # bing transcodes images with javascript, then submits base64-encoded jpeg data...
+        image_size = len(image_data) / 1024
+        image_data, (width, height) = convert_image(image_data)
+        image_data = base64.b64encode(image_data) # base64 encoded submission
+        image_data = (None, image_data, None)
+        form_multipart = OrderedDict([
+            ('imgurl', ''),
+            ('cbir', 'sbi'),
+            ('imageBin', image_data),
+        ])
+        form_urlencoded = OrderedDict([
+            ('q', ''),
+            ('view', 'detailv2'),
+            ('iss', 'sbi'),
+            ('FORM', 'IRSBIQ'),
+            # probably nobody cares about that, but fake it anyway
+            ('sbifsz', u'%s x %s · %s kB · %s'.encode('utf-8') \
+                    % (width, height, image_size, fileext.encode('utf-8'))),
+            ('sbifnm', 'image.%s' % fileext), # our "filename"
+            ('thw', width),
+            ('thh', height),
+        ])
+        qstring = '?' + urlencode(form_urlencoded)
+        body, content_type = encode_multipart_formdata(form_multipart, boundary=None)
+        headers = {
+            b'Accept-Language': b'en-US,en;q=0.5',
+            b'Content-Type': content_type,
+            b'DNT': b'1',
+        }
+        return Request(self.search_image_url + qstring, method='POST',
+                       body=body, headers=headers, callback=self.parse_image)
 
     def parse(self, response):
         page_content = response.xpath('//body')
+        if page_content:
+            self.serp = response.url
         self.logger.info('Visited %s', response.url)
-
-        upload_results = page_content.xpath('.//div[@id="insights"]')
-        if upload_results:
-            return self.parse_image(response)
 
         results = page_content.xpath('.//div[@id="sbi_sct_sp"]/div[@class="sbi_sp"]')
         if not results:
@@ -380,13 +436,15 @@ class Bing(ImageSearch):
 
                 #'source': response.request.url,
                 #'source': response.meta.get('redirect_urls')[0],
-                'search': response.url,
+                'search': self.serp,
             }
             self.write(result)
 
         # There doesn't seem to be any pagination in results here ever! :heart:
 
     def parse_image(self, response):
+        page_content = response.xpath('//body')
+        self.logger.info('Visited %s', response.url)
 
         def gimmefrigginresults():
             # oookay, no f**kin idea what I'm doing here,
@@ -420,20 +478,28 @@ class Bing(ImageSearch):
                 ('IID', lessvaaars['IID']),
                 ('SFX', '1'),
                 ('iss', 'sbi'),
-                ('mid', vaaars['mid']),
-                ('ccid', vaaars['ccid']),
-                ('vw', vaaars['vw'].replace('+', ' ')),
+                ('mid', None),
+                ('ccid', None),
+                ('vw', None),
                 ('simid', '0'),
                 ('thid', ''),
-                ('thh', vaaars['height']),
-                ('thw', vaaars['width']),
+                ('thh', vaaars.get('height') or ''),
+                ('thw', vaaars.get('width') or ''),
                 ('q', ''),
-                ('mst', vaaars['mst']),
-                ('mscr', vaaars['mscr']),
+                ('mst', None),
+                ('mscr', None),
                 ('spurl', ''),
                 ('vf', ''),
                 ('imgurl', ''),
             ])
+            for var in ('mid', 'ccid', 'vw', 'mst', 'mscr'):
+                if var in vaaars:
+                    val = vaaars[var]
+                    if isinstance(val, six.string_types):
+                        val = val.replace('+', ' ') # urlunencode-something?
+                    blended[var] = val
+                else:
+                    del blended[var]
 
             # fourth, assemble
             url = response.urljoin(urlunsplit(('', '', uuuuurl.path, urlencode(blended), '')))
@@ -447,14 +513,21 @@ class Bing(ImageSearch):
             return Request(url, callback=self.parse_image, headers=headers)
 
 
-        if not response.body and response.status == 200:
+        upload_results = page_content.xpath('.//div[@id="insights"]')
+        if upload_results:
+            self.logger.debug('Looks like a valid search result page... without results: %s' % response.url)
+            self.serp = response.url
             # now we have the result page, but no results yet... hmmm
             # gotta do some XHR fancyness, preferrably without a javascript interpreter or DOM
             return gimmefrigginresults()
 
+        if not response.body and response.status == 200:
+            # trouble here is we don't know if our query was misunderstood
+            # (parameters changed) or if there were simply no results
+            self.logger.info('No search results or query failure')
+            return
 
         # well whaddaya know... it worked? whew
-        page_content = response.xpath('//body')
 
         # number of results found (if any)
         total_results = page_content.xpath('.//ul[@class="insights"]//div[contains(@class, "b_focusLabel")]/text()').re_first(r'^(\d+)')
@@ -487,7 +560,7 @@ class Bing(ImageSearch):
                 'link': source_link,
                 'title': source_title,
                 #'text': source_text,
-                #'image_url': source_image,
+                'image_url': None, # does not seem to have direct image links
                 'image_size': source_image_size,
                 'image_filesize': source_image_filesize,
                 'image_format': source_image_format,
@@ -495,7 +568,7 @@ class Bing(ImageSearch):
 
                 #'source': response.request.url,
                 #'source': response.meta.get('redirect_urls')[0],
-                'search': response.url,
+                'search': self.serp,
             }
             self.write(result)
 
@@ -512,24 +585,22 @@ class Tineye(ImageSearch):
     def from_url(self, image_url):
         image_url = optimize_image_url(image_url)
 
-        params = OrderedDict([
+        form_urlencoded = OrderedDict([
             ('search_button', ''),
             ('url', image_url),
         ])
-        return FormRequest(self.search_url, method='POST', formdata=params)
+        return FormRequest(self.search_url, method='POST', formdata=form_urlencoded)
 
-    def from_data(self, image_data, filetype=None, fileext=None):
+    def from_data(self, image_data, filetype=None, fileext='png'):
         if filetype:
             image_data = ('image.bin', image_data, filetype)
         else:
             # content-type guessed from file extension
-            if not fileext:
-                fileext = 'png'
             image_data = ('image.%s' % fileext, image_data)
-        params = OrderedDict([
+        form_multipart = OrderedDict([
             ('image', image_data),
         ])
-        body, content_type = encode_multipart_formdata(params, boundary=None)
+        body, content_type = encode_multipart_formdata(form_multipart, boundary=None)
         headers = {
             b'Accept-Language': b'en-US,en;q=0.5',
             b'Content-Type': content_type,
@@ -539,6 +610,8 @@ class Tineye(ImageSearch):
 
     def parse(self, response):
         page_content = response.xpath('//body')
+        if page_content:
+            self.serp = response.url
         self.logger.info('Visited %s', response.url)
 
         results = page_content.xpath('.//div[@class="results"]//div[@class="row matches"]//div[contains(@class, "match-row")]')
@@ -572,7 +645,7 @@ class Tineye(ImageSearch):
 
                 #'source': response.request.url,
                 #'source': response.meta.get('redirect_urls')[0],
-                'search': response.url,
+                'search': self.serp,
             }
 
             if source_image:
@@ -599,27 +672,25 @@ class Google(ImageSearch):
     def from_url(self, image_url):
         image_url = optimize_image_url(image_url)
 
-        params = OrderedDict([
+        form_urlencoded = OrderedDict([
             ('image_url', image_url),
         ])
-        return FormRequest(self.search_url, method='GET', formdata=params)
+        return FormRequest(self.search_url, method='GET', formdata=form_urlencoded)
 
-    def from_data(self, image_data, filetype=None, fileext=None):
+    def from_data(self, image_data, filetype=None, fileext='png'):
         if filetype:
             image_data = ('image.bin', image_data, filetype)
         else:
             # content-type guessed from file extension
-            if not fileext:
-                fileext = 'png'
             image_data = ('image.%s' % fileext, image_data)
-        params = OrderedDict([
+        form_multipart = OrderedDict([
             ('image_url', ''),
             ('encoded_image', image_data),
             ('image_content', ''),
             ('filename', ''),
             ('hl', 'en'),
         ])
-        body, content_type = encode_multipart_formdata(params, boundary=None)
+        body, content_type = encode_multipart_formdata(form_multipart, boundary=None)
         headers = {
             b'Accept-Language': b'en-US,en;q=0.5',
             b'Content-Type': content_type,
@@ -629,6 +700,8 @@ class Google(ImageSearch):
 
     def parse(self, response):
         page_content = response.xpath('//body')
+        if page_content:
+            self.serp = response.url
         self.logger.info('Visited %s', response.url)
 
         # exclude ads, thanks
@@ -647,7 +720,6 @@ class Google(ImageSearch):
             source_title = ''.join(source_title)
 
             source_displaylink = found.xpath('.//*[@class="s"]//cite/text()').extract_first()
-            source_text = found.xpath('.//*[@class="s"]//*[@class="st"]//text()').extract()
             source_text = found.xpath('.//*[@class="s"]//*[@class="st"]//text()[not(parent::span[@class="f"])]').extract()
             source_text = ''.join(source_text)
 
@@ -656,15 +728,25 @@ class Google(ImageSearch):
             #if source_image_metainfo and len(source_image_metainfo) == 3:
             #    width, height, date = source_image_metainfo
 
+            preview_image = found.xpath('.//*[@class="s"]//div/a/g-img/img/@src')
+            source_image = found.xpath('.//*[@class="s"]//div/a[g-img/img]/@href').extract_first()
+            if source_image:
+                source_image = dict(parse_qsl(urlsplit(source_image).query))
+                source_image, source_link2 = source_image['imgurl'], source_image['imgrefurl']
+
+                if not source_link and source_link2:
+                    source_link = source_link2
+
             result = {
                 'provider': self.__class__.__name__,
                 'link': source_link,
                 'title': source_text,
                 'text': source_text,
                 'display_link': source_displaylink, # the shortened thing
+                'image_url': source_image,
 
                 #'source': response.request.url,
-                'search': response.url,
+                'search': self.serp,
             }
             self.write(result)
 
