@@ -325,10 +325,10 @@ def check_downvotes(settings, user):
             continue
         if comment.score < deletion_comment_score:
             if deletion_testmode:
-                logger.warning('would have deleted comment %s (score: %s): %s' %
-                        (comment.permalink, comment.score, comment.title))
+                logger.warning('would have deleted comment %s (score: %s)' %
+                        (comment.permalink, comment.score))
                 continue
-            logger.info('deleting comment %s: %s' % (comment.permalink, comment.title))
+            logger.info('deleting comment %s' % (comment.permalink,))
             comment.delete()
 
 def _any_from_list_in_string(list_, string_):
