@@ -26,7 +26,7 @@ except ImportError:
         def write(self, data):
             yield data
 
-from ..search import optimize_image_url
+from ..search import find_media_url
 
 
 def convert_image(data):
@@ -108,6 +108,10 @@ class KarmaDecay(ImageSearch):
     search_image_url = 'http://karmadecay.com/index/'
 
     def from_url(self, image_url):
+        # do not 'optimize' .gifv links for KD
+        if not image_url.endswith('.gifv'):
+            image_url = find_media_url(image_url, self.settings)
+
         #form_urlencoded = OrderedDict([
         #    ('kdtoolver', 'b1'),
         #    ('q', image_url),
@@ -223,7 +227,7 @@ class Yandex(ImageSearch):
     search_image_url = search_url
 
     def from_url(self, image_url):
-        image_url = optimize_image_url(image_url)
+        image_url = find_media_url(image_url, self.settings)
 
         form_urlencoded = OrderedDict([
             ('img_url', image_url),
@@ -323,7 +327,7 @@ class Bing(ImageSearch):
     search_image_url = 'https://www.bing.com/images/search'
 
     def from_url(self, image_url):
-        image_url = optimize_image_url(image_url)
+        image_url = find_media_url(image_url, self.settings)
 
         ## prefer non-https URLs, BING can't find images in https:// urls!?
         #if image_url.startswith('https'):
@@ -583,7 +587,7 @@ class Tineye(ImageSearch):
     search_image_url = search_url
 
     def from_url(self, image_url):
-        image_url = optimize_image_url(image_url)
+        image_url = find_media_url(image_url, self.settings)
 
         form_urlencoded = OrderedDict([
             ('search_button', ''),
@@ -670,7 +674,7 @@ class Google(ImageSearch):
     search_image_url = 'https://www.google.com/searchbyimage/upload'
 
     def from_url(self, image_url):
-        image_url = optimize_image_url(image_url)
+        image_url = find_media_url(image_url, self.settings)
 
         form_urlencoded = OrderedDict([
             ('image_url', image_url),

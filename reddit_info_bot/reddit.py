@@ -8,8 +8,7 @@ import re
 import hashlib
 
 from . import praw
-from .search import image_search, filter_image_search, format_image_search
-from .util import domain_suffix
+from .search import image_search, filter_image_search, format_image_search, is_media_domain
 from .exceptions import ConfigurationError
 
 logger = logging.getLogger(__name__)
@@ -366,8 +365,7 @@ def _applicable_comment(comment, settings, account, comments_seen, subreddit_lis
     is_media = _any_from_list_end_string(['.%s' % e for e in media_extensions], comment.submission.url)
     if not is_media:
         # not a media-url, UNLESS we see a special domain here which we know has only media
-        domain = domain_suffix(comment.submission.url)
-        if domain not in ('imgur.com', 'gfycat.com'):
+        if not is_media_domain(comment.submission.url):
             logger.debug('[T] %s - comment has no picture [%s]' % (comment.id, comment.permalink))
             return done()
     comment_body = comment.body.encode('utf-8')
