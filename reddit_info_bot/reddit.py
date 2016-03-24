@@ -332,13 +332,19 @@ def check_downvotes(settings, user):
             comment.delete()
 
 def _any_from_list_in_string(list_, string_):
+    list_ = [str(s).lower() for s in list_]
     string_ = str(string_).lower()
-    #return any(str(w).lower() in string_ for w in list_)
-    return [str(w).lower() for w in list_ if str(w).lower() in string_]
+    #return any(s in string_ for s in list_)
+    return [s for s in list_ if s in string_]
+
+def _any_from_list_end_string(list_, string_):
+    list_ = [str(s).lower() for s in list_]
+    string_ = str(string_).lower()
+    return [s for s in list_ if string_.endswith(s)]
 
 def _applicable_comment(comment, settings, account, comments_seen, subreddit_list, search_list, information_reply):
     time_limit_minutes = settings.getint('COMMENT_REPLY_AGE_LIMIT')
-    image_formats = settings.getlist('IMAGE_FORMATS')
+    media_extensions = ['.%s' % e.strip('.') for e in settings.getlist('MEDIA_EXTENSIONS')]
     footer_message = settings.get('FOOTER_INFO_MESSAGE')
 
     def done(): # put in database and abort processing
@@ -356,9 +362,10 @@ def _applicable_comment(comment, settings, account, comments_seen, subreddit_lis
         logger.debug('[O] %s - comment has been created %d minutes ago, our reply-limit is %d [%s]' \
                      % (comment.id, comment_time_diff / 60, time_limit_minutes, comment.permalink))
         return done()
-    is_image = _any_from_list_in_string(image_formats, comment.submission.url)
-    if not is_image:
-        # not relevant; unless we see an imgur/gfycat domain (those are always images)
+    # FIXME: more robust media detection for urls (possibly check actual linked page content?)
+    is_media = _any_from_list_end_string(['.%s' % e for e in media_extensions], comment.submission.url)
+    if not is_media:
+        # not a media-url, UNLESS we see a special domain here which we know has only media
         domain = domain_suffix(comment.submission.url)
         if domain not in ('imgur.com', 'gfycat.com'):
             logger.debug('[T] %s - comment has no picture [%s]' % (comment.id, comment.permalink))

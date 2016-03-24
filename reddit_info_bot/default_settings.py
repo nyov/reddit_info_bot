@@ -105,9 +105,10 @@ COMMENT_REPLY_AGE_LIMIT = 0 # ignore comments older than X minutes
 REDDIT_SPAMFILTER_SUBMISSION_ID = ''
 
 
-IMAGE_FORMATS = ['.tif', '.tiff', '.gif', '.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd', '.png']
-VIDEO_FORMATS = ['.gifv', '.mp4', '.webm', '.ogg']
-IMAGE_FORMATS += VIDEO_FORMATS
+IMAGE_EXTENSIONS = ['tif', 'tiff', 'gif', 'jpeg', 'jpg', 'jif', 'jfif', 'jp2', 'jpx', 'j2k', 'j2c', 'fpx', 'pcd', 'png']
+VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogg']
+OTHER_EXTENSIONS = ['gifv'] # imaginary gif-video format (mp4/webm), treat as website when scraping
+MEDIA_EXTENSIONS = IMAGE_EXTENSIONS + VIDEO_EXTENSIONS + OTHER_EXTENSIONS
 
 
 FOOTER_INFO_MESSAGE = (
