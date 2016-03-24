@@ -484,7 +484,7 @@ def handle_bot_action(comments, settings, account, account2, subreddit_list, com
 
         if action == 'find_username_mentions':
             try:
-                display_limit = 5 # FIXME: make configurable
+                display_limit = settings.getint('BOTCMD_IMAGESEARCH_MAXRESULTS_FOR_ENGINE')
                 reply_content = cmd_imagesearch(settings, image_url=comment.submission.url,
                         display_limit=display_limit, account1=account, account2=account2)
                 if not reply_content:
