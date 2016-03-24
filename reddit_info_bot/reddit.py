@@ -346,8 +346,7 @@ def _applicable_comment(comment, settings, account, comments_seen, subreddit_lis
         return False
 
     if comment.id in comments_seen:
-        logger.debug('[D] comment %s already logged as done [%s]' % (comment.id, comment.permalink))
-        comment.mark_as_read() # if it is a message, unsee it
+        #logger.debug('[D] comment %s already logged as done' % comment.id)
         return False
     if str(comment.subreddit) not in subreddit_list: #check if it's in one of the right subs
         logger.debug('[!] %s - comment\'s subreddit is not in our list [%s]' % (comment.id, comment.permalink))
