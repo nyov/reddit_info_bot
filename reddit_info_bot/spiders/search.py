@@ -329,39 +329,42 @@ class Bing(ImageSearch):
     def from_url(self, image_url):
         image_url = find_media_url(image_url, self.settings)
 
-        ## prefer non-https URLs, BING can't find images in https:// urls!?
-        #if image_url.startswith('https'):
-        #    image_url = image_url.replace('https', 'http', True)
-        #
-        #form_urlencoded = OrderedDict([
-        #    ('FORM', 'IRSBIQ'),
-        #    ('cbir', 'sbi'),
-        #    ('imgurl', image_url),
-        #])
-        #return FormRequest(self.search_url, method='GET', formdata=form_urlencoded)
+        # can't decide which version works better...
+        if False:
+            # prefer non-https URLs, BING can't find images in https:// urls!?
+            if image_url.startswith('https'):
+                image_url = image_url.replace('https', 'http', True)
 
-        # this seems to be a newer version of bing, and seems to finds results
-        # for more urls as well
-        form_multipart = OrderedDict([
-            ('imgurl', image_url),
-            ('cbir', 'sbi'),
-            ('imageBin', ''),
-        ])
-        form_urlencoded = OrderedDict([
-            ('q', 'imgurl:%s' % image_url),
-            ('view', 'detailv2'),
-            ('iss', 'sbi'),
-            ('FORM', 'IRSBIQ'),
-        ])
-        qstring = '?' + urlencode(form_urlencoded)
-        body, content_type = encode_multipart_formdata(form_multipart, boundary=None)
-        headers = {
-            b'Accept-Language': b'en-US,en;q=0.5',
-            b'Content-Type': content_type,
-            b'DNT': b'1',
-        }
-        return Request(self.search_image_url + qstring, method='POST',
-                       body=body, headers=headers, callback=self.parse_image)
+            form_urlencoded = OrderedDict([
+                ('FORM', 'IRSBIQ'),
+                ('cbir', 'sbi'),
+                ('imgurl', image_url),
+            ])
+            return FormRequest(self.search_url, method='GET', formdata=form_urlencoded)
+
+        else:
+            # this seems to be a newer version of bing, and seems to finds results
+            # for more urls as well
+            form_multipart = OrderedDict([
+                ('imgurl', image_url),
+                ('cbir', 'sbi'),
+                ('imageBin', ''),
+            ])
+            form_urlencoded = OrderedDict([
+                ('q', 'imgurl:%s' % image_url),
+                ('view', 'detailv2'),
+                ('iss', 'sbi'),
+                ('FORM', 'IRSBIQ'),
+            ])
+            qstring = '?' + urlencode(form_urlencoded)
+            body, content_type = encode_multipart_formdata(form_multipart, boundary=None)
+            headers = {
+                b'Accept-Language': b'en-US,en;q=0.5',
+                b'Content-Type': content_type,
+                b'DNT': b'1',
+            }
+            return Request(self.search_image_url + qstring, method='POST',
+                        body=body, headers=headers, callback=self.parse_image)
 
     def from_data(self, image_data, filetype=None, fileext='png'):
         # bing transcodes images with javascript, then submits base64-encoded jpeg data...
@@ -458,7 +461,11 @@ class Bing(ImageSearch):
             # first, grab us some vars...
             vaaars = response.xpath('//span[@id="ivd"]/@json-data').extract_first()
             vaaars = json.loads(unquote(vaaars))
-            vaaars = vaaars['web']['0'] # lets hope that is always there
+            if 'web' in vaaars and '0' in vaaars['web']:
+                vaaars = vaaars['web']['0']
+            else:
+                self.logger.info('No search results or query failure')
+                return
 
             # second, grab us some moar vars...
             iiidx = response.body.find('IIConfig')

@@ -44,8 +44,8 @@ def find_media_url(url, settings):
 
     # add a file extension to shortcut links
     if domain in ('i.imgur.com', 'giant.gfycat.com'):
-        video_extensions = ['.%s' % e.strip('.') for e in settings.getlist('VIDEO_EXTENSIONS')] + \
-                           ['.%s' % e.strip('.') for e in settings.getlist('OTHER_EXTENSIONS')]
+        video_extensions = tuple(['.%s' % e.strip('.') for e in settings.getlist('VIDEO_EXTENSIONS')] +
+                ['.%s' % e.strip('.') for e in settings.getlist('OTHER_EXTENSIONS')])
         # substitute videos with gif versions where possible
         # (because search engines index those as images)
         if url.endswith(video_extensions):
