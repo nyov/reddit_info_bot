@@ -35,13 +35,17 @@ def optimize_image_url(image_url):
             logger.debug('Found potential %s video - using gif url: %s' % (domain, image_url))
     return image_url
 
-def image_search(settings, image_url=None, image_data=None, num_results=15):
+def image_search(settings, **spiderargs):
     from .spiders import crawler_setup
 
-    if not image_url and not image_data:
+    image_url = spiderargs.get('image_url')
+    image_data = spiderargs.get('image_data')
+    if image_url:
+        logger.info('Image-searching for %s' % image_url)
+    elif image_data:
+        logger.info('Image-searching for (image data)')
+    else:
         return
-
-    logger.info('Image-searching for %s' % image_url)
 
     # FIXME: dont "optimize" gifv's for karmadecay
     #if image_url:
@@ -55,7 +59,7 @@ def image_search(settings, image_url=None, image_data=None, num_results=15):
     if pid == 0: # child process
         os.close(pipein)
         writer = os.fdopen(pipeout, 'wb')
-        statuscode = crawler_setup(settings, writer=writer, image_url=image_url, image_data=image_data, num_results=num_results)
+        statuscode = crawler_setup(settings, writer=writer, **spiderargs)
         writer.flush()
         writer.close()
         if not statuscode:
@@ -112,6 +116,9 @@ def filter_image_search(settings, search_results, account1=None, account2=None):
     from .spamfilter import spamfilter_results
 
     def sanitize_string(string):
+        if string is None:
+            return ''
+
         # strip possible control characters
         string = remove_control_characters(string)
 

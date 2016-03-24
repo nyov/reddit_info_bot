@@ -5,6 +5,7 @@ import sys
 import time
 import json
 import logging
+from pprint import pprint
 
 try:
     # remove any already installed reactor
@@ -50,11 +51,14 @@ class InfoBotSpider(Spider):
 
     def __init__(self, *args, **kwargs):
         writer = kwargs.get('writer')
+        self.debug_results = kwargs.get('debug_results')
         super(InfoBotSpider, self).__init__(*args, **kwargs)
         if writer:
             self.writer = writer
 
     def write(self, data):
+        if self.debug_results:
+            pprint(data)
         data = json.dumps(data)
         self.writer.write(data)
         # basic 'line writer' protocol, end with LF

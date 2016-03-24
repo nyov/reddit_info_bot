@@ -9,7 +9,7 @@ import imp
 import daemon  # python-daemon on pypi + debian
 from lockfile.pidlockfile import PIDLockFile # lockfile on pypi, python-lockfile in debian
 from importlib import import_module
-from six.moves.urllib.parse import urlsplit
+from six.moves.urllib.parse import urlsplit, urlunsplit
 
 from .publicsuffix import PublicSuffixList, fetch as download_psl
 
@@ -70,6 +70,17 @@ def chwd(dir):
         errmsg = "Changing to workdir '{0}' failed!".format(dir)
         return (False, errmsg)
     return (True, 'success')
+
+def uri_is_file(uri):
+    source = urlsplit(uri)
+    if not source.netloc and (not source.scheme or source.scheme == 'file'):
+        abspath = os.path.abspath(source.path)
+        return True, abspath
+    else:
+        if not source.scheme:
+            source.scheme = 'http'
+        url = urlunsplit(source)
+        return False, url
 
 def import_file(filepath):
     abspath = os.path.abspath(filepath)
