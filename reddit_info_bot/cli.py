@@ -250,6 +250,7 @@ def execute(argv=None, settings=None):
                 cmdargs.update({'image_data': f.read()})
         else:
             cmdargs.update({'image_url': uri})
+        cmdargs.update({'from_cli': True})
 
     if 'exit' in cmds:
         exit_func = partial(cmds['exit'], settings)

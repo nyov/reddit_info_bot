@@ -47,10 +47,6 @@ def image_search(settings, **spiderargs):
     else:
         return
 
-    # FIXME: dont "optimize" gifv's for karmadecay
-    #if image_url:
-    #    image_url = optimize_image_url(image_url)
-
     pipein, pipeout = os.pipe()
     pid = os.fork()
     if pid < 0:

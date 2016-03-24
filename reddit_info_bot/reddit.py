@@ -429,6 +429,7 @@ def _comment_reply(comment, reply_func, reply_content):
             return # done for now but don't save state and retry later
 
 def handle_bot_action(comments, settings, account, account2, subreddit_list, comments_seen, action):
+    from .commands import cmd_imagesearch
     botmodes = settings.getlist('BOT_MODE', ['log'])
 
     # find_username_mentions
@@ -479,10 +480,9 @@ def handle_bot_action(comments, settings, account, account2, subreddit_list, com
 
         if action == 'find_username_mentions':
             try:
-                display_limit = 5
-                search_results = image_search(settings, comment.submission.url)
-                filter_results = filter_image_search(settings, search_results, account, account2)
-                reply_content = format_image_search(settings, filter_results, display_limit)
+                display_limit = 5 # FIXME: make configurable
+                reply_content = cmd_imagesearch(settings, image_url=comment.submission.url,
+                        display_limit=display_limit, account1=account, account2=account2)
                 if not reply_content:
                     logger.error('image_search failed (bug)! skipping')
                     # try that again, instead of replying with no results
