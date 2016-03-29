@@ -12,28 +12,55 @@ from .util import domain_suffix, remove_control_characters
 logger = logging.getLogger(__name__)
 
 
-def optimize_image_url(image_url):
-    # substitute videos with gif versions where possible
-    # (because search engines index those)
-    domain = domain_suffix(image_url)
-    fileformats = ('.gifv', '.mp4', '.webm', '.ogg')
-    if domain in ('imgur.com', 'gfycat.com'):
-        domainparts = urlsplit(image_url)
-        if image_url.endswith(fileformats):
-            for ff in fileformats:
-                image_url = image_url.replace(ff, '.gif')
-            logger.debug('Found %s video - substituting with gif url: %s' % (domain, image_url))
-        # no file extension?
-        elif domainparts.path.rstrip(string.ascii_lowercase+string.ascii_uppercase) == '/':
+# Define special domains which only host image or video media,
+# and where that media can be found.
+media_only_domains = {
+    'imgur.com': 'i.imgur.com',
+    'gfycat.com': 'giant.gfycat.com',
+    'pbs.twimg.com': 'pbs.twimg.com',
+    'upload.wikimedia.org': 'upload.wikimedia.org',
+}
+
+def is_media_domain(url):
+    ps, domain = domain_suffix(url)
+    if ps in media_only_domains.keys():
+        return media_only_domains[ps]
+    if domain in media_only_domains.keys():
+        return media_only_domains[domain]
+    return False
+
+def find_media_url(url, settings):
+    """ Find a direct media link from an url """
+    domain = is_media_domain(url)
+    if not domain:
+        return url
+
+    # correct domain name
+    domainparts = urlsplit(url)
+    (scheme, netloc, path, query, fragment) = domainparts
+    #if netloc == 'gfycat.com':
+    #   maybe_handy_json_url = urlunsplit((scheme, netloc, '/cajax/get' + path, query, fragment))
+    url = urlunsplit((scheme, domain, path, query, fragment))
+
+    # add a file extension to shortcut links
+    if domain in ('i.imgur.com', 'giant.gfycat.com'):
+        video_extensions = tuple(['.%s' % e.strip('.') for e in settings.getlist('VIDEO_EXTENSIONS')] +
+                ['.%s' % e.strip('.') for e in settings.getlist('OTHER_EXTENSIONS')])
+        # substitute videos with gif versions where possible
+        # (because search engines index those as images)
+        if url.endswith(video_extensions):
+            for ext in video_extensions:
+                url = url.replace(ext, '.gif')
+            logger.debug('Found %s video - substituting with gif url: %s' % (domain, url))
+
+        # no file extension? if it doesn't contain any path delimiters, consider it a shortlink
+        elif domainparts.path.rstrip(string.ascii_letters+string.digits) == '/':
             # on imgur, this could be a regular image, but luckily imgur provides a .gif url anyway :)
-            # on gfycat we must also change domain to 'giant.gfycat.com'
-            if str(domain) == 'gfycat.com':
-                (scheme, netloc, path, query, fragment) = domainparts
-                #maybe_handy_json_url = urlunsplit((scheme, netloc, '/cajax/get' + path, query, fragment))
-                image_url = urlunsplit((scheme, 'giant.gfycat.com', path, query, fragment))
-            image_url += '.gif'
-            logger.debug('Found potential %s video - using gif url: %s' % (domain, image_url))
-    return image_url
+            # gfycat.com always has gif
+            url += '.gif'
+            logger.debug('Found potential %s video - using gif url: %s' % (domain, url))
+
+    return url
 
 def image_search(settings, **spiderargs):
     from .spiders import crawler_setup
@@ -46,10 +73,6 @@ def image_search(settings, **spiderargs):
         logger.info('Image-searching for (image data)')
     else:
         return
-
-    # FIXME: dont "optimize" gifv's for karmadecay
-    #if image_url:
-    #    image_url = optimize_image_url(image_url)
 
     pipein, pipeout = os.pipe()
     pid = os.fork()

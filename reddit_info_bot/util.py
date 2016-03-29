@@ -37,9 +37,20 @@ def cached_psl(fh):
 def tld_from_suffix(suffix):
     return '.'.join(suffix.split('.')[1:])
 
-def domain_suffix(link):
-    parse = urlsplit(link)
-    return psl_cached.get_public_suffix(parse.netloc)
+def domain_suffix(url):
+    """ Return the authoritative part of a domain
+
+    (usually the second-level domain), by using public-suffix list data.
+    For convenience, also return the full domain that was recognized.
+    """
+    domain = urlsplit(url).netloc
+    if psl_cached:
+        # return public suffix
+        ps = psl_cached.get_public_suffix(domain)
+        return (ps, domain)
+    # fall back to recognize
+    # second-level domain as authority
+    return (domain.split('.')[-2:], domain)
 
 
 def remove_control_characters(string):

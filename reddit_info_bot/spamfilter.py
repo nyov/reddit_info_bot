@@ -161,7 +161,7 @@ def isspam(result, lists):
         logger.info('Skipping invalid URL: "{0}"'.format(url))
         return True
     # domain from URL using publicsuffix (not a validator)
-    domain = domain_suffix(url)
+    domain, _ = domain_suffix(url)
     if not domain:
         logger.info('Failed to lookup PSL/Domain for: "{0}"'.format(url))
         return True

@@ -69,11 +69,6 @@ COMMENT_REPLY_AGE_LIMIT = 2 # ignore comments older than minutes
 REDDIT_SPAMFILTER_SUBMISSION_ID = '2fu04u'
 
 
-IMAGE_FORMATS = ['.tif', '.tiff', '.gif', '.jpeg', 'jpg', '.jif', '.jfif', '.jp2', '.jpx', '.j2k', '.j2c', '.fpx', '.pcd', '.png']
-VIDEO_FORMATS = ['.gifv', '.mp4', '.webm', '.ogg']
-IMAGE_FORMATS += VIDEO_FORMATS
-
-
 FOOTER_INFO_MESSAGE = (
 """
 
