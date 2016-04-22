@@ -7,14 +7,21 @@ import time
 import pickle
 import json
 import requests
-try:
-    from sys import intern
-except ImportError:
-    intern = lambda x: x # dont use on py2 unicode strings # FIXME (do we need unicode here?)
 from requests.exceptions import HTTPError, ConnectionError, Timeout
 from .util import domain_suffix, tld_from_suffix, remove_control_characters
 
 logger = logging.getLogger(__name__)
+
+
+LISTS = {
+    'link': set(),
+    'thumb': set(),
+    'text': set(),
+    'user': set(),
+    'tld': set(),
+    'blacklist': set(),
+    'whitelist': set(),
+}
 
 
 def sync_rarchives_spamdb(filter_type, last_update=None):
@@ -114,48 +121,46 @@ def get_filter(filter_type, cachedir):
         errmsg = "Could not load spam filters. Cached files invalid or Network failure."
         sys.exit(errmsg)
 
-    filters = set(intern(i['spamtext']) for i in filters)
+    filters = set(val['spamtext'] for val in filters)
     return filters
 
 cachedir = None
 
-def spamfilter_lists(cache_dir=None):
+def populate_spamfilter_lists(cache_dir=None):
     # s.r.c filters
     global cachedir
     if not cachedir:
         if not cache_dir:
             return
         cachedir = cache_dir
+
     link_filter = get_filter('link', cachedir)
     thumb_filter = get_filter('thumb', cachedir)
+    tld_filter = get_filter('tld', cachedir)
+    tld_filter = set(tld.strip('.') for tld in tld_filter)
     text_filter = get_filter('text', cachedir)
     user_filter = get_filter('user', cachedir)
-    tld_filter = get_filter('tld', cachedir)
-    #
-    link_filter = link_filter | thumb_filter
-    text_filter = text_filter | user_filter
-    tld_blacklist = set(''.join(letter for letter in tld if letter != '.')
-                        for tld in tld_filter)
 
-    hard_blacklist = set()
+    blacklist = set()
     whitelist = set('reddit.com')
 
-    return (
-        link_filter,
-        text_filter,
-        hard_blacklist,
-        whitelist,
-        tld_blacklist,
-    )
+    global LISTS
+    LISTS = {
+        'link': link_filter,
+        'thumb': thumb_filter,
+        'tld': tld_filter,
+        'text': text_filter,
+        'user': user_filter,
+        'blacklist': blacklist, # domains
+        'whitelist': whitelist, # domains
+    }
 
+def spamfilter_lists(cache_dir=None):
+    global LISTS
+    return LISTS
 
-def isspam(result, lists):
-    """check search result for spammy content
-    """
-    (link_filter, text_filter, hard_blacklist,
-     whitelist, tld_blacklist) = lists
-
-    url, text = result[0].lower(), result[1].lower()
+def isspam_link(url):
+    global LISTS
 
     if len(url) < 6: # shorter than '//a.bc' can't be a useable absolute HTTP URL
         logger.info('Skipping invalid URL: "{0}"'.format(url))
@@ -169,29 +174,49 @@ def isspam(result, lists):
     if not tld or tld == '':
         logger.info('Failed to lookup TLD from publicsuffix for: "{0}"'.format(url))
         return True
-    if domain in whitelist:
+    if domain in LISTS['whitelist']:
         # higher prio than the blacklist
         return False
-    if domain in hard_blacklist:
+    if domain in LISTS['blacklist']:
         logger.info('Skipping blacklisted Domain "{0}": {1}'.format(domain, url))
         return True
-    if tld in tld_blacklist:
+    if tld in LISTS['tld']:
         logger.info('Skipping blacklisted TLD "{0}": {1}'.format(tld, url))
         return True
-    if intern(url) in link_filter:
-        logger.info('Skipping spammy link match "{0}": {1}'.format(link_filter[url], url))
+    if url in LISTS['link']:
+        logger.info('Skipping spammy link match "{0}": {1}'.format(LISTS['link'][url], url))
         return True
-    if intern(text) in text_filter:
-        logger.info('Skipping spammy text match "{0}": "{1}"'.format(text_filter[text], text))
+    if url in LISTS['thumb']:
+        logger.info('Skipping spammy thumb match "{0}": {1}'.format(LISTS['thumb'][url], url))
         return True
+
+    # no spam, result is good
+    return False
+
+def isspam_text(text):
+    """check search result for spammy content
+    """
+    global LISTS
+
+    if text in LISTS['text']:
+        logger.info('Skipping spammy text match "{0}": "{1}"'.format(LISTS['text'][text], text))
+        return True
+    if text in LISTS['user']:
+        logger.info('Skipping spammy user match "{0}": "{1}"'.format(LISTS['user'][text], text))
+        return True
+
     # no spam, result is good
     return False
 
 def spamfilter_results(results):
-    """Filter search results
+    """ Filter search results for spam
     """
-    # filter results for spam
-    spamlists = spamfilter_lists()
-    results = [result for result in results if not isspam(result, spamlists)]
+    for result in results:
+        url, text = result[0].lower(), result[1].lower()
 
-    return results
+        if isspam_link(url):
+            continue
+        if isspam_text(text):
+            continue
+
+        yield result

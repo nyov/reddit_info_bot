@@ -164,7 +164,7 @@ def filter_image_search(settings, search_results, account1=None, account2=None):
 
         # spam-filter results
         logger.debug('...filtering results for %s' % provider)
-        filtered = spamfilter_results(result)
+        filtered = list(spamfilter_results(result))
         if not filtered:
             continue
 

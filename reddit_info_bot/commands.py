@@ -16,7 +16,7 @@ from .reddit import (
     reddit_login, reddit_logout,
     build_subreddit_feeds, handle_bot_action, check_downvotes,
 )
-from .spamfilter import spamfilter_lists
+from .spamfilter import populate_spamfilter_lists
 from .log import setup_logging, release_logging
 from .util import chwd, cached_psl, daemon_context
 from .signals import signal_map, running
@@ -102,7 +102,7 @@ def do_setup(settings, command=None, *a, **kw):
         logger.info('%s started' % settings.get('_BOT_INSTANCE_'))
 
         # force early cache-refreshing spamlists
-        spamfilter_lists(settings.get('_CACHEDIR_'))
+        populate_spamfilter_lists(settings.get('_CACHEDIR_'))
         # cache-load psl
         cached_psl(settings.getdict('_FILE_')['pubsuflist'])
 

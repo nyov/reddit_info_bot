@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 import os
-import logging
 import json
 import base64
 import six
@@ -23,8 +22,8 @@ except ImportError:
     from scrapy.spiders import Spider
 
     class InfoBotSpider(Spider):
-        def write(self, data):
-            yield data
+        def parse_result(self, result):
+            return result
 
 from ..search import find_media_url
 
@@ -216,7 +215,7 @@ class KarmaDecay(ImageSearch):
                 #'source': response.meta.get('redirect_urls')[0],
                 'search': self.serp,
             }
-            self.write(result)
+            yield self.parse_result(result)
 
 
 class Yandex(ImageSearch):
@@ -269,7 +268,7 @@ class Yandex(ImageSearch):
             interval, url = get_meta_refresh(response.body, response.url, response.encoding, ignore_tags=())
             result['link'] = url
 
-        self.write(result)
+        yield self.parse_result(result)
 
     def parse(self, response):
         page_content = response.xpath('//body')
@@ -445,7 +444,7 @@ class Bing(ImageSearch):
                 #'source': response.meta.get('redirect_urls')[0],
                 'search': self.serp,
             }
-            self.write(result)
+            yield self.parse_result(result)
 
         # There doesn't seem to be any pagination in results here ever! :heart:
 
@@ -530,7 +529,7 @@ class Bing(ImageSearch):
             self.serp = response.url
             # now we have the result page, but no results yet... hmmm
             # gotta do some XHR fancyness, preferrably without a javascript interpreter or DOM
-            return gimmefrigginresults()
+            yield gimmefrigginresults()
 
         if not response.body and response.status == 200:
             # trouble here is we don't know if our query was misunderstood
@@ -581,7 +580,7 @@ class Bing(ImageSearch):
                 #'source': response.meta.get('redirect_urls')[0],
                 'search': self.serp,
             }
-            self.write(result)
+            yield self.parse_result(result)
 
         # There doesn't seem to be any pagination in results here ever! :heart:
 
@@ -664,7 +663,7 @@ class Tineye(ImageSearch):
                 text = '{0} {1} on {2}'.format(source_image, source_image_size, source_title)
                 result['title'] = text + ' (%s)' % result['text']
 
-            self.write(result)
+            yield self.parse_result(result)
 
         if num_results > self.num_results:
             return
@@ -759,7 +758,7 @@ class Google(ImageSearch):
                 #'source': response.request.url,
                 'search': self.serp,
             }
-            self.write(result)
+            yield self.parse_result(result)
 
         if num_results > self.num_results:
             return
