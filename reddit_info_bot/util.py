@@ -168,3 +168,24 @@ def daemon_context(settings, **kwargs):
         **kwargs
     )
     return context
+
+def http_code_ranges():
+    codes = {
+        '100': set(range(100, 200)), # 100 Informational
+        '200': set(range(200, 300)), # 200 Success
+        '300': set(range(300, 400)), # 300 Redirect
+        '400': set(range(400, 500)), # 400 Client Error
+        '500': set(range(500, 600)), # 500 Server Error
+        'EXT': set(range(600,1000)), # 999 Other
+        'ALL': set(range(100,1000)), # Everything valid
+    }
+    # exclusions
+    codes.update({
+        'X100': codes['ALL'] - codes['100'],
+        'X200': codes['ALL'] - codes['200'],
+        'X300': codes['ALL'] - codes['300'],
+        'X400': codes['ALL'] - codes['400'],
+        'X500': codes['ALL'] - codes['500'],
+        'XEXT': codes['ALL'] - codes['EXT'],
+    })
+    return codes

@@ -4,6 +4,7 @@ import os
 import logging
 import string
 import json
+import six
 from collections import OrderedDict
 from six.moves.urllib.parse import urlsplit, urlunsplit
 from scrapy.item import Item, Field
@@ -11,6 +12,9 @@ from scrapy.item import Item, Field
 from .util import domain_suffix, remove_control_characters
 
 logger = logging.getLogger(__name__)
+
+if six.PY3:
+    unicode = str
 
 
 class SearchResultItem(Item):
@@ -33,6 +37,8 @@ class SearchResultItem(Item):
     image_format = Field()
     # results tagged by spamfilter
     spam = Field()
+    # results marked broken by link-check
+    broken = Field()
 
 
 # Define special domains which only host image or video media,
@@ -184,13 +190,17 @@ def filter_image_search(settings, search_results, account1=None, account2=None):
 
         for result in results:
             for key, value in result.items():
-                result[key] = sanitize_string(value)
+                if isinstance(value, (str, unicode)):
+                    result[key] = sanitize_string(value)
 
         # spam-filter results
         logger.debug('...filtering results for %s' % provider)
         for result in results:
-            # remove items previously marked spammy
+            # remove items marked spammy
             if 'spam' in result and result['spam']:
+                continue
+            # remove items marked broken
+            if 'broken' in result and result['broken']:
                 continue
             filtered_results[provider].append(result)
 
