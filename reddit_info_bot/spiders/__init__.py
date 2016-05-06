@@ -28,6 +28,8 @@ import signal
 from scrapy.crawler import CrawlerProcess as ScrapyCrawlerProcess
 from scrapy.utils.ossignal import install_shutdown_handlers, signal_names
 
+from ..spamfilter import isspam_link, isspam_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -87,6 +89,18 @@ class InfoBotSpider(Spider):
         raise CloseSpider('debug stop')
 
     ####
+
+    @staticmethod
+    def isredditspam_link(link):
+        if not link:
+            return False
+        return isspam_link(link.lower())
+
+    @staticmethod
+    def isredditspam_text(text):
+        if not text:
+            return False
+        return isspam_text(text.lower())
 
     # result item returned by search
     def parse_result(self, result):

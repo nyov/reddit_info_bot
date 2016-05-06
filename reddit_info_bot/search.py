@@ -31,6 +31,8 @@ class SearchResultItem(Item):
     # only on Bing and Tineye so far
     image_filesize = Field()
     image_format = Field()
+    # results tagged by spamfilter
+    spam = Field()
 
 
 # Define special domains which only host image or video media,
@@ -157,7 +159,6 @@ def image_search(settings, **spiderargs):
 def filter_image_search(settings, search_results, account1=None, account2=None):
 
     from .reddit import reddit_messagefilter
-    from .spamfilter import isspam_link, isspam_text
 
     def sanitize_string(string):
         if string is None:
@@ -188,11 +189,8 @@ def filter_image_search(settings, search_results, account1=None, account2=None):
         # spam-filter results
         logger.debug('...filtering results for %s' % provider)
         for result in results:
-            if result['url'] and isspam_link(result['url'].lower()):
-                result['spam'] = 'url'
-                continue
-            if result['description'] and isspam_text(result['description'].lower()):
-                result['spam'] = 'description'
+            # remove items previously marked spammy
+            if 'spam' in result and result['spam']:
                 continue
             filtered_results[provider].append(result)
 

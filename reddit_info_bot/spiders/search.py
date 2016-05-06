@@ -25,6 +25,10 @@ except ImportError:
     class InfoBotSpider(Spider):
         def parse_result(self, result):
             return result
+        def isredditspam_link(self, link):
+            return False
+        def isredditspam_text(self, text):
+            return False
 
 
 def convert_image(data):
@@ -219,7 +223,15 @@ class KarmaDecay(ImageSearch):
                 'image_format': None,
             }
 
-            num_results += 1
+            # mark probable spam (and don't count towards result limit)
+            if self.isredditspam_link(result['url']):
+                result['spam'] = 'url'
+            elif self.isredditspam_text(result['title']):
+                result['spam'] = 'title'
+            elif self.isredditspam_text(result['description']):
+                result['spam'] = 'description'
+            else:
+                num_results += 1
 
             result = SearchResultItem(result)
             yield self.parse_result(result)
@@ -275,6 +287,10 @@ class Yandex(ImageSearch):
             interval, url = get_meta_refresh(response.body, response.url, response.encoding, ignore_tags=())
             result['url'] = url
 
+        # mark probable spam
+        if self.isredditspam_link(result['url']):
+            result['spam'] = 'url'
+
         result = SearchResultItem(result)
         yield self.parse_result(result)
 
@@ -310,7 +326,13 @@ class Yandex(ImageSearch):
                 'image_format': None,
             }
 
-            num_results += 1
+            # mark probable spam (and don't count towards result limit)
+            if self.isredditspam_text(result['title']):
+                result['spam'] = 'title'
+            elif self.isredditspam_text(result['description']):
+                result['spam'] = 'description'
+            else:
+                num_results += 1
 
             yield Request(source_link, callback=self.get_url, meta={'dont_redirect': True, 'result': result})
 
@@ -332,7 +354,6 @@ class Bing(ImageSearch):
     def from_url(self, image_url):
         image_url = find_media_url(image_url, self.settings)
 
-        # can't decide which version works better...
         if False:
             # prefer non-https URLs, BING can't find images in https:// urls!?
             if image_url.startswith('https'):
@@ -439,7 +460,15 @@ class Bing(ImageSearch):
                 'image_format': source_image_format,
             }
 
-            num_results += 1
+            # mark probable spam (and don't count towards result limit)
+            if self.isredditspam_link(result['url']):
+                result['spam'] = 'url'
+            elif self.isredditspam_text(result['title']):
+                result['spam'] = 'title'
+            elif self.isredditspam_text(result['description']):
+                result['spam'] = 'description'
+            else:
+                num_results += 1
 
             result = SearchResultItem(result)
             yield self.parse_result(result)
@@ -576,7 +605,15 @@ class Bing(ImageSearch):
                 'image_format': source_image_format,
             }
 
-            num_results += 1
+            # mark probable spam (and don't count towards result limit)
+            if self.isredditspam_link(result['url']):
+                result['spam'] = 'url'
+            elif self.isredditspam_text(result['title']):
+                result['spam'] = 'title'
+            elif self.isredditspam_text(result['description']):
+                result['spam'] = 'description'
+            else:
+                num_results += 1
 
             result = SearchResultItem(result)
             yield self.parse_result(result)
@@ -662,7 +699,15 @@ class Tineye(ImageSearch):
                 text = '{0} {1} on {2}'.format(source_image, source_image_size, source_title)
                 result['title'] = text + ' (%s)' % result['description']
 
-            num_results += 1
+            # mark probable spam (and don't count towards result limit)
+            if self.isredditspam_link(result['url']):
+                result['spam'] = 'url'
+            elif self.isredditspam_text(result['title']):
+                result['spam'] = 'title'
+            elif self.isredditspam_text(result['description']):
+                result['spam'] = 'description'
+            else:
+                num_results += 1
 
             result = SearchResultItem(result)
             yield self.parse_result(result)
@@ -756,7 +801,15 @@ class Google(ImageSearch):
                 'image_format': None,
             }
 
-            num_results += 1
+            # mark probable spam (and don't count towards result limit)
+            if self.isredditspam_link(result['url']):
+                result['spam'] = 'url'
+            elif self.isredditspam_text(result['title']):
+                result['spam'] = 'title'
+            elif self.isredditspam_text(result['description']):
+                result['spam'] = 'description'
+            else:
+                num_results += 1
 
             result = SearchResultItem(result)
             yield self.parse_result(result)
