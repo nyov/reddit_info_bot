@@ -207,16 +207,3 @@ def isspam_text(text):
 
     # no spam, result is good
     return False
-
-def spamfilter_results(results):
-    """ Filter search results for spam
-    """
-    for result in results:
-        url, text = result[0].lower(), result[1].lower()
-
-        if isspam_link(url):
-            continue
-        if isspam_text(text):
-            continue
-
-        yield result

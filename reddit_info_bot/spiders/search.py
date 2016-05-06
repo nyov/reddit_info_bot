@@ -16,6 +16,7 @@ except ImportError:
     from io import BytesIO
 from PIL import Image
 from scrapy.http import Request, FormRequest, HtmlResponse
+from ..search import find_media_url, SearchResultItem
 try:
     from . import InfoBotSpider
 except ImportError:
@@ -24,8 +25,6 @@ except ImportError:
     class InfoBotSpider(Spider):
         def parse_result(self, result):
             return result
-
-from ..search import find_media_url
 
 
 def convert_image(data):
@@ -63,6 +62,17 @@ class Search(InfoBotSpider):
 
     def pre_search(self, request):
         return request
+
+    def parse(self, response):
+        content = response.xpath('//body') or ''
+        if content:
+            self.serp = response.url
+        self.logger.info('Visited %s', response.url)
+
+        return self.parse_search(response, content)
+
+    def parse_search(self, response, content):
+        raise NotImplementedError
 
 
 class ImageSearch(Search):
@@ -165,28 +175,21 @@ class KarmaDecay(ImageSearch):
         }
         return Request(self.search_image_url, method='POST', body=body, headers=headers)
 
-    def parse(self, response):
-        page_content = response.xpath('//body')
-        if page_content:
-            self.serp = response.url
-        self.logger.info('Visited %s', response.url)
-
-        no_results = page_content.xpath('//tr[contains(@class, "ns")]') # "No very similar images were found on Reddit."
+    def parse_search(self, response, content):
+        no_results = content.xpath('//tr[contains(@class, "ns")]') # "No very similar images were found on Reddit."
         if no_results:
             self.logger.info('No search results')
             return
 
         # ignore 'less similar' results. they're usually completely different
-        results = page_content.xpath('.//div[@id="content"]/table[@class="search"]//tr[@class="result"][following-sibling::tr[@class="ls"]]')
+        results = content.xpath('.//div[@id="content"]/table[@class="search"]//tr[@class="result"][following-sibling::tr[@class="ls"]]')
         if not results:
-            results = page_content.xpath('.//div[@id="content"]/table[@class="search"]//tr[@class="result"]')
+            results = content.xpath('.//div[@id="content"]/table[@class="search"]//tr[@class="result"]')
             if not results:
                 self.logger.info('No search results')
 
         num_results = response.meta.get('num_results') or 0 # result counter
         for found in results:
-            num_results += 1
-
             source_image = found.xpath('td[@class="img"]/a/@href').extract_first()
             source_image_size = found.xpath('td[@class="info"]/div[@class="similar"]/span[contains(.//text(), " x ")]//text()').extract_first()
             source_image_size = [s.strip() for s in source_image_size.split('x')] # w x h
@@ -205,16 +208,20 @@ class KarmaDecay(ImageSearch):
 
             result = {
                 'provider': self.__class__.__name__,
-                'link': source_link,
+                'url': source_link,
+                'display_url': None, # has none
                 'title': source_title,
-                'text': source_text,
+                'description': source_text,
+                'serp': self.serp,
                 'image_url': source_image,
                 'image_size': source_image_size,
-
-                #'source': response.request.url,
-                #'source': response.meta.get('redirect_urls')[0],
-                'search': self.serp,
+                'image_filesize': None,
+                'image_format': None,
             }
+
+            num_results += 1
+
+            result = SearchResultItem(result)
             yield self.parse_result(result)
 
 
@@ -266,54 +273,51 @@ class Yandex(ImageSearch):
         url = None
         if isinstance(response, HtmlResponse):
             interval, url = get_meta_refresh(response.body, response.url, response.encoding, ignore_tags=())
-            result['link'] = url
+            result['url'] = url
 
+        result = SearchResultItem(result)
         yield self.parse_result(result)
 
-    def parse(self, response):
-        page_content = response.xpath('//body')
-        if page_content:
-            self.serp = response.url
-        self.logger.info('Visited %s', response.url)
-
-        results = page_content.xpath('.//ul[@class="other-sites__container"]/li')
+    def parse_search(self, response, content):
+        results = content.xpath('.//ul[@class="other-sites__container"]/li')
         if not results:
             self.logger.info('No search results')
-            #similar = page_content.xpath('.//ul[@class="similar__thumbs"]/li/a') # /@href + /img/@src
+            #similar = content.xpath('.//ul[@class="similar__thumbs"]/li/a') # /@href + /img/@src
+            return
 
         num_results = response.meta.get('num_results') or 0 # result counter
         for found in results:
-            num_results += 1
-
             source_image = found.xpath('a[@class="other-sites__preview-link"]/@href').extract_first()
             source_image_size = found.xpath('.//div[contains(@class, "other-sites__meta")]/text()').extract_first()
             source_image_size = [s.strip() for s in source_image_size.split('×'.decode('utf-8'))] # w x h
             source_image_size = 'x'.join(source_image_size)
 
             source_link = found.xpath('.//a[contains(@class, "other-sites__title-link")]/@href').extract_first()
-            source_displaylink = found.xpath('.//a[contains(@class, "other-sites__outer-link")]/@href').extract_first()
+            source_displaylink = found.xpath('.//a[contains(@class, "other-sites__outer-link")]/text()').extract_first()
             source_title = found.xpath('.//a[contains(@class, "other-sites__title-link")]/text()').extract_first()
             source_text = found.xpath('.//a[contains(@class, "other-sites__desc")]/text()').extract_first() # not in image upload
 
             result = {
                 'provider': self.__class__.__name__,
-                'link': source_link,
+                'url': source_link,
+                'display_url': None,
                 'title': source_title,
-                'text': source_text,
+                'description': source_text,
+                'serp': self.serp,
                 'image_url': source_image,
                 'image_size': source_image_size,
-                'display_link': source_displaylink, # the shortened thing
-
-                #'source': response.request.url,
-                #'source': response.meta.get('redirect_urls')[0],
-                'search': self.serp,
+                'image_filesize': None,
+                'image_format': None,
             }
+
+            num_results += 1
+
             yield Request(source_link, callback=self.get_url, meta={'dont_redirect': True, 'result': result})
 
         if num_results > self.num_results:
             return
         # dont seem like relevant results
-        #more_link = page_content.xpath('.//div[contains(@class, "more_direction_next")]/a[contains(@class, "more__button")]/@href').extract_first()
+        #more_link = content.xpath('.//div[contains(@class, "more_direction_next")]/a[contains(@class, "more__button")]/@href').extract_first()
         #if more_link:
         #    yield Request(response.urljoin(more_link), meta={'num_results': num_results}, callback=self.parse)
 
@@ -398,13 +402,8 @@ class Bing(ImageSearch):
         return Request(self.search_image_url + qstring, method='POST',
                        body=body, headers=headers, callback=self.parse_image)
 
-    def parse(self, response):
-        page_content = response.xpath('//body')
-        if page_content:
-            self.serp = response.url
-        self.logger.info('Visited %s', response.url)
-
-        results = page_content.xpath('.//div[@id="sbi_sct_sp"]/div[@class="sbi_sp"]')
+    def parse_search(self, response, content):
+        results = content.xpath('.//div[@id="sbi_sct_sp"]/div[@class="sbi_sp"]')
         if not results:
             self.logger.info('No search results')
             if "Sorry, we can't search by image with" in response.body:
@@ -415,41 +414,40 @@ class Bing(ImageSearch):
 
         num_results = response.meta.get('num_results') or 0 # result counter
         for found in results:
-            num_results += 1
-
             source_image = found.xpath('div[@class="th"]/a/@href').extract_first()
             source_image_metainfo = found.xpath('div[@class="info"]/div[@class="si"][contains(text(), " x ")]/text()').re(ur'^(.*)·(.*)·(.*)$')
             source_image_size = source_image_metainfo[0]
-            #source_image_filesize = source_image_metainfo[1]
-            #source_image_format = source_image_metainfo[2]
+            source_image_filesize = source_image_metainfo[1]
+            source_image_format = source_image_metainfo[2]
             source_image_size = [s.strip() for s in source_image_size.split('x')] # w x h
             source_image_size = 'x'.join(source_image_size)
 
             source_link = found.xpath('div[@class="info"]/a/@href').extract_first()
             source_title = found.xpath('div[@class="info"]/a/text()').extract_first()
             source_displaylink = found.xpath('div[@class="info"]/div[@class="st"]/text()').extract_first()
-            #source_text = found.xpath('td[@class="info"]/div[@class="submitted"]//text()[normalize-space()]')
-            #source_text = ' '.join(source_text.extract())
 
             result = {
                 'provider': self.__class__.__name__,
-                'link': source_link,
+                'url': source_link,
+                'display_url': source_displaylink, # a shortened url
                 'title': source_title,
-                #'text': source_text,
+                'description': None, # has no text description
+                'serp': self.serp,
                 'image_url': source_image,
                 'image_size': source_image_size,
-                'display_link': source_displaylink, # the shortened thing
-
-                #'source': response.request.url,
-                #'source': response.meta.get('redirect_urls')[0],
-                'search': self.serp,
+                'image_filesize': '%s KiB' % source_image_filesize,
+                'image_format': source_image_format,
             }
+
+            num_results += 1
+
+            result = SearchResultItem(result)
             yield self.parse_result(result)
 
         # There doesn't seem to be any pagination in results here ever! :heart:
 
     def parse_image(self, response):
-        page_content = response.xpath('//body')
+        content = response.xpath('//body')
         self.logger.info('Visited %s', response.url)
 
         def gimmefrigginresults():
@@ -523,7 +521,7 @@ class Bing(ImageSearch):
             return Request(url, callback=self.parse_image, headers=headers)
 
 
-        upload_results = page_content.xpath('.//div[@id="insights"]')
+        upload_results = content.xpath('.//div[@id="insights"]')
         if upload_results:
             self.logger.debug('Looks like a valid search result page... without results: %s' % response.url)
             self.serp = response.url
@@ -540,46 +538,47 @@ class Bing(ImageSearch):
         # well whaddaya know... it worked? whew
 
         # number of results found (if any)
-        total_results = page_content.xpath('.//ul[@class="insights"]//div[contains(@class, "b_focusLabel")]/text()').re_first(r'^(\d+)')
+        total_results = content.xpath('.//ul[@class="insights"]//div[contains(@class, "b_focusLabel")]/text()').re_first(r'^(\d+)')
         if total_results:
-            total_results = int(total_results) # oh my. that was worth it
+            total_results = int(total_results)
         else:
-            self.logger.info('No search results')
-            return
+            self.logger.info('No search results or query failure?')
 
-        results = page_content.xpath('.//ul[@class="insights"]//ul[@class="expbody"]/li')
-        #results = page_content.xpath('.//ul[@class="insights"]//ul[@class="expbody"]/li[a]')
+        results = content.xpath('.//ul[@class="insights"]//ul[@class="expbody"]/li')
+        #results = content.xpath('.//ul[@class="insights"]//ul[@class="expbody"]/li[a]')
 
         num_results = response.meta.get('num_results') or 0 # result counter
         for found in results:
-            num_results += 1
-
             source_link = found.xpath('a/@href').extract_first()
             source_displaylink = found.xpath('a/div[@class="iscbody"]//ul[@class="b_dataList"]/li[1]/text()').extract_first() # preview link [no protocol]
 
             source_title = found.xpath('a/div//span[@title]/text()').extract_first()
             source_image_metainfo = found.xpath('a/div[@class="iscbody"]//ul[@class="b_dataList"]/li[2]/text()').re(ur'^(\d+) x (\d+) · (\d+) kB · (.*)$')
-            width, height, source_image_filesize, source_image_format = source_image_metainfo
+            try:
+                width, height, source_image_filesize, source_image_format = source_image_metainfo
+            except ValueError:
+                width, height, source_image_filesize, source_image_format = 0, 0, 0, ''
             source_image_size = '%sx%s' % (width, height)
 
-            if not source_link or not source_title:
-                continue
+            #if not source_link or not source_title:
+            #    continue
 
             result = {
                 'provider': self.__class__.__name__,
-                'link': source_link,
+                'url': source_link,
+                'display_url': source_displaylink, # the shortened thing (missing scheme)
                 'title': source_title,
-                #'text': source_text,
-                'image_url': None, # does not seem to have direct image links
+                'description': None, # has no text description
+                'serp': self.serp,
+                'image_url': None, # FIXME: does not seem to have direct image links [maybe we can get them though. HACKS]
                 'image_size': source_image_size,
-                'image_filesize': source_image_filesize,
+                'image_filesize': '%s KiB' % source_image_filesize,
                 'image_format': source_image_format,
-                'display_link': source_displaylink, # the shortened thing
-
-                #'source': response.request.url,
-                #'source': response.meta.get('redirect_urls')[0],
-                'search': self.serp,
             }
+
+            num_results += 1
+
+            result = SearchResultItem(result)
             yield self.parse_result(result)
 
         # There doesn't seem to be any pagination in results here ever! :heart:
@@ -618,13 +617,8 @@ class Tineye(ImageSearch):
         }
         return Request(self.search_image_url, method='POST', body=body, headers=headers)
 
-    def parse(self, response):
-        page_content = response.xpath('//body')
-        if page_content:
-            self.serp = response.url
-        self.logger.info('Visited %s', response.url)
-
-        results = page_content.xpath('.//div[@class="results"]//div[@class="row matches"]//div[contains(@class, "match-row")]')
+    def parse_search(self, response, content):
+        results = content.xpath('.//div[@class="results"]//div[@class="row matches"]//div[contains(@class, "match-row")]')
         if not results:
             self.logger.info('No search results')
         if 'Your IP has been blocked' in response.body:
@@ -634,12 +628,17 @@ class Tineye(ImageSearch):
 
         num_results = response.meta.get('num_results') or 0 # result counter
         for found in results:
-            num_results += 1
-
+            # NOTE: this ignores possible multiple matches per (sub)domains (of the same file), as listed by tineye
             source_image = found.xpath('.//div[@class="match"]/p[contains(@class, "short-image-link")]/a/@href').extract_first()
             source_image_size = found.xpath('.//div[contains(@class, "match-thumb")]/p/span[2]/text()').extract_first()
+            source_image_size = source_image_size.strip(',')
             source_image_size = [s.strip() for s in source_image_size.split('x')] # w x h
             source_image_size = 'x'.join(source_image_size)
+            # TODO: include these
+            source_image_format = found.xpath('.//div[contains(@class, "match-thumb")]/p/span[1]/text()').extract_first()
+            source_image_format = source_image_format.strip(',')
+            source_image_filesize = found.xpath('.//div[contains(@class, "match-thumb")]/p/span[3]/text()').extract_first()
+            source_image_filesize = source_image_filesize.strip(',')
 
             source_link = found.xpath('.//div[@class="match"]/p[not(@class)]/a/@href').extract_first()
             source_title = found.xpath('.//div[@class="match"]/h4[@title]/text()').extract_first()
@@ -647,27 +646,31 @@ class Tineye(ImageSearch):
 
             result = {
                 'provider': self.__class__.__name__,
-                'link': source_link,
+                'url': source_link,
+                'display_url': None,
                 'title': source_title,
-                'text': source_text,
+                'description': source_text,
+                'serp': self.serp,
                 'image_url': source_image,
                 'image_size': source_image_size,
-
-                #'source': response.request.url,
-                #'source': response.meta.get('redirect_urls')[0],
-                'search': self.serp,
+                'image_filesize': source_image_filesize,
+                'image_format': source_image_format,
             }
 
             if source_image:
                 source_image = os.path.basename(source_image)
                 text = '{0} {1} on {2}'.format(source_image, source_image_size, source_title)
-                result['title'] = text + ' (%s)' % result['text']
+                result['title'] = text + ' (%s)' % result['description']
 
+            num_results += 1
+
+            result = SearchResultItem(result)
             yield self.parse_result(result)
 
         if num_results > self.num_results:
             return
-        more_link = page_content.xpath('.//div[@class="pagination"]/span[@class="current"]/following-sibling::a/@href').extract_first()
+
+        more_link = content.xpath('.//div[@class="pagination"]/span[@class="current"]/following-sibling::a/@href').extract_first()
         if more_link:
             yield Request(response.urljoin(more_link), meta={'num_results': num_results}, callback=self.parse)
 
@@ -708,23 +711,16 @@ class Google(ImageSearch):
         }
         return Request(self.search_image_url, method='POST', body=body, headers=headers)
 
-    def parse(self, response):
-        page_content = response.xpath('//body')
-        if page_content:
-            self.serp = response.url
-        self.logger.info('Visited %s', response.url)
-
+    def parse_search(self, response, content):
         # exclude ads, thanks
-        results = page_content.xpath('.//div[contains(@class, "normal-header")][div[contains(text(), "Pages that include matching images")]]/following-sibling::*//*[@class="rc"]')
+        results = content.xpath('.//div[contains(@class, "normal-header")][div[contains(text(), "Pages that include matching images")]]/following-sibling::*//*[@class="rc"]')
         if not results:
-            results = page_content.xpath('.//*[@class="rc"]')
+            results = content.xpath('.//*[@class="rc"]')
             if not results:
                 self.logger.info('No search results')
 
         num_results = response.meta.get('num_results') or 0 # result counter
         for found in results:
-            num_results += 1
-
             source_link = found.xpath('.//*[@class="r"]//a/@href').extract_first()
             source_title = found.xpath('.//*[@class="r"]//a/text()').extract()
             source_title = ''.join(source_title)
@@ -749,19 +745,25 @@ class Google(ImageSearch):
 
             result = {
                 'provider': self.__class__.__name__,
-                'link': source_link,
+                'url': source_link,
+                'display_url': source_displaylink,
                 'title': source_text,
-                'text': source_text,
-                'display_link': source_displaylink, # the shortened thing
+                'description': source_text,
+                'serp': self.serp,
                 'image_url': source_image,
-
-                #'source': response.request.url,
-                'search': self.serp,
+                'image_size': None,
+                'image_filesize': None,
+                'image_format': None,
             }
+
+            num_results += 1
+
+            result = SearchResultItem(result)
             yield self.parse_result(result)
 
         if num_results > self.num_results:
             return
-        more_link = page_content.xpath('.//*[@id="nav"][@role="presentation"]//td[@class="cur"]/following-sibling::td/a/@href').extract_first()
+
+        more_link = content.xpath('.//*[@id="nav"][@role="presentation"]//td[@class="cur"]/following-sibling::td/a/@href').extract_first()
         if more_link:
             yield Request(response.urljoin(more_link), meta={'num_results': num_results}, callback=self.parse)

@@ -8,7 +8,7 @@ import re
 import hashlib
 
 from . import praw
-from .search import image_search, filter_image_search, format_image_search, is_media_domain
+from .search import is_media_domain
 from .exceptions import ConfigurationError
 
 logger = logging.getLogger(__name__)
@@ -272,40 +272,26 @@ def reddit_messagefilter(messages, sending_account, receiving_account, submissio
 
     return verified_messages
 
-def reddit_format_results(results, escape_chars=True):
-    """Format search results for reddit.
-
-    Returns a markdown-formatted and spam-filtered list of the results.
-    """
-    def escape_markdown(string):
-        # escape markdown characters
-        # from https://daringfireball.net/projects/markdown/syntax#backslash
-        # \   backslash
-        # `   backtick
-        # *   asterisk
-        # _   underscore
-        # {}  curly braces
-        # []  square brackets
-        # ()  parentheses
-        # #   hash mark
-        # +   plus sign
-        # -   minus sign (hyphen)
-        # .   dot
-        # !   exclamation mark
-        markdown_chars = r'\`*_{}[]()#+-.!'
-        reddit_chars = r'^~<>'
-        escape_chars = markdown_chars + reddit_chars
-        string = ''.join(c if c not in escape_chars else '\%s' % c for c in string)
-        return string
-
-    if escape_chars:
-        results = [[escape_markdown(v) for v in result]
-                   for result in results]
-
-    # format output
-    markdown_links = ['[%s](%s)' % (text, url) for url, text in results]
-    formatted = '\n\n'.join(markdown_links)
-    return formatted
+def reddit_markdown_escape(string):
+    # escape markdown characters
+    # from https://daringfireball.net/projects/markdown/syntax#backslash
+    # \   backslash
+    # `   backtick
+    # *   asterisk
+    # _   underscore
+    # {}  curly braces
+    # []  square brackets
+    # ()  parentheses
+    # #   hash mark
+    # +   plus sign
+    # -   minus sign (hyphen)
+    # .   dot
+    # !   exclamation mark
+    markdown_chars = r'\`*_{}[]()#+-.!'
+    reddit_chars = r'^~<>'
+    escape_chars = markdown_chars + reddit_chars
+    string = ''.join(c if c not in escape_chars else '\%s' % c for c in string)
+    return string
 
 
 #
@@ -488,11 +474,11 @@ def handle_bot_action(comments, settings, account, account2, subreddit_list, com
                 reply_content = cmd_imagesearch(settings, image_url=comment.submission.url,
                         display_limit=display_limit, account1=account, account2=account2)
                 if not reply_content:
-                    logger.error('image_search failed (bug)! skipping')
+                    logger.error('cmd_imagesearch failed! skipping')
                     # try that again, instead of replying with no results
                     continue
             except Exception as e:
-                logger.error('Error occured in image_search: %s' % e)
+                logger.error('Error occured in cmd_imagesearch: %s' % e)
                 raise
                 continue
         if action == 'find_keywords':

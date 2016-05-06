@@ -24,11 +24,12 @@ from scrapy.spiders import Spider
 from scrapy.exceptions import CloseSpider
 from scrapy.settings import Settings
 
-logger = logging.getLogger(__name__)
-
 import signal
 from scrapy.crawler import CrawlerProcess as ScrapyCrawlerProcess
 from scrapy.utils.ossignal import install_shutdown_handlers, signal_names
+
+logger = logging.getLogger(__name__)
+
 
 class CrawlerProcess(ScrapyCrawlerProcess):
 
@@ -59,6 +60,8 @@ class InfoBotSpider(Spider):
     def write(self, data):
         if self.debug_results:
             pprint(data)
+        if not isinstance(data, dict):
+            data = dict(data)
         data = json.dumps(data)
         self.writer.write(data)
         # basic 'line writer' protocol, end with LF
@@ -82,6 +85,17 @@ class InfoBotSpider(Spider):
         from scrapy.shell import inspect_response
         inspect_response(response, self)
         raise CloseSpider('debug stop')
+
+    ####
+
+    # result item returned by search
+    def parse_result(self, result):
+        if not 'url' in result or not result['url']:
+            # investigate unusable results, that shouldn't happen.
+            self.logger.warning("bad result (no URL): %r" % result)
+            return
+
+        return self.write(result)
 
 
 def crawler_setup(settings, *args, **kwargs):

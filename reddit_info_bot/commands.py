@@ -90,7 +90,10 @@ def do_setup(settings, command=None, *a, **kw):
     # open files
     open_file_handles = {}
     for file, filename in open_files.items():
-        open_file_handles[file] = open(filename, 'rb+').__enter__()
+        if os.path.exists(filename):
+            open_file_handles[file] = open(filename, 'rb+').__enter__()
+        else:
+            open_file_handles[file] = open(filename, 'wb').__enter__()
     settings.set('_FILE_', open_file_handles) # (runtime setting)
 
     # configure logging
@@ -233,6 +236,8 @@ def cmd_imagesearch(settings, image_url=None, image_data=None, image_ext='jpg',
     from .search import image_search, filter_image_search, format_image_search
 
     from_cli = kwargs.get('from_cli') or False
+    debug = kwargs.get('debug') or False
+
     if not image_url and not image_data:
         logger.error('Missing source for image search')
         return
@@ -240,13 +245,13 @@ def cmd_imagesearch(settings, image_url=None, image_data=None, image_ext='jpg',
     search_results = image_search(settings,
             image_url=image_url, image_data=image_data, num_results=display_limit,
             image_ext=image_ext,
-            #debug_results=True, # dump full search results to stdout
+            debug_results=debug, # dump full search results to stdout
         )
     filter_results = filter_image_search(settings, search_results,
             account1=kwargs.get('account1'), account2=kwargs.get('account2')
         )
     reply_contents = format_image_search(settings, filter_results, display_limit, escape_chars=not from_cli)
     if from_cli: # being called directly, dump output to terminal
-        logger.debug('Image-search results:\n%s' % reply_contents)
+        logger.info('Image-search results:\n%s' % reply_contents)
         return
     return reply_contents

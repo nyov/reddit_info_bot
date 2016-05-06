@@ -6,10 +6,31 @@ import string
 import json
 from collections import OrderedDict
 from six.moves.urllib.parse import urlsplit, urlunsplit
+from scrapy.item import Item, Field
 
 from .util import domain_suffix, remove_control_characters
 
 logger = logging.getLogger(__name__)
+
+
+class SearchResultItem(Item):
+    """ Search Result set
+
+    Fields for use in Result template formatting.
+    """
+    provider = Field()
+    url = Field()
+    title = Field()
+    description = Field()
+    serp = Field()
+    spam = Field()
+    image_url = Field()
+
+    image_size = Field() # missing on Google?
+    display_url = Field() # missing on KD, Tineye
+    # only on Bing and Tineye so far
+    image_filesize = Field()
+    image_format = Field()
 
 
 # Define special domains which only host image or video media,
@@ -101,24 +122,24 @@ def image_search(settings, **spiderargs):
         if not data or len(data) == 0:
             break
 
-        response = None
+        result = None
         try:
-            response = json.loads(data)
+            result = json.loads(data)
         except ValueError:
             logger.error('Error decoding Spider data: %s' % (data,))
-        if response:
-            provider = None
-            link = title = ''
-            if 'provider' in response:
-                provider = response['provider']
-            if 'link' in response:
-                link = response['link']
-            if 'title' in response:
-                title = response['title']
+        if not result:
+            continue
+        # result must have a search provider
+        if not 'provider' in result:
+            continue # should not happen
 
-            if not provider in results:
-                results[provider] = []
-            results[provider].append([link, title])
+        result = SearchResultItem(result)
+
+        provider = result['provider']
+        if not provider in results:
+            results[provider] = []
+
+        results[provider].append(result)
 
     pid, status = os.waitpid(pid, 0)
     reader.close()
@@ -129,14 +150,14 @@ def image_search(settings, **spiderargs):
         if not provider in results:
             results[provider] = []
 
-    # sort for constant key order
+    # sort (by provider) for constant key order
     results = OrderedDict(sorted(results.items()))
     return results
 
 def filter_image_search(settings, search_results, account1=None, account2=None):
 
     from .reddit import reddit_messagefilter
-    from .spamfilter import spamfilter_results
+    from .spamfilter import isspam_link, isspam_text
 
     def sanitize_string(string):
         if string is None:
@@ -153,23 +174,31 @@ def filter_image_search(settings, search_results, account1=None, account2=None):
 
     stats = OrderedDict()
     filtered_results = OrderedDict()
-    for provider, result in search_results.items():
+    for provider, results in search_results.items():
         filtered_results[provider] = []
 
-        stats[provider] = {'all': len(result), 'succeeded': 0}
-        if not result:
+        stats[provider] = {'all': len(results), 'succeeded': 0}
+        if not results:
             continue
 
-        result = [[sanitize_string(v) for v in r] for r in result]
+        for result in results:
+            for key, value in result.items():
+                result[key] = sanitize_string(value)
 
         # spam-filter results
         logger.debug('...filtering results for %s' % provider)
-        filtered = list(spamfilter_results(result))
-        if not filtered:
-            continue
+        for result in results:
+            if result['url'] and isspam_link(result['url'].lower()):
+                result['spam'] = 'url'
+                continue
+            if result['description'] and isspam_text(result['description'].lower()):
+                result['spam'] = 'description'
+                continue
+            filtered_results[provider].append(result)
 
-        filtered_results[provider] = filtered
-        stats[provider].update({'succeeded': len(filtered)})
+        if not filtered_results[provider]:
+            continue
+        stats[provider].update({'succeeded': len(filtered_results[provider])})
 
     # reddit-spamfilter results
     verified_results = OrderedDict()
@@ -180,7 +209,7 @@ def filter_image_search(settings, search_results, account1=None, account2=None):
     else:
         urls = set()
         for _, results in filtered_results.items():
-            urls |= set([url for url, text in results])
+            urls |= set([result['url'] for result in results])
 
         verified_urls = reddit_messagefilter(urls, account2, account1, submission_id)
 
@@ -190,8 +219,7 @@ def filter_image_search(settings, search_results, account1=None, account2=None):
 
             res = []
             for result in results:
-                url = result[0]
-                if url in verified_urls:
+                if 'url' in result and result['url'] in verified_urls:
                     res.append(result)
 
             if not res:
@@ -209,16 +237,46 @@ def filter_image_search(settings, search_results, account1=None, account2=None):
 
 def format_image_search(settings, search_results, display_limit=None, escape_chars=True):
 
-    from .reddit import reddit_format_results
+    from .reddit import reddit_markdown_escape
 
+    results_item_format = settings.get('BOTCMD_IMAGESEARCH_RESULT_TEMPLATE').decode('utf-8')
     results_message_format = settings.get('BOTCMD_IMAGESEARCH_MESSAGE_TEMPLATE').decode('utf-8')
     no_engine_results_message = settings.get('BOTCMD_IMAGESEARCH_NO_SEARCHENGINE_RESULTS_MESSAGE').decode('utf-8')
     reply = ''
 
-    check_results = {}
-    for provider, result in search_results.items():
+    def reddit_format_results(results, escape_chars=True):
+        """Format search results for reddit.
 
-        if not result:
+        All result dict keys can be used in "BOTCMD_IMAGESEARCH_RESULT_TEMPLATE"
+        template string. Returns a template-formatted list of items.
+        """
+        items = []
+        for result in results:
+            result = dict(result)
+            if escape_chars:
+                for key, value in result.items():
+                    result[key] = reddit_markdown_escape(value)
+
+            # add result['text'] key with best possible textual value
+            text = result['title']
+            if not text:
+                text = result['description']
+            if not text:
+                text = result['display_url']
+            if not text:
+                text = result['url']
+            result['text'] = text
+
+            entry = results_item_format.format(**result)
+            items.append(entry)
+
+        formatted = '\n'.join(items)
+        return formatted
+
+    check_results = {}
+    for provider, results in search_results.items():
+
+        if not results:
             reply += results_message_format.format(
                     search_engine=provider,
                     search_results=no_engine_results_message,
@@ -227,16 +285,16 @@ def format_image_search(settings, search_results, display_limit=None, escape_cha
 
         # limit output to `display_limit` results
         if display_limit:
-            result = result[:display_limit]
+            results = results[:display_limit]
 
         # format results
-        formatted = reddit_format_results(result, escape_chars)
+        formatted = reddit_format_results(results, escape_chars)
         reply += results_message_format.format(
                 search_engine=provider,
                 search_results=formatted,
             )
 
-        check_results[provider] = result
+        check_results[provider] = results
 
     if not check_results:
         reply = ''
