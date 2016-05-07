@@ -7,6 +7,7 @@ import sys, os
 import warnings
 import logging
 import time
+import datetime
 import pickle
 from functools import wraps
 
@@ -48,6 +49,7 @@ def do_exit(settings):
 def do_setup(settings, command=None, *a, **kw):
     """Bot environment setup and shutdown
     """
+    startup_time = time.time()
 
     workdir = settings.get('BOT_WORKDIR')
     if workdir:
@@ -85,7 +87,7 @@ def do_setup(settings, command=None, *a, **kw):
 
     sys.stdout.write('%s starting up at %s\n' % (
                      settings.get('_BOT_INSTANCE_'),
-                     time.asctime()))
+                     time.ctime(startup_time)))
 
     # open files
     open_file_handles = {}
@@ -115,9 +117,13 @@ def do_setup(settings, command=None, *a, **kw):
         logger.info('%s shutting down' % settings.get('_BOT_INSTANCE_'))
         release_logging(log_handler)
 
-        sys.stdout.write('%s shut down on %s\n' % (
+        shutdown_time = time.time()
+        uptime = datetime.datetime.fromtimestamp(shutdown_time) - datetime.datetime.fromtimestamp(startup_time)
+        format_uptime = uptime.__str__()
+        sys.stdout.write('%s shut down on %s [uptime: %s]\n' % (
                          settings.get('_BOT_INSTANCE_'),
-                         time.asctime()))
+                         time.ctime(shutdown_time),
+                         format_uptime))
 
 def with_setup(command):
     """setup decorator"""
