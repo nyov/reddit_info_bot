@@ -5,7 +5,6 @@ import sys
 import time
 import json
 import logging
-from pprint import pprint
 from functools import partial
 
 try:
@@ -125,20 +124,45 @@ class RewriteRedirectMiddleware(RedirectMiddleware):
 
 
 # ItemPipeline
+from scrapy.exceptions import DropItem
+
+writer = None
+def collector_pipeline_writer(writefd=None):
+    global writer
+    if not writer:
+        if not writefd:
+            return
+        writer = writefd
+    return writer
+
 class ResultCollectorPipeline(object):
 
+    def __init__(self, writer):
+        if not writer:
+            raise NotConfigured
+        self.writer = writer
+
+    @classmethod
+    def from_settings(cls, settings):
+        o = cls(collector_pipeline_writer())
+        o.debug = settings.getbool('RESULTCOLLECTOR_DEBUG')
+        return o
+
     def process_item(self, item, spider):
-        return item
+        """ basic 'line writer' protocol, end line with LF """
+        data = json.dumps(dict(item))
+        self.writer.write(data)
+        self.writer.write('\n')
+        self.writer.flush()
+
+        if self.debug:
+            return item
+
+        # drop; don't propagate item to other pipelines
+        raise DropItem()
 
 
 class InfoBotSpider(Spider):
-
-    def __init__(self, *args, **kwargs):
-        writer = kwargs.get('writer')
-        self.debug_results = kwargs.get('debug_results')
-        super(InfoBotSpider, self).__init__(*args, **kwargs)
-        if writer:
-            self.writer = writer
 
     @classmethod
     def from_crawler(cls, crawler, *args, **kwargs):
@@ -152,25 +176,6 @@ class InfoBotSpider(Spider):
 
         o.LINKCHECK_TIMEOUT = o.crawler.settings.get('DOWNLOAD_TIMEOUT_LINKCHECK', o.crawler.settings.get('DOWNLOAD_TIMEOUT'))
         return o
-
-    def write(self, data):
-        item = data.copy()
-        if self.debug_results:
-            pprint(data)
-        if not isinstance(data, dict):
-            data = dict(data)
-        data = json.dumps(data)
-        self.writer.write(data)
-        # basic 'line writer' protocol, end with LF
-        self.writer.write('\n')
-        self.writer.flush()
-        #
-        # push data to regular scrapy ItemPipeline
-        return item
-
-    def finished(self):
-        if self.writer:
-            self.writer.flush()
 
     @staticmethod
     def close(spider, reason):
@@ -245,7 +250,7 @@ class InfoBotSpider(Spider):
                 url = result['image_url']
             # consider valid for now
             # FIXME: retry as GET request
-            return self.write(result)
+            return result
 
         if response.status != 200:
             self.logger.info(
@@ -254,7 +259,7 @@ class InfoBotSpider(Spider):
             result['broken'] = True
             #return
 
-        return self.write(result)
+        return result
 
 
 def crawler_setup(settings, *args, **kwargs):
@@ -267,6 +272,10 @@ def crawler_setup(settings, *args, **kwargs):
         telnet_ext = 'scrapy.telnet.TelnetConsole'
     else:
         telnet_ext = 'scrapy.extensions.telnet.TelnetConsole'
+
+    # ResultCollectorPipeline file descriptor
+    # ...hacky, hacky, hacky :|
+    collector_pipeline_writer(kwargs.pop('writer'))
 
     default_settings = {
         'EXTENSIONS': {
@@ -287,6 +296,7 @@ def crawler_setup(settings, *args, **kwargs):
         'ITEM_PIPELINES': {
             ResultCollectorPipeline: 800,
         },
+        'RESULTCOLLECTOR_DEBUG': kwargs.pop('debug_results'),
     }
     default_settings.update(settings.attributes)
     settings = Settings(default_settings)
