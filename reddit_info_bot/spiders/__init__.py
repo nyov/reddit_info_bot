@@ -124,6 +124,13 @@ class RewriteRedirectMiddleware(RedirectMiddleware):
         return url
 
 
+# ItemPipeline
+class ResultCollectorPipeline(object):
+
+    def process_item(self, item, spider):
+        return item
+
+
 class InfoBotSpider(Spider):
 
     def __init__(self, *args, **kwargs):
@@ -147,6 +154,7 @@ class InfoBotSpider(Spider):
         return o
 
     def write(self, data):
+        item = data.copy()
         if self.debug_results:
             pprint(data)
         if not isinstance(data, dict):
@@ -156,6 +164,9 @@ class InfoBotSpider(Spider):
         # basic 'line writer' protocol, end with LF
         self.writer.write('\n')
         self.writer.flush()
+        #
+        # push data to regular scrapy ItemPipeline
+        return item
 
     def finished(self):
         if self.writer:
@@ -272,6 +283,9 @@ def crawler_setup(settings, *args, **kwargs):
         'DOWNLOADER_MIDDLEWARES': {
             'scrapy.downloadermiddlewares.redirect.RedirectMiddleware': None,
             RewriteRedirectMiddleware: 600,
+        },
+        'ITEM_PIPELINES': {
+            ResultCollectorPipeline: 800,
         },
     }
     default_settings.update(settings.attributes)
