@@ -33,6 +33,15 @@ LOG_CONFIG = {
 }
 
 ##
+## imgur API settings
+##
+
+IMGUR_CLIENT_ID = ''
+IMGUR_CLIENT_SECRET = '' # optional ("anonymous" if None)
+
+IMGUR_ALBUM_ID = ''
+
+##
 ## reddit settings
 ##
 
