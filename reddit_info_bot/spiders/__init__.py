@@ -5,7 +5,6 @@ import sys
 import time
 import json
 import logging
-from pprint import pprint
 from functools import partial
 
 try:
@@ -22,13 +21,13 @@ del install
 from twisted.internet import reactor
 from twisted.internet.error import TimeoutError
 
+# apply monkey patches for scrapy
+from . import _monkeypatches
+del _monkeypatches
+
 from scrapy.spiders import Spider
 from scrapy.exceptions import CloseSpider
 from scrapy.settings import Settings
-
-import signal
-from scrapy.crawler import CrawlerProcess as ScrapyCrawlerProcess
-from scrapy.utils.ossignal import install_shutdown_handlers, signal_names
 
 from scrapy.http import Request
 from ..spamfilter import isspam_link, isspam_text
@@ -36,6 +35,11 @@ from ..util import http_code_ranges
 
 logger = logging.getLogger(__name__)
 
+
+# CrawlerProcess
+import signal
+from scrapy.crawler import CrawlerProcess as ScrapyCrawlerProcess
+from scrapy.utils.ossignal import install_shutdown_handlers, signal_names
 
 class CrawlerProcess(ScrapyCrawlerProcess):
 
@@ -54,14 +58,111 @@ class CrawlerProcess(ScrapyCrawlerProcess):
         reactor.callFromThread(self._stop_reactor)
 
 
-class InfoBotSpider(Spider):
+# RewriteRedirectMiddleware
+from scrapy.downloadermiddlewares.redirect import RedirectMiddleware
+from six.moves.urllib.parse import urljoin, urlsplit, urlunsplit
+from scrapy.utils.python import to_native_str
+from ..util import domain_suffix, tld_from_suffix
 
-    def __init__(self, *args, **kwargs):
-        writer = kwargs.get('writer')
-        self.debug_results = kwargs.get('debug_results')
-        super(InfoBotSpider, self).__init__(*args, **kwargs)
-        if writer:
-            self.writer = writer
+class RewriteRedirectMiddleware(RedirectMiddleware):
+    """ Handle redirection of requests based on response status and meta-refresh html tag
+
+    Extended with custom location rewrites.
+    """
+
+    def process_response(self, request, response, spider):
+        if (request.meta.get('dont_redirect', False) or
+                response.status in getattr(spider, 'handle_httpstatus_list', []) or
+                response.status in request.meta.get('handle_httpstatus_list', []) or
+                request.meta.get('handle_httpstatus_all', False)):
+            return response
+
+        allowed_status = (301, 302, 303, 307)
+        if 'Location' not in response.headers or response.status not in allowed_status:
+            return response
+
+        return self.handle_redirect(request, response, spider)
+
+    def handle_redirect(self, request, response, spider):
+        # HTTP header is ascii or latin1, redirected url will be percent-encoded utf-8
+        location = to_native_str(response.headers['location'].decode('latin1'))
+
+        redirected_url = urljoin(request.url, location)
+
+        redirected_url = self.rewrite_redirect(redirected_url, response.url)
+
+        if response.status in (301, 307) or request.method == 'HEAD':
+            redirected = request.replace(url=redirected_url)
+        else:
+            redirected = self._redirect_request_using_get(request, redirected_url)
+        return self._redirect(redirected, request, spider, response.status)
+
+    def rewrite_redirect(self, url, oldurl):
+
+        def replace_tld(netloc, oldtld, newtld):
+            sep = netloc.find(oldtld)
+            if sep > 0:
+                newloc = netloc[:sep] + newtld
+                return newloc
+
+        domain, fulldomain = domain_suffix(url)
+        tld = tld_from_suffix(domain)
+
+        # Google: force lookup of .com results
+        if domain.split('.')[:1][0] == 'google':
+            domainparts = urlsplit(url)
+            (scheme, _netloc, path, query, fragment) = domainparts
+            newloc = replace_tld(fulldomain, tld, 'com')
+            if not newloc:
+                return url
+            url = urlunsplit((scheme, newloc, path, query, fragment))
+
+            msg = "Rewriting %s redirect to %s" % (fulldomain, newloc)
+            logger.debug(msg)
+
+        return url
+
+
+# ItemPipeline
+from scrapy.exceptions import DropItem
+
+writer = None
+def collector_pipeline_writer(writefd=None):
+    global writer
+    if not writer:
+        if not writefd:
+            return
+        writer = writefd
+    return writer
+
+class ResultCollectorPipeline(object):
+
+    def __init__(self, writer):
+        if not writer:
+            raise NotConfigured
+        self.writer = writer
+
+    @classmethod
+    def from_settings(cls, settings):
+        o = cls(collector_pipeline_writer())
+        o.debug = settings.getbool('RESULTCOLLECTOR_DEBUG')
+        return o
+
+    def process_item(self, item, spider):
+        """ basic 'line writer' protocol, end line with LF """
+        data = json.dumps(dict(item))
+        self.writer.write(data)
+        self.writer.write('\n')
+        self.writer.flush()
+
+        if self.debug:
+            return item
+
+        # drop; don't propagate item to other pipelines
+        raise DropItem()
+
+
+class InfoBotSpider(Spider):
 
     @classmethod
     def from_crawler(cls, crawler, *args, **kwargs):
@@ -75,21 +176,6 @@ class InfoBotSpider(Spider):
 
         o.LINKCHECK_TIMEOUT = o.crawler.settings.get('DOWNLOAD_TIMEOUT_LINKCHECK', o.crawler.settings.get('DOWNLOAD_TIMEOUT'))
         return o
-
-    def write(self, data):
-        if self.debug_results:
-            pprint(data)
-        if not isinstance(data, dict):
-            data = dict(data)
-        data = json.dumps(data)
-        self.writer.write(data)
-        # basic 'line writer' protocol, end with LF
-        self.writer.write('\n')
-        self.writer.flush()
-
-    def finished(self):
-        if self.writer:
-            self.writer.flush()
 
     @staticmethod
     def close(spider, reason):
@@ -164,7 +250,7 @@ class InfoBotSpider(Spider):
                 url = result['image_url']
             # consider valid for now
             # FIXME: retry as GET request
-            return self.write(result)
+            return result
 
         if response.status != 200:
             self.logger.info(
@@ -173,7 +259,7 @@ class InfoBotSpider(Spider):
             result['broken'] = True
             #return
 
-        return self.write(result)
+        return result
 
 
 def crawler_setup(settings, *args, **kwargs):
@@ -187,6 +273,10 @@ def crawler_setup(settings, *args, **kwargs):
     else:
         telnet_ext = 'scrapy.extensions.telnet.TelnetConsole'
 
+    # ResultCollectorPipeline file descriptor
+    # ...hacky, hacky, hacky :|
+    collector_pipeline_writer(kwargs.pop('writer'))
+
     default_settings = {
         'EXTENSIONS': {
             telnet_ext: None,
@@ -198,6 +288,15 @@ def crawler_setup(settings, *args, **kwargs):
         'STATS_DUMP': False,
         'DOWNLOADER_STATS': False,
         'SPIDER_MODULES': [],
+        #
+        'DOWNLOADER_MIDDLEWARES': {
+            'scrapy.downloadermiddlewares.redirect.RedirectMiddleware': None,
+            RewriteRedirectMiddleware: 600,
+        },
+        'ITEM_PIPELINES': {
+            ResultCollectorPipeline: 800,
+        },
+        'RESULTCOLLECTOR_DEBUG': kwargs.pop('debug_results'),
     }
     default_settings.update(settings.attributes)
     settings = Settings(default_settings)
