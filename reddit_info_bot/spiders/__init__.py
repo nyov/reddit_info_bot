@@ -22,6 +22,10 @@ del install
 from twisted.internet import reactor
 from twisted.internet.error import TimeoutError
 
+# apply monkey patches for scrapy
+from . import _monkeypatches
+del _monkeypatches
+
 from scrapy.spiders import Spider
 from scrapy.exceptions import CloseSpider
 from scrapy.settings import Settings
