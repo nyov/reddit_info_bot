@@ -48,9 +48,8 @@ def domain_suffix(url):
         # return public suffix
         ps = psl_cached.get_public_suffix(domain)
         return (ps, domain)
-    # fall back to recognize
-    # second-level domain as authority
-    return (domain.split('.')[-2:], domain)
+    # fallback to recognize second-level domain as authority
+    return ('.'.join(domain.split('.')[-2:]), domain)
 
 
 def remove_control_characters(string):

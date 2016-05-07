@@ -178,10 +178,18 @@ class InfoBotSpider(Spider):
 
 def crawler_setup(settings, *args, **kwargs):
 
+    # telnet extension workaround
+    # (simply including both in EXTENSIONS fails on scrapy 1.1+:
+    #  "Some paths in settings convert to the same object")
+    from scrapy import __version__ as scrapy_version
+    if scrapy_version[:3] == '1.0':
+        telnet_ext = 'scrapy.telnet.TelnetConsole'
+    else:
+        telnet_ext = 'scrapy.extensions.telnet.TelnetConsole'
+
     default_settings = {
         'EXTENSIONS': {
-            'scrapy.telnet.TelnetConsole': None,
-            'scrapy.extensions.telnet.TelnetConsole': None,
+            telnet_ext: None,
             'scrapy.extensions.spiderstate.SpiderState': None,
             'scrapy.extensions.corestats.CoreStats': None,
             'scrapy.extensions.logstats.LogStats': None,
@@ -194,7 +202,7 @@ def crawler_setup(settings, *args, **kwargs):
     default_settings.update(settings.attributes)
     settings = Settings(default_settings)
 
-    # "downgrade" some verbose scrapy loggers
+    # shut up some verbose scrapy loggers
     logging.getLogger('scrapy.middleware').setLevel(logging.WARNING)
     logging.getLogger('scrapy.core.engine').setLevel(logging.WARNING)
 
