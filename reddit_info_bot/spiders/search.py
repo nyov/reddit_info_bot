@@ -11,9 +11,9 @@ from six.moves.urllib.parse import (
     unquote, urlparse, urlsplit, urlunsplit, parse_qsl, urlencode,
 )
 try:
-    from cStringIO import StringIO as BytesIO
+    from ..util import BytesIO
 except ImportError:
-    from io import BytesIO
+    from six import BytesIO
 from PIL import Image
 from scrapy.http import Request, FormRequest, HtmlResponse
 from ..search import find_media_url, SearchResultItem
@@ -757,6 +757,11 @@ class Google(ImageSearch):
         return Request(self.search_image_url, method='POST', body=body, headers=headers)
 
     def parse_search(self, response, content):
+        if 'Images must be smaller than' in response.body:
+            # 20MB limit. Result is empty
+            # FIXME: retry with a first-frame picture?
+            return
+
         # exclude ads, thanks
         results = content.xpath('.//div[contains(@class, "normal-header")][div[contains(text(), "Pages that include matching images")]]/following-sibling::*//*[@class="rc"]')
         if not results:

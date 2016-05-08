@@ -124,8 +124,6 @@ class RewriteRedirectMiddleware(RedirectMiddleware):
 
 
 # ItemPipeline
-from scrapy.exceptions import DropItem
-
 writer = None
 def collector_pipeline_writer(writefd=None):
     global writer
@@ -145,7 +143,6 @@ class ResultCollectorPipeline(object):
     @classmethod
     def from_settings(cls, settings):
         o = cls(collector_pipeline_writer())
-        o.debug = settings.getbool('RESULTCOLLECTOR_DEBUG')
         return o
 
     def process_item(self, item, spider):
@@ -155,12 +152,7 @@ class ResultCollectorPipeline(object):
         self.writer.write('\n')
         self.writer.flush()
 
-        if self.debug:
-            return item
-
-        # drop; don't propagate item to other pipelines
-        raise DropItem()
-
+        return item
 
 class InfoBotSpider(Spider):
 
@@ -296,7 +288,6 @@ def crawler_setup(settings, *args, **kwargs):
         'ITEM_PIPELINES': {
             ResultCollectorPipeline: 800,
         },
-        'RESULTCOLLECTOR_DEBUG': kwargs.pop('debug_results'),
     }
     default_settings.update(settings.attributes)
     settings = Settings(default_settings)

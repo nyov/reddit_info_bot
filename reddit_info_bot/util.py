@@ -7,6 +7,14 @@ import unicodedata
 import six
 import imp
 import daemon  # python-daemon on pypi + debian
+try:
+    from cStringIO import StringIO as BytesIO
+except ImportError:
+    try:
+        from StringIO import StringIO as BytesIO
+    except ImportError:
+        from io import BytesIO
+six.BytesIO = BytesIO
 from lockfile.pidlockfile import PIDLockFile # lockfile on pypi, python-lockfile in debian
 from importlib import import_module
 from six.moves.urllib.parse import urlsplit, urlunsplit
@@ -54,6 +62,19 @@ def domain_suffix(url):
 
 def remove_control_characters(string):
     return ''.join(c for c in string if unicodedata.category(c)[0] != 'C')
+
+def sanitize_string(string):
+    if not string:
+        return ''
+
+    # strip possible control characters
+    string = remove_control_characters(string)
+
+    # also strip non-ascii characters
+    #string = ''.join(c for c in string if ord(c) in range(32, 127))
+
+    string = string.strip()
+    return string
 
 def string_translate(text, intab, outtab):
     """Helper function for string translation

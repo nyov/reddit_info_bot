@@ -9,7 +9,7 @@ from collections import OrderedDict
 from six.moves.urllib.parse import urlsplit, urlunsplit
 from scrapy.item import Item, Field
 
-from .util import domain_suffix, remove_control_characters
+from .util import domain_suffix, sanitize_string
 
 logger = logging.getLogger(__name__)
 
@@ -162,22 +162,9 @@ def image_search(settings, **spiderargs):
     results = OrderedDict(sorted(results.items()))
     return results
 
-def filter_image_search(settings, search_results, account1=None, account2=None):
+def filter_image_search(settings, search_results, account1=None, account2=None, display_limit=None):
 
     from .reddit import reddit_messagefilter
-
-    def sanitize_string(string):
-        if string is None:
-            return ''
-
-        # strip possible control characters
-        string = remove_control_characters(string)
-
-        # also strip non-ascii characters
-        #string = ''.join(c for c in string if ord(c) in range(32, 127))
-
-        string = string.strip()
-        return string
 
     stats = OrderedDict()
     filtered_results = OrderedDict()
@@ -219,6 +206,12 @@ def filter_image_search(settings, search_results, account1=None, account2=None):
         for _, results in filtered_results.items():
             urls |= set([result['url'] for result in results])
 
+        if display_limit:
+            # limit url checks on reddit to sane number of results
+            # TODO: better implementation in reddit_messagefilter
+            cutoff_limit = display_limit+5 # (expect about 5 spam links)
+            urls = list(urls)[:cutoff_limit]
+
         verified_urls = reddit_messagefilter(urls, account2, account1, submission_id)
 
         for provider, results in filtered_results.items():
@@ -241,9 +234,18 @@ def filter_image_search(settings, search_results, account1=None, account2=None):
         logger.info('%11s: all: %3d / failed: %3d / good: %3d' % (provider,
             stats.get('all'), stats.get('all')-stats.get('succeeded'), stats.get('succeeded')))
 
+    if not display_limit:
+        return verified_results
+
+    # limit output to `display_limit` results
+    for provider, results in verified_results.items():
+        if not results:
+            continue
+        results = results[:display_limit]
+        verified_results[provider] = results
     return verified_results
 
-def format_image_search(settings, search_results, display_limit=None, escape_chars=True):
+def format_image_search(settings, search_results, escape_chars=True):
 
     from .reddit import reddit_markdown_escape
 
@@ -290,10 +292,6 @@ def format_image_search(settings, search_results, display_limit=None, escape_cha
                     search_results=no_engine_results_message,
                 )
             continue
-
-        # limit output to `display_limit` results
-        if display_limit:
-            results = results[:display_limit]
 
         # format results
         formatted = reddit_format_results(results, escape_chars)
