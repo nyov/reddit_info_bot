@@ -22,6 +22,7 @@ class SearchResultItem(Item):
 
     Fields for use in Result template formatting.
     """
+    id = Field()
     provider = Field()
     url = Field()
     title = Field()
@@ -266,6 +267,9 @@ def format_image_search(settings, search_results, escape_chars=True):
         All result dict keys can be used in "BOTCMD_IMAGESEARCH_RESULT_TEMPLATE"
         template string. Returns a template-formatted list of items.
         """
+        # sort results by their id (restore original SERP listing order)
+        results = sorted(results, key=lambda k:k['id'])
+
         items = []
         for result in results:
             result = dict(result)

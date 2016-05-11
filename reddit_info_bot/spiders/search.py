@@ -215,7 +215,8 @@ class KarmaDecay(ImageSearch):
             if not results:
                 self.logger.info('No search results')
 
-        num_results = response.meta.get('num_results') or 0 # result counter
+        rc = response.meta.get('rc') or 0 # result counter
+        num_results = response.meta.get('num_results') or 0
         for found in results:
             source_image = found.xpath('td[@class="img"]/a/@href').extract_first()
             source_image_size = found.xpath('td[@class="info"]/div[@class="similar"]/span[contains(.//text(), " x ")]//text()').extract_first()
@@ -236,6 +237,7 @@ class KarmaDecay(ImageSearch):
             source_image_format = self.guess_filetype(source_image)
 
             result = {
+                'id': rc,
                 'provider': self.__class__.__name__,
                 'url': source_link,
                 'display_url': None, # has none
@@ -247,6 +249,7 @@ class KarmaDecay(ImageSearch):
                 'image_filesize': None,
                 'image_format': source_image_format,
             }
+            rc += 1
 
             # mark probable spam (and don't count towards result limit)
             if self.isredditspam_link(result['url']):
@@ -338,7 +341,8 @@ class Yandex(ImageSearch):
             #similar = content.xpath('.//ul[@class="similar__thumbs"]/li/a') # /@href + /img/@src
             return
 
-        num_results = response.meta.get('num_results') or 0 # result counter
+        rc = response.meta.get('rc') or 0 # result counter
+        num_results = response.meta.get('num_results') or 0
         for found in results:
             source_image = found.xpath('a[@class="other-sites__preview-link"]/@href').extract_first()
             source_image_size = found.xpath('.//div[contains(@class, "other-sites__meta")]/text()').extract_first()
@@ -353,6 +357,7 @@ class Yandex(ImageSearch):
             source_image_format = self.guess_filetype(source_image)
 
             result = {
+                'id': rc,
                 'provider': self.__class__.__name__,
                 'url': source_link,
                 'display_url': None,
@@ -364,6 +369,7 @@ class Yandex(ImageSearch):
                 'image_filesize': None,
                 'image_format': source_image_format,
             }
+            rc += 1
 
             # mark probable spam (and don't count towards result limit)
             if self.isredditspam_text(result['title']):
@@ -380,7 +386,7 @@ class Yandex(ImageSearch):
         # dont seem like relevant results
         #more_link = content.xpath('.//div[contains(@class, "more_direction_next")]/a[contains(@class, "more__button")]/@href').extract_first()
         #if more_link:
-        #    yield Request(response.urljoin(more_link), meta={'num_results': num_results}, callback=self.parse)
+        #    yield Request(response.urljoin(more_link), meta={'num_results': num_results, 'rc': rc}, callback=self.parse)
 
 
 class Bing(ImageSearch):
@@ -489,7 +495,8 @@ class Bing(ImageSearch):
                 self.logger.warning('Unknown search fail.')
             return
 
-        num_results = response.meta.get('num_results') or 0 # result counter
+        rc = response.meta.get('rc') or 0 # result counter
+        num_results = response.meta.get('num_results') or 0
         for found in results:
             source_image = found.xpath('div[@class="th"]/a/@href').extract_first()
             source_image_metainfo = found.xpath('div[@class="info"]/div[@class="si"][contains(text(), " x ")]/text()').re(ur'^(.*)·(.*)·(.*)$')
@@ -511,6 +518,7 @@ class Bing(ImageSearch):
             source_displaylink = found.xpath('div[@class="info"]/div[@class="st"]/text()').extract_first()
 
             result = {
+                'id': rc,
                 'provider': self.__class__.__name__,
                 'url': source_link,
                 'display_url': source_displaylink, # a shortened url
@@ -522,6 +530,7 @@ class Bing(ImageSearch):
                 'image_filesize': source_image_filesize,
                 'image_format': source_image_format,
             }
+            rc += 1
 
             # mark probable spam (and don't count towards result limit)
             if self.isredditspam_link(result['url']):
@@ -649,7 +658,8 @@ class Bing(ImageSearch):
         results = content.xpath('.//ul[@class="insights"]//ul[@class="expbody"]/li')
         #results = content.xpath('.//ul[@class="insights"]//ul[@class="expbody"]/li[a]')
 
-        num_results = response.meta.get('num_results') or 0 # result counter
+        rc = response.meta.get('rc') or 0 # result counter
+        num_results = response.meta.get('num_results') or 0
         for found in results:
             source_link = found.xpath('a/@href').extract_first()
             source_displaylink = found.xpath('a/div[@class="iscbody"]//ul[@class="b_dataList"]/li[1]/text()').extract_first() # preview link [no protocol]
@@ -671,6 +681,7 @@ class Bing(ImageSearch):
                 source_image_format = _source_image_format
 
             result = {
+                'id': rc,
                 'provider': self.__class__.__name__,
                 'url': source_link,
                 'display_url': source_displaylink, # the shortened thing (missing scheme)
@@ -682,6 +693,7 @@ class Bing(ImageSearch):
                 'image_filesize': source_image_filesize,
                 'image_format': source_image_format,
             }
+            rc += 1
 
             # mark probable spam (and don't count towards result limit)
             if self.isredditspam_link(result['url']):
@@ -702,15 +714,18 @@ class Bing(ImageSearch):
             return
         # or try alternative results
         # Note: the quality of these results seems slightly more questionable, so consider them a last resort, for now
-        more = response.meta.get('more')
-        if more:
-            yield Request(more, callback=self.parse_more)
+        more_link = response.meta.get('more')
+        if more_link:
+            yield Request(more, meta={'num_results': num_results, 'rc': rc}, callback=self.parse_more)
 
     def parse_more(self, response):
         content = response.xpath('//body')
         self.logger.info('Visited %s', response.url)
 
         results = content.xpath('.//div[@id="dg_c"]//div[@class="dg_b"]/div[@class="imgres"]/div[@class="dg_u"]//a')
+
+        rc = response.meta.get('rc') or 0 # result counter
+        num_results = response.meta.get('num_results') or 0
         for found in results:
             source_image_metainfo = found.xpath('@t2').re(ur'^(\d+) x (\d+) · (\d+) kB · (.*)$')
             try:
@@ -725,6 +740,7 @@ class Bing(ImageSearch):
 
             json_metadata = found.xpath('@m').extract_first()
             result = {
+                'id': rc,
                 'provider': self.__class__.__name__,
                 'url': response.urljoin(found.xpath('@t3').extract_first()),
                 'title': found.xpath('@t1').extract_first(),
@@ -739,6 +755,7 @@ class Bing(ImageSearch):
                 'image_thumb_size': '%dx%d' % (int(found.xpath('@hh').extract_first()),
                                          int(found.xpath('@hw').extract_first())),
             }
+            rc += 1
 
             result = SearchResultItem(result)
             yield self.parse_result(result)
@@ -791,7 +808,8 @@ class Tineye(ImageSearch):
             estimated_result_number = int(estimated_result_number)
             self.logger.info('Estimated Result number %d' % estimated_result_number)
 
-        num_results = response.meta.get('num_results') or 0 # result counter
+        rc = response.meta.get('rc') or 0 # result counter
+        num_results = response.meta.get('num_results') or 0
         for found in results:
             # NOTE: this ignores possible multiple matches per (sub)domains (of the same file), as listed by tineye
             source_image = found.xpath('.//div[@class="match"]/p[contains(@class, "short-image-link")]/a/@href').extract_first()
@@ -823,6 +841,7 @@ class Tineye(ImageSearch):
             source_text = found.xpath('.//div[@class="match"]/p[@class="crawl-date"]/text()').extract_first()
 
             result = {
+                'id': rc,
                 'provider': self.__class__.__name__,
                 'url': source_link,
                 'display_url': None,
@@ -834,6 +853,7 @@ class Tineye(ImageSearch):
                 'image_filesize': source_image_filesize,
                 'image_format': source_image_format,
             }
+            rc += 1
 
             # mark probable spam (and don't count towards result limit)
             if self.isredditspam_link(result['url']):
@@ -853,7 +873,7 @@ class Tineye(ImageSearch):
 
         more_link = content.xpath('.//div[@class="pagination"]/span[@class="current"]/following-sibling::a/@href').extract_first()
         if more_link:
-            yield Request(response.urljoin(more_link), meta={'num_results': num_results}, callback=self.parse)
+            yield Request(response.urljoin(more_link), meta={'num_results': num_results, 'rc': rc}, callback=self.parse)
 
 
 class Google(ImageSearch):
@@ -914,7 +934,8 @@ class Google(ImageSearch):
             if not results:
                 self.logger.info('No search results')
 
-        num_results = response.meta.get('num_results') or 0 # result counter
+        rc = response.meta.get('rc') or 0 # result counter
+        num_results = response.meta.get('num_results') or 0
         for found in results:
             source_link = found.xpath('.//*[@class="r"]//a/@href').extract_first()
             source_title = found.xpath('.//*[@class="r"]//a/text()').extract()
@@ -957,6 +978,7 @@ class Google(ImageSearch):
             source_image_format = self.guess_filetype(source_image)
 
             result = {
+                'id': rc,
                 'provider': self.__class__.__name__,
                 'url': source_link,
                 'display_url': source_displaylink,
@@ -968,6 +990,7 @@ class Google(ImageSearch):
                 'image_filesize': None, # Not available
                 'image_format': source_image_format,
             }
+            rc += 1
 
             # mark probable spam (and don't count towards result limit)
             if self.isredditspam_link(result['url']):
@@ -987,4 +1010,4 @@ class Google(ImageSearch):
 
         more_link = content.xpath('.//*[@id="nav"][@role="presentation"]//td[@class="cur"]/following-sibling::td/a/@href').extract_first()
         if more_link:
-            yield Request(response.urljoin(more_link), meta={'num_results': num_results}, callback=self.parse)
+            yield Request(response.urljoin(more_link), meta={'num_results': num_results, 'rc': rc}, callback=self.parse)
