@@ -123,6 +123,24 @@ class RewriteRedirectMiddleware(RedirectMiddleware):
         return url
 
 
+# RetryMiddleware with with custom "retry_http_codes" Request.meta field
+from scrapy.downloadermiddlewares.retry import RetryMiddleware as ScrapyRetryMiddleware
+
+class RetryMiddleware(ScrapyRetryMiddleware):
+
+    def process_response(self, request, response, spider):
+        if request.meta.get('dont_retry', False):
+            return response
+        retry_http_codes = self.retry_http_codes
+        temporary_codes = request.meta.get('retry_http_codes', [])
+        if temporary_codes:
+            retry_http_codes |= set(int(x) for x in temporary_codes)
+        if response.status in retry_http_codes:
+            reason = response_status_message(response.status)
+            return self._retry(request, reason, spider) or response
+        return response
+
+
 # ItemPipeline
 writer = None
 def collector_pipeline_writer(writefd=None):
@@ -282,6 +300,8 @@ def crawler_setup(settings, *args, **kwargs):
         'SPIDER_MODULES': [],
         #
         'DOWNLOADER_MIDDLEWARES': {
+            'scrapy.downloadermiddlewares.retry.RetryMiddleware': None,
+            RetryMiddleware: 500,
             'scrapy.downloadermiddlewares.redirect.RedirectMiddleware': None,
             RewriteRedirectMiddleware: 600,
         },

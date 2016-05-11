@@ -115,6 +115,11 @@ class ImageSearch(Search):
             request = self.from_data(self.image_data,
                                      filetype=self.filetype,
                                      fileext=self.fileext)
+        # Retry initial search requests on _any_ error event.
+        # Any observed errors were transient errors (even a 404),
+        # but would lose us a whole batch of results at once.
+        # (Excepting the possibility of a ban)
+        request.meta['retry_http_codes'] = self.ERROR_HTTP_CODES
         yield self.pre_search(request)
 
     @staticmethod
