@@ -121,6 +121,20 @@ BOTCMD_DOWNVOTES_DELETE_AFTER = 30 # only act on comments after X minutes age
 BOTCMD_DOWNVOTES_DELETION_SCORE = 1 # karma score below which a comment is removed
 
 
+BOTCMD_WORDCLOUD_ENABLED = True # generate and upload wordclouds
+BOTCMD_WORDCLOUD_CONFIG = { # Reference: https://amueller.github.io/word_cloud/generated/wordcloud.WordCloud.html#wordcloud-wordcloud
+    #'font_path': '<ttf_or_otf.path>',
+    #'font_path': '/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed.ttf',
+    'width': 400,
+    'height': 200,
+    'scale': 2,
+    'max_words': 200,
+    'background_color': 'black',
+    'relative_scaling': 0.5,
+    'prefer_horizontal': 0.9,
+}
+
+
 COMMENT_REPLY_AGE_LIMIT = 0 # ignore comments older than X minutes
 
 

@@ -248,7 +248,7 @@ def filter_image_search(settings, search_results, account1=None, account2=None, 
         verified_results[provider] = results
     return verified_results
 
-def format_image_search(settings, search_results, escape_chars=True):
+def format_image_search(settings, search_results, metainfo={}, escape_chars=True):
 
     from .reddit import reddit_markdown_escape
 
@@ -269,6 +269,9 @@ def format_image_search(settings, search_results, escape_chars=True):
             if escape_chars:
                 for key, value in result.items():
                     result[key] = reddit_markdown_escape(value)
+
+            # quote url whitespace, really shouldn't happen :(
+            result['url'] = result['url'].replace(' ', '%20')
 
             # add result['text'] key with best possible textual value
             text = result['title']
@@ -308,8 +311,51 @@ def format_image_search(settings, search_results, escape_chars=True):
     if not check_results:
         reply = ''
 
+    wordcloud_link = metainfo.get('wordcloud')
+    if wordcloud_link:
+        reply += "___\n\nA wordcloud of all search results was generated and [is available on Imgur](%s).\n" % wordcloud_link
+
     if not reply:
         reply = settings.get('BOTCMD_IMAGESEARCH_NO_RESULTS_MESSAGE').decode('utf-8')
 
     reply += settings.get('FOOTER_INFO_MESSAGE').decode('utf-8')
     return reply
+
+def filter_wordcloud_text(settings, search_results):
+    """ Prepare text for wordcloud
+
+    (Generated from all search result data, not excluding entries marked spam
+     or no longer available.)
+    """
+
+    text = []
+
+    for provider, results in search_results.items():
+        if not results:
+            continue
+
+        for result in results:
+            for key, value in result.items():
+                if isinstance(value, (str, unicode)):
+                    result[key] = sanitize_string(value)
+
+            # wordcloud
+            # from title and description text
+            if result['title']:
+                text += result['title'].split()
+            if result['description']:
+                text += result['description'].split()
+            # /wordcloud
+
+    text = ' '.join(text)
+
+    # Additional removal of nonrelevant text
+    eradicate = [
+        'Crawled on', # strip Tineye's "Crawled on"
+        'Tumblr', # strip "Tumblr"... because I hate the name
+        'gif', 'jpg', 'jpeg', 'png', # file formats often dominating content
+    ]
+    for strng in eradicate:
+        text = text.replace(strng, '')
+
+    return text

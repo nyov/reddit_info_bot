@@ -9,6 +9,7 @@ import logging
 import time
 import datetime
 import pickle
+import pprint
 from functools import wraps
 
 from .version import __version__, version_info
@@ -31,6 +32,7 @@ def bot_commands():
     cmds = {
         'run': with_setup(cmd_run),
         'imagesearch': with_setup(cmd_imagesearch),
+        'wordcloud': cmd_wordcloud,
         'exit': do_exit,
     }
     return cmds
@@ -239,22 +241,74 @@ def cmd_run(settings):
 
 def cmd_imagesearch(settings, image_url=None, image_data=None, image_ext='jpg',
                     display_limit=15, from_cli=False, **kwargs):
-    from .search import image_search, filter_image_search, format_image_search
+    from .search import (image_search, filter_image_search, format_image_search,
+                         filter_wordcloud_text)
+    from .imgur import image_upload, imgur_login
 
     if not image_url and not image_data:
         logger.error('Missing source for image search')
         return
 
+    # build wordcloud ?
+    wordcloud = settings.getbool('BOTCMD_WORDCLOUD_ENABLED', not from_cli)
+
     search_results = image_search(settings,
             image_url=image_url, image_data=image_data, num_results=display_limit,
             image_ext=image_ext,
         )
+
+    if wordcloud:
+        text = filter_wordcloud_text(settings, search_results)
+        if text:
+            logger.info('Generating wordcloud for results.')
+            filename = "%swordcloud.png" % settings.get('_CACHEDIR_')
+            wordcloud_image = cmd_wordcloud(settings, text, from_cli=from_cli, filename=filename)
+            if not wordcloud_image: # not uploading when run from CLI (dumped to file)
+                wordcloud = False
+                logger.info('Wordcloud was written to "%s"' % filename)
+        else:
+            wordcloud = False
+            logger.info('No text to build wordcloud, skipping.')
+
     filter_results = filter_image_search(settings, search_results,
             account1=kwargs.get('account1'), account2=kwargs.get('account2'),
             display_limit=display_limit,
         )
-    reply_contents = format_image_search(settings, filter_results, escape_chars=not from_cli)
+
+    imgur_link = None
+    if wordcloud and wordcloud_image:
+        logger.info('Uploading wordcloud to Imgur.')
+        client = imgur_login(settings)
+        config = {}
+        album = settings.get('IMGUR_ALBUM_ID')
+        if album:
+            config.update({'album': album})
+        idata = image_upload(client, wordcloud_image, config)
+        imgur_link = idata['link']
+        #imgur_hash = idata['deletehash']
+        # log metadata including the deletehash
+        logger.info('...Imgur link: %s -- Metadata:\n%s' % (imgur_link, pprint.pformat(idata)))
+
+    reply_contents = format_image_search(settings, filter_results,
+            escape_chars=not from_cli, metainfo={'wordcloud':imgur_link})
+
     if from_cli: # being called directly, dump output to terminal
         logger.info('Image-search results:\n%s' % reply_contents)
         return
     return reply_contents
+
+def cmd_wordcloud(settings, text, from_cli=False, filename=None, **kwargs):
+    from .wcloud import wordcloud_image
+
+    config = settings.getdict('BOTCMD_WORDCLOUD_CONFIG')
+    kwargs.update(config)
+    image, imgsize = wordcloud_image(text, **kwargs)
+
+    if not from_cli:
+        return image
+
+    if filename:
+        with open(filename, 'wb') as of:
+            image.seek(0)
+            of.write(image.read())
+        image.close()

@@ -101,7 +101,8 @@ def usage(instance):
 
     Usage:
       reddit_info_bot [options]
-      reddit_info_bot imagesearch <url_or_file> [options]
+      reddit_info_bot [options] imagesearch <url_or_file>
+      reddit_info_bot [options] wordcloud <input_text_file> <output_image_file>
 
     Options:
       -c FILE --config=FILE    Load configuration from custom file
@@ -246,11 +247,19 @@ def execute(argv=None, settings=None):
         yes, uri = uri_is_file(image_src)
         if yes:
             with open(uri, 'rb') as f:
-                # TODO: use buffer
                 cmdargs.update({'image_data': f.read()})
         else:
             cmdargs.update({'image_url': uri})
         cmdargs.update({'from_cli': True})
+    if cmdname == 'wordcloud':
+        textfile = options['<INPUT_TEXT_FILE>']
+        with open(textfile, 'rb') as f:
+            cmdargs.update({'text': f.read().decode('utf-8')})
+        filename = options['<OUTPUT_IMAGE_FILE>']
+        cmdargs.update({
+            'filename': filename,
+            'from_cli': True,
+        })
 
     if 'exit' in cmds:
         exit_func = partial(cmds['exit'], settings)

@@ -225,7 +225,9 @@ class InfoBotSpider(Spider):
             # It's more important to us than the page it was found on.
             url = result['image_url']
             reqmethod = 'HEAD' # save on download size
-        return Request(url, method=reqmethod, callback=self.analyze_result, meta={
+        return Request(url, method=reqmethod, callback=self.analyze_result,
+            #dont_filter=True,
+            meta={
                 'result': result,
                 #'handle_httpstatus_all': True,
                 'handle_httpstatus_list': list(self.GOOD_HTTP_CODES | self.ERROR_HTTP_CODES),
