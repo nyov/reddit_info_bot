@@ -238,12 +238,14 @@ def cmd_run(settings):
     reddit_logout(account1)
 
 def cmd_imagesearch(settings, image_url=None, image_data=None, image_ext='jpg',
-                    display_limit=15, from_cli=False, **kwargs):
+                    from_cli=False, **kwargs):
     from .search import image_search, filter_image_search, format_image_search
 
     if not image_url and not image_data:
         logger.error('Missing source for image search')
         return
+
+    display_limit = settings.getint('BOTCMD_IMAGESEARCH_MAXRESULTS_FOR_ENGINE', 15)
 
     search_results = image_search(settings,
             image_url=image_url, image_data=image_data, num_results=display_limit,

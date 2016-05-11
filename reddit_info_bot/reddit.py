@@ -236,7 +236,7 @@ def reddit_messagefilter(messages, sending_account, receiving_account, submissio
                 else:
                     # met by reddit banhammer
                     banned_by = 'reddit'
-                logger.debug('...message banned by %s: %s' % (banned_by, message.body))
+                logger.info('...message banned by %s: %s' % (banned_by, message.body))
                 continue
 
             msg, _ = message_queue.pop(id)
@@ -261,7 +261,6 @@ def reddit_messagefilter(messages, sending_account, receiving_account, submissio
         #if len(fetched_messages) == 0: # are we checking from a different account (not our inbox)?
         #    # check submission thread instead
         #    fetched_messages = fetch_posted_messages(refresh=True)
-        [m.mark_as_read() for m in fetch_inbox_messages()] # keep inbox clean
         fetched_messages = fetch_posted_messages(refresh=True)
         verified_messages += check_messages(message_queue, fetched_messages)
 
@@ -472,9 +471,8 @@ def handle_bot_action(comments, settings, account, account2, subreddit_list, com
         logger.info('[N] Detected keyword(s) %s in %s' % (', '.join(keywords), comment.permalink))
 
         if action == 'find_username_mentions':
-            display_limit = settings.getint('BOTCMD_IMAGESEARCH_MAXRESULTS_FOR_ENGINE')
             reply_content = cmd_imagesearch(settings, image_url=comment.submission.url,
-                    display_limit=display_limit, account1=account, account2=account2)
+                                            account1=account, account2=account2)
             if not reply_content:
                 logger.error('cmd_imagesearch failed! skipping')
                 continue # try that again, don't mark as done yet

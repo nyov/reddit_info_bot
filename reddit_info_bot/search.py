@@ -238,7 +238,7 @@ def filter_image_search(settings, search_results, account1=None, account2=None, 
 
     # stats
     for provider, stats in stats.items():
-        logger.info('%11s: all: %3d / failed: %3d / good: %3d' % (provider,
+        logger.info('%11s: all: %3d / ignored: %3d / good: %3d' % (provider,
             stats.get('all'), stats.get('all')-stats.get('succeeded'), stats.get('succeeded')))
 
     if not display_limit:
