@@ -74,7 +74,7 @@ BOTCMD_IMAGESEARCH = [ # (main) initiate image search
 ]
 BOTCMD_IMAGESEARCH_MAXRESULTS_FOR_ENGINE = 5
 BOTCMD_IMAGESEARCH_RESULT_TEMPLATE = (
-"""[{text}]({url})
+"""[{text}]({url}) {imagelink}
 """
 )
 BOTCMD_IMAGESEARCH_MESSAGE_TEMPLATE = (

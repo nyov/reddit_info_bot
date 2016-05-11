@@ -274,6 +274,8 @@ def reddit_messagefilter(messages, sending_account, receiving_account, submissio
     return verified_messages
 
 def reddit_markdown_escape(string):
+    if not isinstance(string, (str, unicode)):
+        return string
     # escape markdown characters
     # from https://daringfireball.net/projects/markdown/syntax#backslash
     # \   backslash

@@ -206,14 +206,17 @@ def filter_image_search(settings, search_results, account1=None, account2=None, 
         logger.info('reddit_spamfilter skipped (missing settings)')
     else:
         urls = set()
-        for _, results in filtered_results.items():
-            urls |= set([result['url'] for result in results])
+        for provider, results in filtered_results.items():
+            if not results:
+                continue
 
-        if display_limit:
-            # limit url checks on reddit to sane number of results
-            # TODO: better implementation in reddit_messagefilter
-            cutoff_limit = display_limit+5 # (expect about 5 spam links)
-            urls = list(urls)[:cutoff_limit]
+            _urls = set([result['url'] for result in results])
+            if display_limit:
+                # limit url checks on reddit to sane number of results
+                # TODO: better implementation in reddit_messagefilter
+                cutoff_limit = display_limit+5 # (expect about 5 spam links)
+                _urls = set(list(_urls)[:cutoff_limit])
+            urls |= _urls
 
         verified_urls = reddit_messagefilter(urls, account2, account1, submission_id)
 
@@ -280,6 +283,11 @@ def format_image_search(settings, search_results, escape_chars=True):
                 text = result['url']
             result['text'] = text
 
+            # add synthetic result['imagelink'] for template formatting
+            result['imagelink'] = ''
+            if result['image_url']:
+                result['imagelink'] = u'[{}]({})'.format(u'\U0001f517', result['image_url'])
+
             entry = results_item_format.format(**result)
             items.append(entry)
 
@@ -298,7 +306,9 @@ def format_image_search(settings, search_results, escape_chars=True):
 
         # format results
         formatted = reddit_format_results(results, escape_chars)
+        provider_link = '[{}]({})'.format(provider, results[0]['serp'])
         reply += results_message_format.format(
+                #search_engine=provider_link,
                 search_engine=provider,
                 search_results=formatted,
             )
