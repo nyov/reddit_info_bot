@@ -29,16 +29,19 @@ class SearchResultItem(Item):
     serp = Field()
     spam = Field()
     image_url = Field()
-
-    image_size = Field() # missing on Google?
-    display_url = Field() # missing on KD, Tineye
-    # only on Bing and Tineye so far
-    image_filesize = Field()
+    image_size = Field()
     image_format = Field()
+
+    image_filesize = Field() # not on Google, KarmaDecay, Yandex
+    display_url = Field() # not on KarmaDecay, Tineye
     # results tagged by spamfilter
     spam = Field()
     # results marked broken by link-check
     broken = Field()
+
+    # unused
+    image_thumb_url = Field()
+    image_thumb_size = Field()
 
 
 # Define special domains which only host image or video media,
