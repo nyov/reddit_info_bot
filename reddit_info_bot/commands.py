@@ -301,7 +301,11 @@ def cmd_wordcloud(settings, text, from_cli=False, filename=None, **kwargs):
     from .wcloud import wordcloud_image
 
     config = settings.getdict('BOTCMD_WORDCLOUD_CONFIG')
-    kwargs.update(config)
+    kwargs.update(config) # kwargs options override settings from config
+    if 'stopwords' not in kwargs:
+        from .wcloud import stopwords
+        stopwords |= set(settings.getlist('BOTCMD_WORDCLOUD_STOPWORDS'))
+        kwargs.update({'stopwords':stopwords})
     image, imgsize = wordcloud_image(text, **kwargs)
 
     if not from_cli:

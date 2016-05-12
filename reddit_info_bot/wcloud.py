@@ -7,6 +7,8 @@ try:
     from .util import BytesIO
 except ValueError:
     from six import BytesIO
+
+# stopwords
 from wordcloud import STOPWORDS, WordCloud
 STOPWORDS = set(w.decode('utf-8') for w in STOPWORDS)
 try:
@@ -16,7 +18,6 @@ try:
 except ImportError:
     stopwords = STOPWORDS or set()
 del STOPWORDS
-
 
 default_settings = {
     #'font_path': '',
@@ -29,6 +30,11 @@ default_settings = {
     'prefer_horizontal': 0.9,
 }
 
+def update_stopwords(s_words):
+    if isinstance(s_words, (list, tuple)):
+        s_words = set(s_words)
+    stopwords = s_words
+    return s_words
 
 def wordcloud_image(text, **kwargs):
     """ Build wordcloud from text """
@@ -52,6 +58,14 @@ def wordcloud_image(text, **kwargs):
 
 
 if __name__ == '__main__':
+    import sys, pprint
+
+    # Print the list of default stopwords
+    pprint.pprint(stopwords)
+
+    sys.exit(0)
+
+    # Test wordcloud building
     text = """
         blah
         blah

@@ -313,7 +313,8 @@ def format_image_search(settings, search_results, metainfo={}, escape_chars=True
 
     wordcloud_link = metainfo.get('wordcloud')
     if wordcloud_link:
-        reply += "___\n\nA wordcloud of all search results was generated and [is available on Imgur](%s).\n" % wordcloud_link
+        wcmessage = settings.get('BOTCMD_IMAGESEARCH_WORDCLOUD_TEMPLATE').decode('utf-8')
+        reply += wcmessage.format(wordcloud_link=wordcloud_link)
 
     if not reply:
         reply = settings.get('BOTCMD_IMAGESEARCH_NO_RESULTS_MESSAGE').decode('utf-8')
@@ -349,13 +350,10 @@ def filter_wordcloud_text(settings, search_results):
 
     text = ' '.join(text)
 
-    # Additional removal of nonrelevant text
-    eradicate = [
-        'Crawled on', # strip Tineye's "Crawled on"
-        'Tumblr', # strip "Tumblr"... because I hate the name
-        'gif', 'jpg', 'jpeg', 'png', # file formats often dominating content
-    ]
-    for strng in eradicate:
-        text = text.replace(strng, '')
+    # hardcoded removal of nonrelevant text
+    # (prefer using stopwords in wordcloud)
+    #eradicate = []
+    #for strng in eradicate:
+    #    text = text.replace(strng, '')
 
     return text

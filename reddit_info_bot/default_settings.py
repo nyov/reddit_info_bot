@@ -42,7 +42,7 @@ IMGUR_CLIENT_SECRET = '' # optional ("anonymous" if None)
 IMGUR_ALBUM_ID = ''
 
 ##
-## reddit settings
+## reddit API settings
 ##
 
 REDDIT_ACCOUNT_NAME = ''
@@ -71,7 +71,7 @@ BOT_AGENT = '%s:%s:%s%s' % (
 REDDIT_SPAMFILTER_SUBMISSION_ID = ''
 
 ##
-##
+## operational settings
 ##
 
 BOT_MODE = []
@@ -92,6 +92,13 @@ BOTCMD_IMAGESEARCH_MESSAGE_TEMPLATE = (
 **Best {search_engine} Guesses**
 
 {search_results}
+
+"""
+)
+BOTCMD_IMAGESEARCH_WORDCLOUD_TEMPLATE = ( # if wordcloud is enabled, insert this text below search results
+"""___
+
+A wordcloud of all search results was generated and [is available on Imgur]({wordcloud_link}).
 
 """
 )
@@ -133,6 +140,11 @@ BOTCMD_WORDCLOUD_CONFIG = { # Reference: https://amueller.github.io/word_cloud/g
     'relative_scaling': 0.5,
     'prefer_horizontal': 0.9,
 }
+BOTCMD_WORDCLOUD_STOPWORDS = [ # additional stopwords to merge with wordcloud stopwords
+    'gif', 'jpg', 'jpeg', 'png', # file formats often dominating content
+    'Crawled on', # strip Tineye's "Crawled on" text on every results
+    'Tumblr', # mentioned way too often
+]
 
 
 COMMENT_REPLY_AGE_LIMIT = 0 # ignore comments older than X minutes
@@ -153,10 +165,12 @@ FOOTER_INFO_MESSAGE = (
 )
 
 
-SUBREDDITS = ['all']
+SUBREDDITS = [ # list of /r/<subreddits> to watch
+    'all',
+]
 
 ##
-## search / scrapy spider settings
+## search spider (scrapy) settings
 ##
 
 USER_AGENT = '%s/%s' % (BOT_NAME, BOT_VERSION)
