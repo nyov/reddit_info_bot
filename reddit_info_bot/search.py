@@ -256,9 +256,9 @@ def format_image_search(settings, search_results, escape_chars=True):
 
     from .reddit import reddit_markdown_escape
 
-    results_item_format = settings.get('BOTCMD_IMAGESEARCH_RESULT_TEMPLATE').decode('utf-8')
-    results_message_format = settings.get('BOTCMD_IMAGESEARCH_MESSAGE_TEMPLATE').decode('utf-8')
-    no_engine_results_message = settings.get('BOTCMD_IMAGESEARCH_NO_SEARCHENGINE_RESULTS_MESSAGE').decode('utf-8')
+    results_item_format = settings.getstr('BOTCMD_IMAGESEARCH_RESULT_TEMPLATE')
+    results_message_format = settings.getstr('BOTCMD_IMAGESEARCH_MESSAGE_TEMPLATE')
+    no_engine_results_message = settings.getstr('BOTCMD_IMAGESEARCH_NO_SEARCHENGINE_RESULTS_MESSAGE')
     reply = ''
 
     def reddit_format_results(results, escape_chars=True):
@@ -323,7 +323,7 @@ def format_image_search(settings, search_results, escape_chars=True):
         reply = ''
 
     if not reply:
-        reply = settings.get('BOTCMD_IMAGESEARCH_NO_RESULTS_MESSAGE').decode('utf-8')
+        reply = settings.getstr('BOTCMD_IMAGESEARCH_NO_RESULTS_MESSAGE')
 
-    reply += settings.get('FOOTER_INFO_MESSAGE').decode('utf-8')
+    reply += settings.getstr('FOOTER_INFO_MESSAGE')
     return reply
