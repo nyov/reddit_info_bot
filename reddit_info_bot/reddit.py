@@ -13,6 +13,8 @@ from .exceptions import ConfigurationError
 
 logger = logging.getLogger(__name__)
 
+REDDIT_MESSAGE_SIZELIMIT = 10000
+
 
 # Reddit authentication helpers
 

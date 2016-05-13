@@ -254,12 +254,12 @@ def filter_image_search(settings, search_results, account1=None, account2=None, 
 
 def format_image_search(settings, search_results, escape_chars=True):
 
-    from .reddit import reddit_markdown_escape
+    from .reddit import reddit_markdown_escape, REDDIT_MESSAGE_SIZELIMIT
 
     results_item_format = settings.getstr('BOTCMD_IMAGESEARCH_RESULT_TEMPLATE')
     results_message_format = settings.getstr('BOTCMD_IMAGESEARCH_MESSAGE_TEMPLATE')
     no_engine_results_message = settings.getstr('BOTCMD_IMAGESEARCH_NO_SEARCHENGINE_RESULTS_MESSAGE')
-    reply = ''
+    footer_message = settings.getstr('FOOTER_INFO_MESSAGE')
 
     def reddit_format_results(results, escape_chars=True):
         """Format search results for reddit.
@@ -298,32 +298,53 @@ def format_image_search(settings, search_results, escape_chars=True):
         formatted = '\n'.join(items)
         return formatted
 
-    check_results = {}
-    for provider, results in search_results.items():
-
-        if not results:
-            reply += results_message_format.format(
-                    search_engine=provider,
-                    search_results=no_engine_results_message,
-                )
-            continue
-
-        # format results
-        formatted = reddit_format_results(results, escape_chars)
-        provider_link = '[{}]({})'.format(provider, results[0]['serp'])
-        reply += results_message_format.format(
-                #search_engine=provider_link,
-                search_engine=provider,
-                search_results=formatted,
-            )
-
-        check_results[provider] = results
-
-    if not check_results:
+    def reddit_format_resultpage(sresults):
         reply = ''
+        check_results = {}
+        for provider, results in sresults.items():
 
-    if not reply:
-        reply = settings.getstr('BOTCMD_IMAGESEARCH_NO_RESULTS_MESSAGE')
+            if not results:
+                reply += results_message_format.format(
+                        search_engine=provider,
+                        search_results=no_engine_results_message,
+                    )
+                continue
 
-    reply += settings.getstr('FOOTER_INFO_MESSAGE')
+            # format results
+            formatted = reddit_format_results(results, escape_chars)
+            provider_link = '[{}]({})'.format(provider, results[0]['serp'])
+            reply += results_message_format.format(
+                    #search_engine=provider_link,
+                    search_engine=provider,
+                    search_results=formatted,
+                )
+
+            check_results[provider] = results
+
+        if not check_results:
+            reply = ''
+
+        if not reply:
+            reply = settings.getstr('BOTCMD_IMAGESEARCH_NO_RESULTS_MESSAGE')
+
+        reply += footer_message
+        return reply
+
+
+    # Anything above REDDIT_MESSAGE_SIZELIMIT does not post,
+    # so make sure we'll fit (by dropping replies)
+    while True:
+        reply = reddit_format_resultpage(search_results)
+        # count length in bytes, not unicode chars
+        # (to be safe, no idea what reddit counts)
+        r_len = len(reply.encode('utf-8'))
+        if r_len < REDDIT_MESSAGE_SIZELIMIT:
+            break
+
+        logger.info('Reply message is %d characters over allowed message length %d, truncating.' % (
+            r_len - REDDIT_MESSAGE_SIZELIMIT, REDDIT_MESSAGE_SIZELIMIT))
+        [results.pop() for _, results in search_results.items() if results]
+
+    logger.debug('Reply message is %d chars out of %d (%d remaining)' % (
+        r_len, REDDIT_MESSAGE_SIZELIMIT, REDDIT_MESSAGE_SIZELIMIT - r_len))
     return reply
