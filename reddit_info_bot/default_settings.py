@@ -58,6 +58,13 @@ BOT_AGENT = '%s:%s:%s%s' % (
     ' (by /u/%s)' % BOT_OWNER if BOT_OWNER else '',
 )
 
+
+REDDIT_SPAMFILTER_SUBMISSION_ID = ''
+
+##
+##
+##
+
 BOT_MODE = []
 
 # bot commands
@@ -66,6 +73,10 @@ BOTCMD_IMAGESEARCH = [ # (main) initiate image search
     'u/%s' % REDDIT_ACCOUNT_NAME,
 ]
 BOTCMD_IMAGESEARCH_MAXRESULTS_FOR_ENGINE = 5
+BOTCMD_IMAGESEARCH_RESULT_TEMPLATE = (
+"""[{text}]({url}) {imagelink}
+"""
+)
 BOTCMD_IMAGESEARCH_MESSAGE_TEMPLATE = (
 """___
 
@@ -103,8 +114,6 @@ BOTCMD_DOWNVOTES_DELETION_SCORE = 1 # karma score below which a comment is remov
 
 COMMENT_REPLY_AGE_LIMIT = 0 # ignore comments older than X minutes
 
-REDDIT_SPAMFILTER_SUBMISSION_ID = ''
-
 
 IMAGE_EXTENSIONS = ['tif', 'tiff', 'gif', 'jpeg', 'jpg', 'jif', 'jfif', 'jp2', 'jpx', 'j2k', 'j2c', 'fpx', 'pcd', 'png']
 VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogg']
@@ -129,6 +138,7 @@ SUBREDDITS = ['all']
 
 USER_AGENT = '%s/%s' % (BOT_NAME, BOT_VERSION)
 DOWNLOAD_TIMEOUT = 360 # in seconds
+DOWNLOAD_TIMEOUT_LINKCHECK = 30
 
 AUTOTHROTTLE_ENABLED = True
 COOKIES_ENABLED = True

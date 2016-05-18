@@ -2,6 +2,7 @@ import six
 import copy
 import json
 from importlib import import_module
+from scrapy.utils.python import to_unicode, to_bytes
 
 from . import default_settings
 
@@ -28,6 +29,12 @@ class Settings(object):
 
     def get(self, name, default=None):
         return self[name] if self[name] is not None else default
+
+    def getstr(self, name, default=u''):
+        return to_unicode(self.get(name, default))
+
+    def getbytes(self, name, default=b''):
+        return to_bytes(self.get(name, default))
 
     def getbool(self, name, default=False):
         return bool(int(self.get(name, default)))

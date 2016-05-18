@@ -7,6 +7,14 @@ import unicodedata
 import six
 import imp
 import daemon  # python-daemon on pypi + debian
+try:
+    from cStringIO import StringIO as BytesIO
+except ImportError:
+    try:
+        from StringIO import StringIO as BytesIO
+    except ImportError:
+        from io import BytesIO
+six.BytesIO = BytesIO
 from lockfile.pidlockfile import PIDLockFile # lockfile on pypi, python-lockfile in debian
 from importlib import import_module
 from six.moves.urllib.parse import urlsplit, urlunsplit
@@ -48,13 +56,25 @@ def domain_suffix(url):
         # return public suffix
         ps = psl_cached.get_public_suffix(domain)
         return (ps, domain)
-    # fall back to recognize
-    # second-level domain as authority
-    return (domain.split('.')[-2:], domain)
+    # fallback to recognize second-level domain as authority
+    return ('.'.join(domain.split('.')[-2:]), domain)
 
 
 def remove_control_characters(string):
     return ''.join(c for c in string if unicodedata.category(c)[0] != 'C')
+
+def sanitize_string(string):
+    if not string:
+        return ''
+
+    # strip possible control characters
+    string = remove_control_characters(string)
+
+    # also strip non-ascii characters
+    #string = ''.join(c for c in string if ord(c) in range(32, 127))
+
+    string = string.strip()
+    return string
 
 def string_translate(text, intab, outtab):
     """Helper function for string translation
@@ -168,3 +188,24 @@ def daemon_context(settings, **kwargs):
         **kwargs
     )
     return context
+
+def http_code_ranges():
+    codes = {
+        '100': set(range(100, 200)), # 100 Informational
+        '200': set(range(200, 300)), # 200 Success
+        '300': set(range(300, 400)), # 300 Redirect
+        '400': set(range(400, 500)), # 400 Client Error
+        '500': set(range(500, 600)), # 500 Server Error
+        'EXT': set(range(600,1000)), # 999 Other
+        'ALL': set(range(100,1000)), # Everything valid
+    }
+    # exclusions
+    codes.update({
+        'X100': codes['ALL'] - codes['100'],
+        'X200': codes['ALL'] - codes['200'],
+        'X300': codes['ALL'] - codes['300'],
+        'X400': codes['ALL'] - codes['400'],
+        'X500': codes['ALL'] - codes['500'],
+        'XEXT': codes['ALL'] - codes['EXT'],
+    })
+    return codes

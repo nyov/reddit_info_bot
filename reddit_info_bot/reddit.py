@@ -8,10 +8,12 @@ import re
 import hashlib
 
 from . import praw
-from .search import image_search, filter_image_search, format_image_search, is_media_domain
+from .search import is_media_domain
 from .exceptions import ConfigurationError
 
 logger = logging.getLogger(__name__)
+
+REDDIT_MESSAGE_SIZELIMIT = 10000
 
 
 # Reddit authentication helpers
@@ -150,7 +152,7 @@ def reddit_messagefilter(messages, sending_account, receiving_account, submissio
     and check from `receiving_account` to verify they were not filtered out.
     """
 
-    def ishashedmessage(text):
+    def is_hashed_message(text):
         hash = text[1:33] # the added md5
         found, = re.findall(r'([a-fA-F\d]{32})', hash) or [False]
         return found
@@ -197,7 +199,7 @@ def reddit_messagefilter(messages, sending_account, receiving_account, submissio
 
         submission = sending_account.get_submission(submission_id=submission_id, comment_sort='new')
 
-        if refresh: # drop a previous lookup from cache
+        if refresh: # drop a previous lookup from PRAW's cache
             submission.refresh()
 
         messages = submission.comments
@@ -207,7 +209,7 @@ def reddit_messagefilter(messages, sending_account, receiving_account, submissio
         # fetch posts on receiving_account
         # works only for the creator of `submission_id` thread
         messages = receiving_account.get_messages(limit=200)
-        messages = [m for m in messages if ishashedmessage(m.body)]
+        messages = [m for m in messages if is_hashed_message(m.body)]
         return messages
 
     def check_messages(message_queue, messages):
@@ -215,7 +217,7 @@ def reddit_messagefilter(messages, sending_account, receiving_account, submissio
         for message in messages:
             if not isinstance(message, (praw.objects.Comment, praw.objects.Message)):
                 continue
-            id = ishashedmessage(message.body)
+            id = is_hashed_message(message.body)
             if not id:
                 continue
 
@@ -226,17 +228,18 @@ def reddit_messagefilter(messages, sending_account, receiving_account, submissio
             if id not in message_queue:
                 continue
 
-            # if we have mod status, we may see the banned messages,
+            # if we have mod status, we should see the banned messages,
             # and can drop them from queue (confirmed positive)
-            if isinstance(message, praw.objects.Comment):
-                if message.banned_by:
-                    message_queue.pop(id)
-                    if isinstance(message.banned_by, praw.objects.Redditor):
-                        banned_by = message.banned_by
-                    else:
-                        banned_by = 'reddit'
-                    logger.debug('...message banned by %s: %s' % (banned_by, message.body))
-                    continue
+            if isinstance(message, praw.objects.Comment) and message.banned_by:
+                message_queue.pop(id)
+                if isinstance(message.banned_by, praw.objects.Redditor):
+                    # banned by mod / bot
+                    banned_by = message.banned_by
+                else:
+                    # met by reddit banhammer
+                    banned_by = 'reddit'
+                logger.info('...message banned by %s: %s' % (banned_by, message.body))
+                continue
 
             msg, _ = message_queue.pop(id)
             fetched_messages += [msg]
@@ -260,7 +263,6 @@ def reddit_messagefilter(messages, sending_account, receiving_account, submissio
         #if len(fetched_messages) == 0: # are we checking from a different account (not our inbox)?
         #    # check submission thread instead
         #    fetched_messages = fetch_posted_messages(refresh=True)
-        [m.mark_as_read() for m in fetch_inbox_messages()] # keep inbox clean
         fetched_messages = fetch_posted_messages(refresh=True)
         verified_messages += check_messages(message_queue, fetched_messages)
 
@@ -272,40 +274,28 @@ def reddit_messagefilter(messages, sending_account, receiving_account, submissio
 
     return verified_messages
 
-def reddit_format_results(results, escape_chars=True):
-    """Format search results for reddit.
-
-    Returns a markdown-formatted and spam-filtered list of the results.
-    """
-    def escape_markdown(string):
-        # escape markdown characters
-        # from https://daringfireball.net/projects/markdown/syntax#backslash
-        # \   backslash
-        # `   backtick
-        # *   asterisk
-        # _   underscore
-        # {}  curly braces
-        # []  square brackets
-        # ()  parentheses
-        # #   hash mark
-        # +   plus sign
-        # -   minus sign (hyphen)
-        # .   dot
-        # !   exclamation mark
-        markdown_chars = r'\`*_{}[]()#+-.!'
-        reddit_chars = r'^~<>'
-        escape_chars = markdown_chars + reddit_chars
-        string = ''.join(c if c not in escape_chars else '\%s' % c for c in string)
+def reddit_markdown_escape(string):
+    if not isinstance(string, (str, unicode)):
         return string
-
-    if escape_chars:
-        results = [[escape_markdown(v) for v in result]
-                   for result in results]
-
-    # format output
-    markdown_links = ['[%s](%s)' % (text, url) for url, text in results]
-    formatted = '\n\n'.join(markdown_links)
-    return formatted
+    # escape markdown characters
+    # from https://daringfireball.net/projects/markdown/syntax#backslash
+    # \   backslash
+    # `   backtick
+    # *   asterisk
+    # _   underscore
+    # {}  curly braces
+    # []  square brackets
+    # ()  parentheses
+    # #   hash mark
+    # +   plus sign
+    # -   minus sign (hyphen)
+    # .   dot
+    # !   exclamation mark
+    markdown_chars = r'\`*_{}[]()#+-.!'
+    reddit_chars = r'^~<>'
+    escape_chars = markdown_chars + reddit_chars
+    string = ''.join(c if c not in escape_chars else '\%s' % c for c in string)
+    return string
 
 
 #
@@ -483,18 +473,11 @@ def handle_bot_action(comments, settings, account, account2, subreddit_list, com
         logger.info('[N] Detected keyword(s) %s in %s' % (', '.join(keywords), comment.permalink))
 
         if action == 'find_username_mentions':
-            try:
-                display_limit = settings.getint('BOTCMD_IMAGESEARCH_MAXRESULTS_FOR_ENGINE')
-                reply_content = cmd_imagesearch(settings, image_url=comment.submission.url,
-                        display_limit=display_limit, account1=account, account2=account2)
-                if not reply_content:
-                    logger.error('image_search failed (bug)! skipping')
-                    # try that again, instead of replying with no results
-                    continue
-            except Exception as e:
-                logger.error('Error occured in image_search: %s' % e)
-                raise
-                continue
+            reply_content = cmd_imagesearch(settings, image_url=comment.submission.url,
+                                            account1=account, account2=account2)
+            if not reply_content:
+                logger.error('cmd_imagesearch failed! skipping')
+                continue # try that again, don't mark as done yet
         if action == 'find_keywords':
             reply_content = information_reply
 
