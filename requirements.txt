@@ -7,3 +7,5 @@ setproctitle # optional
 scrapy>=1.1.0
 urllib3
 pillow
+wordcloud
+imgurpython>=1.1.8

@@ -33,7 +33,16 @@ LOG_CONFIG = {
 }
 
 ##
-## reddit settings
+## imgur API settings
+##
+
+IMGUR_CLIENT_ID = ''
+IMGUR_CLIENT_SECRET = '' # optional ("anonymous" if None)
+
+IMGUR_ALBUM_ID = ''
+
+##
+## reddit API settings
 ##
 
 REDDIT_ACCOUNT_NAME = ''
@@ -62,7 +71,7 @@ BOT_AGENT = '%s:%s:%s%s' % (
 REDDIT_SPAMFILTER_SUBMISSION_ID = ''
 
 ##
-##
+## operational settings
 ##
 
 BOT_MODE = []
@@ -83,6 +92,13 @@ BOTCMD_IMAGESEARCH_MESSAGE_TEMPLATE = (
 **Best {search_engine} Guesses**
 
 {search_results}
+
+"""
+)
+BOTCMD_IMAGESEARCH_WORDCLOUD_TEMPLATE = ( # if wordcloud is enabled, insert this text below search results
+"""___
+
+A wordcloud of all search results was generated and [is available on Imgur]({wordcloud_link}).
 
 """
 )
@@ -112,6 +128,25 @@ BOTCMD_DOWNVOTES_DELETE_AFTER = 30 # only act on comments after X minutes age
 BOTCMD_DOWNVOTES_DELETION_SCORE = 1 # karma score below which a comment is removed
 
 
+BOTCMD_WORDCLOUD_ENABLED = True # generate and upload wordclouds
+BOTCMD_WORDCLOUD_CONFIG = { # Reference: https://amueller.github.io/word_cloud/generated/wordcloud.WordCloud.html#wordcloud-wordcloud
+    #'font_path': '<ttf_or_otf.path>',
+    #'font_path': '/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed.ttf',
+    'width': 400,
+    'height': 200,
+    'scale': 2,
+    'max_words': 200,
+    'background_color': 'black',
+    'relative_scaling': 0.5,
+    'prefer_horizontal': 0.9,
+}
+BOTCMD_WORDCLOUD_STOPWORDS = [ # additional stopwords to merge with wordcloud stopwords
+    'gif', 'jpg', 'jpeg', 'png', # file formats often dominating content
+    'Crawled on', # strip Tineye's "Crawled on" text on every results
+    'Tumblr', # mentioned way too often
+]
+
+
 COMMENT_REPLY_AGE_LIMIT = 0 # ignore comments older than X minutes
 
 
@@ -130,10 +165,12 @@ FOOTER_INFO_MESSAGE = (
 )
 
 
-SUBREDDITS = ['all']
+SUBREDDITS = [ # list of /r/<subreddits> to watch
+    'all',
+]
 
 ##
-## search / scrapy spider settings
+## search spider (scrapy) settings
 ##
 
 USER_AGENT = '%s/%s' % (BOT_NAME, BOT_VERSION)

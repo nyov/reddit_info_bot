@@ -252,7 +252,7 @@ def filter_image_search(settings, search_results, account1=None, account2=None, 
         verified_results[provider] = results
     return verified_results
 
-def format_image_search(settings, search_results, escape_chars=True):
+def format_image_search(settings, search_results, metainfo={}, escape_chars=True):
 
     from .reddit import reddit_markdown_escape, REDDIT_MESSAGE_SIZELIMIT
 
@@ -276,6 +276,9 @@ def format_image_search(settings, search_results, escape_chars=True):
             if escape_chars:
                 for key, value in result.items():
                     result[key] = reddit_markdown_escape(value)
+
+            # quote url whitespace, really shouldn't happen :(
+            result['url'] = result['url'].replace(' ', '%20')
 
             # add result['text'] key with best possible textual value
             text = result['title']
@@ -324,6 +327,11 @@ def format_image_search(settings, search_results, escape_chars=True):
         if not check_results:
             reply = ''
 
+        wordcloud_link = metainfo.get('wordcloud')
+        if wordcloud_link:
+            wcmessage = settings.getstr('BOTCMD_IMAGESEARCH_WORDCLOUD_TEMPLATE')
+            reply += wcmessage.format(wordcloud_link=wordcloud_link)
+
         if not reply:
             reply = settings.getstr('BOTCMD_IMAGESEARCH_NO_RESULTS_MESSAGE')
 
@@ -348,3 +356,32 @@ def format_image_search(settings, search_results, escape_chars=True):
     logger.debug('Reply message is %d chars out of %d (%d remaining)' % (
         r_len, REDDIT_MESSAGE_SIZELIMIT, REDDIT_MESSAGE_SIZELIMIT - r_len))
     return reply
+
+def filter_wordcloud_text(settings, search_results):
+    """ Prepare text for wordcloud
+
+    (Generated from all search result data, not excluding entries marked spam
+     or no longer available.)
+    """
+
+    text = []
+
+    for provider, results in search_results.items():
+        if not results:
+            continue
+
+        for result in results:
+            for key, value in result.items():
+                if isinstance(value, (str, unicode)):
+                    result[key] = sanitize_string(value)
+
+            # wordcloud
+            # from title and description text
+            if result['title']:
+                text += result['title'].split()
+            if result['description']:
+                text += result['description'].split()
+            # /wordcloud
+
+    text = ' '.join(text)
+    return text
