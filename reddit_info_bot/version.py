@@ -1,4 +1,4 @@
-__version__ = '2015.10.2'
+__version__ = '2016.05.1'
 
 def git_version(default_version=None, path=None, local=False):
     import os, subprocess
