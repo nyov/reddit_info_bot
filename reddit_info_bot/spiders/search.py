@@ -102,11 +102,13 @@ class ImageSearch(Search):
 
     def from_url(self, image_url, method='GET', params={}):
         # 'application/x-www-form-urlencoded'
-        return FormRequest(self.search_url, method=method, formdata=params)
+        return FormRequest(self.search_url, method=method, formdata=params,
+                           priority=500)
 
     def from_data(self, image_data, method='POST', params={}):
         # 'multipart/form-data'
-        return Request(self.search_image_url, method=method, body=params)
+        return Request(self.search_image_url, method=method, body=params,
+                       priority=500)
 
     def start_requests(self):
         if self.image_url:
