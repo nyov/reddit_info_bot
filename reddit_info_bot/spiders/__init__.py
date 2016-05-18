@@ -125,6 +125,7 @@ class RewriteRedirectMiddleware(RedirectMiddleware):
 
 # RetryMiddleware with with custom "retry_http_codes" Request.meta field
 from scrapy.downloadermiddlewares.retry import RetryMiddleware as ScrapyRetryMiddleware
+from scrapy.utils.response import response_status_message
 
 class RetryMiddleware(ScrapyRetryMiddleware):
 
