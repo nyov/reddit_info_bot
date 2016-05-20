@@ -260,6 +260,8 @@ class KarmaDecay(ImageSearch):
                 result['spam'] = 'title'
             elif self.isredditspam_text(result['description']):
                 result['spam'] = 'description'
+            elif self.isredditspam_link(result['image_url']):
+                result['spam'] = 'image_url'
             else:
                 num_results += 1
 
@@ -378,6 +380,8 @@ class Yandex(ImageSearch):
                 result['spam'] = 'title'
             elif self.isredditspam_text(result['description']):
                 result['spam'] = 'description'
+            elif self.isredditspam_link(result['image_url']):
+                result['spam'] = 'image_url'
             else:
                 num_results += 1
 
@@ -541,6 +545,8 @@ class Bing(ImageSearch):
                 result['spam'] = 'title'
             elif self.isredditspam_text(result['description']):
                 result['spam'] = 'description'
+            elif self.isredditspam_link(result['image_url']):
+                result['spam'] = 'image_url'
             else:
                 num_results += 1
 
@@ -704,6 +710,8 @@ class Bing(ImageSearch):
                 result['spam'] = 'title'
             elif self.isredditspam_text(result['description']):
                 result['spam'] = 'description'
+            #elif self.isredditspam_link(result['image_url']):
+            #    result['spam'] = 'image_url'
             else:
                 num_results += 1
 
@@ -864,6 +872,8 @@ class Tineye(ImageSearch):
                 result['spam'] = 'title'
             elif self.isredditspam_text(result['description']):
                 result['spam'] = 'description'
+            elif self.isredditspam_link(result['image_url']):
+                result['spam'] = 'image_url'
             else:
                 num_results += 1
 
@@ -1001,6 +1011,8 @@ class Google(ImageSearch):
                 result['spam'] = 'title'
             elif self.isredditspam_text(result['description']):
                 result['spam'] = 'description'
+            elif self.isredditspam_link(result['image_url']):
+                result['spam'] = 'image_url'
             else:
                 num_results += 1
 
