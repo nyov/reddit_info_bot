@@ -8,4 +8,5 @@ scrapy>=1.1.0
 urllib3
 pillow
 wordcloud
-imgurpython>=1.1.8
+#imgurpython>=1.1.8
+# unreleased on pypi

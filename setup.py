@@ -69,6 +69,10 @@ def main(argv):
         'install_requires': [
             # included from requirements.txt
         ],
+        'dependency_links': [
+            # imgurpython unreleased 1.1.8
+            'https://github.com/Imgur/imgurpython/zipball/1.1.8',
+        ],
     }
 
     if requirements:
