@@ -142,7 +142,7 @@ BOTCMD_WORDCLOUD_CONFIG = { # Reference: https://amueller.github.io/word_cloud/g
 }
 BOTCMD_WORDCLOUD_STOPWORDS = [ # additional stopwords to merge with wordcloud stopwords
     'gif', 'jpg', 'jpeg', 'png', # file formats often dominating content
-    'Crawled on', # strip Tineye's "Crawled on" text on every results
+    'Crawled', # strip Tineye's "Crawled on" text on every results
     'Tumblr', # mentioned way too often
 ]
 
