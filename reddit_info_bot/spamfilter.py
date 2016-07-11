@@ -163,31 +163,31 @@ def isspam_link(url):
     global LISTS
 
     if len(url) < 6: # shorter than '//a.bc' can't be a useable absolute HTTP URL
-        logger.info('Skipping invalid URL: "{0}"'.format(url))
+        logger.debug('Skipping invalid URL: "{0}"'.format(url))
         return True
     # domain from URL using publicsuffix (not a validator)
     domain, _ = domain_suffix(url)
     if not domain:
-        logger.info('Failed to lookup PSL/Domain for: "{0}"'.format(url))
+        logger.debug('Failed to lookup PSL/Domain for: "{0}"'.format(url))
         return True
     tld = tld_from_suffix(domain)
     if not tld or tld == '':
-        logger.info('Failed to lookup TLD from publicsuffix for: "{0}"'.format(url))
+        logger.debug('Failed to lookup TLD from publicsuffix for: "{0}"'.format(url))
         return True
     if domain in LISTS['whitelist']:
         # higher prio than the blacklist
         return False
     if domain in LISTS['blacklist']:
-        logger.info('Skipping blacklisted Domain "{0}": {1}'.format(domain, url))
+        logger.debug('Skipping blacklisted Domain "{0}": {1}'.format(domain, url))
         return True
     if tld in LISTS['tld']:
-        logger.info('Skipping blacklisted TLD "{0}": {1}'.format(tld, url))
+        logger.debug('Skipping blacklisted TLD "{0}": {1}'.format(tld, url))
         return True
     if url in LISTS['link']:
-        logger.info('Skipping spammy link match "{0}": {1}'.format(LISTS['link'][url], url))
+        logger.debug('Skipping spammy link match "{0}": {1}'.format(LISTS['link'][url], url))
         return True
     if url in LISTS['thumb']:
-        logger.info('Skipping spammy thumb match "{0}": {1}'.format(LISTS['thumb'][url], url))
+        logger.debug('Skipping spammy thumb match "{0}": {1}'.format(LISTS['thumb'][url], url))
         return True
 
     # no spam, result is good
@@ -199,10 +199,10 @@ def isspam_text(text):
     global LISTS
 
     if text in LISTS['text']:
-        logger.info('Skipping spammy text match "{0}": "{1}"'.format(LISTS['text'][text], text))
+        logger.debug('Skipping spammy text match "{0}": "{1}"'.format(LISTS['text'][text], text))
         return True
     if text in LISTS['user']:
-        logger.info('Skipping spammy user match "{0}": "{1}"'.format(LISTS['user'][text], text))
+        logger.debug('Skipping spammy user match "{0}": "{1}"'.format(LISTS['user'][text], text))
         return True
 
     # no spam, result is good
