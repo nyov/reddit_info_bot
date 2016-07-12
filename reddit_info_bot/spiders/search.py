@@ -145,6 +145,16 @@ class KarmaDecay(ImageSearch):
     search_url = 'http://karmadecay.com/'
     search_image_url = 'http://karmadecay.com/index/'
 
+    custom_settings = {
+        'COOKIES_ENABLED': True,
+    }
+    cookies=[{
+        'kdad': 'h',
+        'adshown': '1', # sorry
+        # we're linking the search results,
+        # the added traffic hopefully offsets our karma
+    }]
+
     def from_url(self, image_url):
         # do not 'optimize' .gifv links for KD
         if not image_url.endswith('.gifv'):
@@ -726,7 +736,7 @@ class Bing(ImageSearch):
         # Note: the quality of these results seems slightly more questionable, so consider them a last resort, for now
         more_link = response.meta.get('more')
         if more_link:
-            yield Request(more, meta={'num_results': num_results, 'rc': rc}, callback=self.parse_more)
+            yield Request(more_link, meta={'num_results': num_results, 'rc': rc}, callback=self.parse_more)
 
     def parse_more(self, response):
         content = response.xpath('//body')

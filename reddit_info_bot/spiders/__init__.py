@@ -231,7 +231,7 @@ class InfoBotSpider(Spider):
             """ handle TimeoutError tracebacks getting dumped to stderr """
             exc = failure.trap(TimeoutError) # any other exception gets re-raised right here
             errmsg = failure.getErrorMessage()
-            self.logger.info(
+            self.logger.debug(
                 "Ignoring %s result with %s: %s (%s)" % (
                     result['provider'], str(exc.__name__), result['url'], errmsg))
             result['broken'] = True
@@ -266,7 +266,7 @@ class InfoBotSpider(Spider):
             return result
 
         if response.status != 200:
-            self.logger.info(
+            self.logger.debug(
                 "Ignoring %s result with bad response status (%s): %s" % (
                     result['provider'], response.status, response.url))
             result['broken'] = True
