@@ -343,30 +343,45 @@ def _applicable_comment(comment, settings, account, comments_seen, subreddit_lis
     if comment.id in comments_seen:
         #logger.debug('[D] comment %s already logged as done' % comment.id)
         return False
+
     if str(comment.subreddit) not in subreddit_list: #check if it's in one of the right subs
         logger.debug('[!] %s - comment\'s subreddit is not in our list [%s]' % (comment.id, comment.permalink))
         return done()
+
     comment_time_diff = (time.time() - comment.created_utc)
     if comment_time_diff / 60 > time_limit_minutes:
         logger.debug('[O] %s - comment has been created %d minutes ago, our reply-limit is %d [%s]' \
                      % (comment.id, comment_time_diff / 60, time_limit_minutes, comment.permalink))
         return done()
-    # FIXME: more robust media detection for urls (possibly check actual linked page content?)
-    is_media = _any_from_list_end_string(['.%s' % e for e in media_extensions], comment.submission.url)
+
+    is_media = _any_from_list_end_string(media_extensions, comment.submission.url)
     if not is_media:
-        # not a media-url, UNLESS we see a special domain here which we know has only media
-        if not is_media_domain(comment.submission.url):
-            logger.debug('[T] %s - comment has no picture [%s]' % (comment.id, comment.permalink))
+        if not hasattr(comment.submission, 'post_hint'): # 'post_hint' attribute only exists on media posts
+            # not a media-url, UNLESS we see a special domain here which we know has only media
+            if not is_media_domain(comment.submission.url):
+                logger.debug('[T] %s - comment submission has no image [%s]' % (comment.id, comment.permalink))
+                return done()
+        elif comment.submission.post_hint == 'rich:video':
+            pass
+            # TODO: dont really have an image here to search for yet, might fail
+            #comment.submission.url = comment.submission.preview.images.source.url
+        elif comment.submission.post_hint == 'image':
+            pass
+        else:
+            logger.debug('[T] %s - comment submission has no image [%s]' % (comment.id, comment.permalink))
             return done()
+
     comment_body = comment.body.encode('utf-8')
     keywords = _any_from_list_in_string(search_list, comment_body)
     if not keywords:
         logger.debug('[P] %s - comment has no keyword [%s]' % (comment.id, comment.permalink))
         return done()
+
     # found a keyword
     if not comment.author:
         logger.debug('[X] %s - comment has no author / does not exist [%s]' % (comment.id, comment.permalink))
         return done()
+
     top_level = [c.replies for c in comment.submission.comments] # FIXME: do we need this?
     submission_comments = []
     for i in top_level:
