@@ -468,6 +468,8 @@ def handle_bot_action(comments, settings, account, account2, subreddit_list, com
     if action == 'find_username_mentions':
         search_list = settings.getlist('BOTCMD_IMAGESEARCH')
         reply_func = find_username_mentions
+        # Only handle 'username mention's, ignore any messages that are direct PMs (praw.objects.Message)
+        comments = [c for c in comments if isinstance(c, praw.objects.Comment)]
     elif action == 'find_keywords':
         search_list = settings.getlist('BOTCMD_INFORMATIONAL')
         reply_func = find_keywords
