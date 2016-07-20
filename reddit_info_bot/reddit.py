@@ -270,7 +270,8 @@ def reddit_messagefilter(messages, sending_account, receiving_account, submissio
     logger.info('reddit_messagefilter verified %d message(s) as good' % len(verified_messages))
 
     if message_queue:
-        logger.info('reddit_messagefilter filtered out: %s' % ', '.join('"[%s] %s"' % [(h, m) for (m, h) in message_queue.values()] ))
+        _filtered = ', '.join([m for (h, (o, m)) in message_queue.items()])
+        logger.info('reddit_messagefilter filtered out: %s' % _filtered)
 
     return verified_messages
 
