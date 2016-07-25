@@ -8,6 +8,10 @@ import pickle
 import json
 import requests
 from requests.exceptions import HTTPError, ConnectionError, Timeout
+try:
+    from urllib.parse import urlparse, urlunparse
+except ImportError:
+    from urlparse import urlparse, urlunparse
 from .util import domain_suffix, tld_from_suffix, remove_control_characters
 
 logger = logging.getLogger(__name__)
@@ -22,6 +26,15 @@ LISTS = {
     'blacklist': set(),
     'whitelist': set(),
 }
+
+
+def _strip_scheme(url):
+    (scheme, netloc, path, params, query, fragment) = urlparse(url)
+    return urlunparse(('', netloc, path, params, query, fragment))
+
+def _check(string, list):
+    """ check for string in items in list """
+    return '|'.join([thing for thing in list if thing in string])
 
 
 def sync_rarchives_spamdb(filter_type, last_update=None):
@@ -42,7 +55,7 @@ def sync_rarchives_spamdb(filter_type, last_update=None):
     def fetch_data(url):
         try:
             logger.debug('%s: downloading %s' % (self.__name__, url))
-            response = requests.get(url).content
+            response = requests.get(url).text
             data = json.loads(response)
             if 'error' in data:
                 return (False, data['error'])
@@ -102,7 +115,7 @@ def get_filter(filter_type, cachedir):
             logger.warning(msg)
         else:
             with open(filename, 'wb') as outf:
-                outf.write(response)
+                outf.write(response.encode('utf-8'))
 
     if not os.path.isfile(filename) or \
             (int(time.time() - os.path.getmtime(filename)) > 43200): # cache 24 hours
@@ -135,6 +148,7 @@ def populate_spamfilter_lists(cache_dir=None):
         cachedir = cache_dir
 
     link_filter = get_filter('link', cachedir)
+    link_filter = set(_strip_scheme(link) for link in link_filter)
     thumb_filter = get_filter('thumb', cachedir)
     tld_filter = get_filter('tld', cachedir)
     tld_filter = set(tld.strip('.') for tld in tld_filter)
@@ -165,29 +179,48 @@ def isspam_link(url):
     if len(url) < 6: # shorter than '//a.bc' can't be a useable absolute HTTP URL
         logger.debug('Skipping invalid URL: "{0}"'.format(url))
         return True
+
+    url = _strip_scheme(url)
+
     # domain from URL using publicsuffix (not a validator)
-    domain, _ = domain_suffix(url)
+    domain, fulldomain = domain_suffix(url)
     if not domain:
         logger.debug('Failed to lookup PSL/Domain for: "{0}"'.format(url))
         return True
+
     tld = tld_from_suffix(domain)
     if not tld or tld == '':
         logger.debug('Failed to lookup TLD from publicsuffix for: "{0}"'.format(url))
         return True
+
     if domain in LISTS['whitelist']:
         # higher prio than the blacklist
         return False
+
     if domain in LISTS['blacklist']:
         logger.debug('Skipping blacklisted Domain "{0}": {1}'.format(domain, url))
         return True
+
     if tld in LISTS['tld']:
         logger.debug('Skipping blacklisted TLD "{0}": {1}'.format(tld, url))
         return True
-    if url in LISTS['link']:
-        logger.debug('Skipping spammy link match "{0}": {1}'.format(LISTS['link'][url], url))
+
+    inlist = _check(url, LISTS['link']) # perfect match (100% certainty)
+    if inlist:
+        logger.debug('Skipping spammy link match "{0}": {1}'.format(inlist, url))
         return True
-    if url in LISTS['thumb']:
-        logger.debug('Skipping spammy thumb match "{0}": {1}'.format(LISTS['thumb'][url], url))
+    inlist = _check(fulldomain, LISTS['link']) # full match (~80% certainty)
+    if inlist:
+        logger.debug('Skipping spammy link match "{0}": {1}'.format(inlist, fulldomain))
+        return True
+    inlist = _check(domain, LISTS['link']) # partial match (~50% certainty)
+    if inlist:
+        logger.debug('Skipping spammy link match "{0}": {1}'.format(inlist, domain))
+        return True
+
+    inlist = _check(url, LISTS['thumb'])
+    if inlist:
+        logger.debug('Skipping spammy thumb match "{0}": {1}'.format(inlist, url))
         return True
 
     # no spam, result is good
@@ -198,11 +231,14 @@ def isspam_text(text):
     """
     global LISTS
 
-    if text in LISTS['text']:
-        logger.debug('Skipping spammy text match "{0}": "{1}"'.format(LISTS['text'][text], text))
+    inlist = _check(text, LISTS['text'])
+    if inlist:
+        logger.debug('Skipping spammy text match "{0}": "{1}"'.format(inlist, text))
         return True
-    if text in LISTS['user']:
-        logger.debug('Skipping spammy user match "{0}": "{1}"'.format(LISTS['user'][text], text))
+
+    inlist = _check(text, LISTS['user'])
+    if inlist:
+        logger.debug('Skipping spammy user match "{0}": "{1}"'.format(inlist, text))
         return True
 
     # no spam, result is good
