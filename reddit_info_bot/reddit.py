@@ -163,7 +163,7 @@ def reddit_messagefilter(messages, sending_account, receiving_account, submissio
             # use a unique id in the message so we'll always recognize it
             # (even if the text got mangled, e.g. unicode or other strangeness)
             # using a hashsum of message helps to reduce posting duplicate content
-            id = hashlib.md5(message).hexdigest()
+            id = hashlib.md5(message.encode('utf-8', 'strict')).hexdigest()
             if id not in message_queue:
                 hashed = '[%s] %s' % (id, message)
                 message_queue.update({id: (message, hashed)})
